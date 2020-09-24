@@ -1,6 +1,7 @@
 
 #%%
 import numpy as np
+import sys
 import pint # 0.15 or higher
 ureg = pint.UnitRegistry()
 
@@ -26,7 +27,7 @@ class CoolingConditions:
                     indoor_rh=0.4,
                     indoor_drybulb=u(80.0,"°F"),
                     press=u(1.0,"atm"),
-                    mass_flow_fraction=0.8, # operating flow/ rated flow
+                    mass_flow_fraction=[0.8,0.7], # operating flow/ rated flow
                     compressor_speed=0):
     self.outdoor_drybulb = outdoor_drybulb
     self.indoor_rh = indoor_rh
@@ -41,7 +42,7 @@ class HeatingConditions:
                     outdoor_rh=0.4,
                     indoor_drybulb=u(70.0,"°F"),
                     press=u(1.0,"atm"),
-                    mass_flow_fraction=0.8, # operating flow/ rated flow
+                    mass_flow_fraction=[0.8,0.7], # operating flow/ rated flow
                     compressor_speed=0):
     self.outdoor_drybulb = outdoor_drybulb
     self.indoor_rh = indoor_rh
@@ -55,35 +56,37 @@ class DXUnit:
 
   A_cond = CoolingConditions()
   B_cond = CoolingConditions(outdoor_drybulb=u(82.0,"°F"))
+  F_cond = CoolingConditions(outdoor_drybulb=u(67.0,"°F"))
+  H0_cond = HeatingConditions(outdoor_drybulb=u(62.0,"°F"))
   H1_cond = HeatingConditions()
   H3_cond = HeatingConditions(outdoor_drybulb=u(17.0,"°F"))
   H2_cond = HeatingConditions(outdoor_drybulb=u(35.0,"°F"))
-  
-  def __init__(self,gross_total_cooling_capacity=lambda conditions,cap_rated : 10000,
+
+  def __init__(self,gross_total_cooling_capacity=lambda conditions,cap_rated,system_stage : 10000, # (system_stage = 0) = low stage and (system_stage = 1) = full stage
                     gross_sensible_cooling_capacity=lambda conditions : 1.0,
-                    gross_cooling_power=lambda conditions, cop_rated,cap_rated : 8000,
+                    gross_cooling_power=lambda conditions, cop_rated,cap_rated,system_stage : 8000,
                     c_d_cooling=0.2,
                     fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')],
                     cop_cooling_rated=[3.0],
                     flow_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
                     cap_cooling_rated=[11000], # This has same units as gross capacity. This should be in base units to remove confusion.
                     shr_cooling_rated=[0.8], # Sensible heat ratio (Sensible capacity / Total capacity)
-                    gross_stead_state_heating_capacity=lambda conditions,cap_rated : 10000, # in base unit to remove confusion
+                    gross_stead_state_heating_capacity=lambda conditions,cap_rated,system_stage : 10000, # in base unit to remove confusion
                     gross_integrated_heating_capacity=lambda conditions : 1.0,
-                    gross_stead_state_heating_power=lambda conditions, cop_rated,cap_rated : 8000, # in base unit to remove confusion
+                    gross_stead_state_heating_power=lambda conditions, cop_rated,cap_rated,system_stage : 8000, # in base unit to remove confusion
                     gross_integrated_heating_power=lambda conditions : 1.0,
                     c_d_heating=0.2,
-                    fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
-                    cop_heating_rated=[2.5],
-                    flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
-                    cap_heating_rated=[11000], # # This has same units as gross capacity. This should be in base units to remove confusion.
-                    climate_region = 1,
+                    fan_eff_heating_rated=[u(0.365,'W/cu_ft/min'),u(0.365,'W/cu_ft/min')],
+                    cop_heating_rated=[2.5, 3.0],
+                    flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration"),u(350.0,"cu_ft/min/ton_of_refrigeration")],
+                    cap_heating_rated=[11000,16000], # # This has same units as gross capacity. This should be in base units to remove confusion.
+                    climate_region = 3,
                     defrost_strategy = 'demand_defrost',
-                    temp_frost_influence_start = 45, # eq. 11.119 this is in °F
+                    temp_frost_influence_start = [45, 40], # eq. 11.119 and 11.134 this is in °F
                     minimum_hp_outdoor_temp_low = 10.0, # value taken from Scott's script single-stage
+                    cycling = 'between_low_full', # 'between_off_full' | 'between_low_full'
                     minimum_hp_outdoor_temp_high = 14.0): # value taken from Scott's script single-stage
     self.num_coolilng_speeds = len(cop_cooling_rated)
-    # Check to make sure all cooling arrays are the same size if not output a warning message
     self.gross_total_cooling_capacity = gross_total_cooling_capacity # This should be in base units
     self.gross_sensible_cooling_capacity = gross_sensible_cooling_capacity
     self.gross_cooling_power = gross_cooling_power
@@ -99,6 +102,7 @@ class DXUnit:
     self.gross_stead_state_heating_power = gross_stead_state_heating_power
     self.gross_integrated_heating_power = gross_integrated_heating_power
     self.c_d_heating = c_d_heating
+    self.cycling = cycling
     self.fan_eff_heating_rated = fan_eff_heating_rated
     self.cop_heating_rated = cop_heating_rated
     self.flow_per_cap_heating_rated = flow_per_cap_heating_rated
@@ -117,47 +121,161 @@ class DXUnit:
                               'bin':[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],
                               'Temp':[62,57,52,47,42,37,32,27,22,17,12,7,2,-3,-8,-13,-18,-23]
                              }
+    self.table_cooling = {'bin':[1,2,3,4,5,6,7,8],
+                          'Temp': [67,72,77,82,87,92,97,102],
+                          'fraction_hrs': [0.214,0.231,0.216,0.161,0.104,0.052,0.018,0.004]
+                         }
     self.standar_design_htg_requirements = [(5000+i*5000)/3.412 for i in range(0,8)] + [(50000+i*10000)/3.412 for i in range(0,9)] # division by 3.412 is used for btu/h to w conversion
 
+    ### Check to make sure all cooling arrays are the same size if not output a warning message
+    check_dimension_cooling = (len(self.fan_eff_cooling_rated)+len(self.cop_cooling_rated)+len(self.flow_per_cap_cooling_rated)+len(self.cap_cooling_rated))/4
+    check_dimension_heating = (len(self.fan_eff_heating_rated)+len(self.cop_heating_rated)+len(self.flow_per_cap_heating_rated)+len(self.cap_heating_rated))/4
+
+    if  (check_dimension_cooling != 1) and (check_dimension_cooling != 2):
+        sys.exit('Make sure all relevant cooling arrays have same size (e.g. for double stage systems some parameters need low and full stage values)')
+    if  (check_dimension_heating != 1) and (check_dimension_heating != 2):
+        sys.exit('Make sure all relevant heating arrays have same size (e.g. for double stage systems some parameters need low and full stage values)')
 
   ### For cooling ###
-  def fan_power_clg(self, conditions):
-    return self.fan_eff_cooling_rated[conditions.compressor_speed]*self.standard_indoor_airflow_clg(conditions) # eq. 11.16
+  def fan_power_clg(self, conditions,system_stage):
+    return self.fan_eff_cooling_rated[system_stage]*self.standard_indoor_airflow_clg(conditions,system_stage) # eq. 11.16
 
-  def fan_heat_clg(self, conditions):
-    return self.fan_power_clg(conditions)# eq. 11.11 (in SI units)
+  def fan_heat_clg(self, conditions,system_stage):
+    return self.fan_power_clg(conditions,system_stage)# eq. 11.11 (in SI units)
 
-  def standard_indoor_airflow_clg(self,conditions):
+  def standard_indoor_airflow_clg(self,conditions,system_stage):
     air_density_standard_conditions = 1.204 # in kg/m3
-    return self.flow_per_cap_cooling_rated[conditions.compressor_speed]*self.cap_cooling_rated[conditions.compressor_speed]*psychrolib.GetDryAirDensity(convert(conditions.indoor_drybulb,"K","°C"), conditions.press)/air_density_standard_conditions
+    return self.flow_per_cap_cooling_rated[system_stage]*self.cap_cooling_rated[system_stage]*psychrolib.GetDryAirDensity(convert(conditions.indoor_drybulb,"K","°C"), conditions.press)/air_density_standard_conditions
 
-  def net_total_cooling_capacity(self, conditions):
-    return self.gross_total_cooling_capacity(conditions,self.cap_cooling_rated[conditions.compressor_speed]) - self.fan_heat_clg(conditions) # eq. 11.3 but not considering duct losses
+  def net_total_cooling_capacity(self, conditions, system_stage):
+    return self.gross_total_cooling_capacity(conditions,self.cap_cooling_rated[system_stage],system_stage) - self.fan_heat_clg(conditions,system_stage) # eq. 11.3 but not considering duct losses
 
-  def net_cooling_power(self, conditions):
-    return self.gross_cooling_power(conditions,self.cop_cooling_rated[conditions.compressor_speed],self.cap_cooling_rated[conditions.compressor_speed]) + self.fan_power_clg(conditions) # eq. 11.15
+  def net_cooling_power(self, conditions,system_stage):
+    return self.gross_cooling_power(conditions,self.cop_cooling_rated[system_stage],self.cap_cooling_rated[system_stage],system_stage) + self.fan_power_clg(conditions,system_stage) # eq. 11.15
 
-  def eer(self, conditions):
-    eer = self.net_total_cooling_capacity(conditions)/self.net_cooling_power(conditions)
+  def building_load_cooling(self):
+    sizing_factor = 1.1 # eq. 11.61
+    BL = np.asarray([(u(self.table_cooling['Temp'][i],"°F")-u(65.0,"°F"))/(u(95,"°F")-u(65.0,"°F")) for i in range(0,8)]) * self.net_total_cooling_capacity(self.A_cond,1) / sizing_factor # eq. 11.60
+    return BL # BL is an array with a length equal to # of bins
+
+  def cooling_capacity_power_bins(self):
+    q_full_bin = {'cap': [i*0 for i in range(8)],'t_bin': self.table_cooling['Temp']}
+    q_low_bin = {'cap': [i*0 for i in range(8)],'t_bin': self.table_cooling['Temp']}
+    p_full_bin = {'power': [i*0 for i in range(8)],'t_bin': self.table_cooling['Temp']}
+    p_low_bin = {'power': [i*0 for i in range(8)],'t_bin': self.table_cooling['Temp']}
+    for t_bin in self.table_cooling['Temp']:
+        q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)] = self.net_total_cooling_capacity(self.B_cond,1) + (self.net_total_cooling_capacity(self.A_cond,1) - self.net_total_cooling_capacity(self.B_cond,1)) * ((u(t_bin,"°F")-self.B_cond.outdoor_drybulb)/(self.A_cond.outdoor_drybulb-self.B_cond.outdoor_drybulb)) # e.q. 11.64
+        q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] = self.net_total_cooling_capacity(self.F_cond,0) + (self.net_total_cooling_capacity(self.B_cond,0) - self.net_total_cooling_capacity(self.F_cond,0)) * ((u(t_bin,"°F")-self.F_cond.outdoor_drybulb)/(self.B_cond.outdoor_drybulb-self.F_cond.outdoor_drybulb)) # e.q. 11.62
+        p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)] = self.net_cooling_power(self.B_cond,1) + (self.net_cooling_power(self.A_cond,1) - self.net_cooling_power(self.B_cond,1)) * ((u(t_bin,"°F")-self.B_cond.outdoor_drybulb)/(self.A_cond.outdoor_drybulb-self.B_cond.outdoor_drybulb)) # e.q. 11.65
+        p_low_bin['power'][p_low_bin['t_bin'].index(t_bin)] = self.net_cooling_power(self.F_cond,0) + (self.net_cooling_power(self.B_cond,0) - self.net_cooling_power(self.F_cond,0)) * ((u(t_bin,"°F")-self.F_cond.outdoor_drybulb)/(self.B_cond.outdoor_drybulb-self.F_cond.outdoor_drybulb)) # e.q. 11.63
+    return q_full_bin, q_low_bin, p_full_bin, p_low_bin
+
+  def total_bin_capacity_cooling(self):
+    q = {'cap': [i*0 for i in range(8)],'t_bin': self.table_cooling['Temp']}
+    bl = {'bl': self.building_load_cooling(),'t_bin': self.table_cooling['Temp']}
+    q_full_bin, q_low_bin,_,_ = self.cooling_capacity_power_bins()
+    clf_full_bin, clf_low_bin = self.cooling_load_factor()
+    hrs_fraction = {'fraction': self.table_cooling['fraction_hrs'],'t_bin': self.table_cooling['Temp']}
+    for t_bin in self.table_cooling['Temp']:
+        if q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] >= bl['bl'][bl['t_bin'].index(t_bin)]: # e.q. 11.66
+            q['cap'][q['t_bin'].index(t_bin)] = clf_low_bin['clf'][clf_low_bin['t_bin'].index(t_bin)]*q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)]*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
+        elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_low_full'): # e.q. 11.72
+            q['cap'][q['t_bin'].index(t_bin)] = (clf_low_bin['clf'][clf_low_bin['t_bin'].index(t_bin)]*q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)]+clf_full_bin['clf'][clf_full_bin['t_bin'].index(t_bin)]*q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)])*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
+        elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_off_full'): # e.q. 11.76
+             q['cap'][q['t_bin'].index(t_bin)] = clf_full_bin['clf'][clf_full_bin['t_bin'].index(t_bin)]*q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
+        else: # e.q. 11.81
+            q['cap'][q['t_bin'].index(t_bin)] = q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
+    return q
+
+  def total_bin_energy_cooling(self):
+    e = {'e': [i*0 for i in range(8)],'t_bin': self.table_cooling['Temp']}
+    bl = {'bl': self.building_load_cooling(),'t_bin': self.table_cooling['Temp']}
+    q_full_bin, q_low_bin,_,_ = self.cooling_capacity_power_bins()
+    _,_,p_full_bin, p_low_bin = self.cooling_capacity_power_bins()
+    clf_full_bin, clf_low_bin = self.cooling_load_factor()
+    plf_full_bin, plf_low_bin = self.plf_cooling_bins()
+    hrs_fraction = {'fraction': self.table_cooling['fraction_hrs'],'t_bin': self.table_cooling['Temp']}
+    for t_bin in self.table_cooling['Temp']:
+        if q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] >= bl['bl'][bl['t_bin'].index(t_bin)]: # e.q. 11.67
+            e['e'][e['t_bin'].index(t_bin)] = clf_low_bin['clf'][clf_low_bin['t_bin'].index(t_bin)]*p_low_bin['power'][p_low_bin['t_bin'].index(t_bin)]*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]/plf_low_bin['plf'][plf_low_bin['t_bin'].index(t_bin)]
+        elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_low_full'): # e.q. 11.73
+            e['e'][e['t_bin'].index(t_bin)] = (clf_low_bin['clf'][clf_low_bin['t_bin'].index(t_bin)]*p_low_bin['power'][p_low_bin['t_bin'].index(t_bin)]+clf_full_bin['clf'][clf_full_bin['t_bin'].index(t_bin)]*p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)])*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
+        elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_off_full'): # e.q. 11.77
+            e['e'][e['t_bin'].index(t_bin)] = clf_full_bin['clf'][clf_full_bin['t_bin'].index(t_bin)]*p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)]*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]/plf_full_bin['plf'][plf_full_bin['t_bin'].index(t_bin)]
+        else: # e.q. 11.82
+            e['e'][e['t_bin'].index(t_bin)] = p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)]*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
+    return e
+
+  def cooling_load_factor(self):
+    bl = {'bl': self.building_load_cooling(),'t_bin': self.table_cooling['Temp']}
+    clf_full_bin = {'clf': [i*0 for i in range(8)],'t_bin': self.table_cooling['Temp']}
+    clf_low_bin = {'clf': [i*0 for i in range(8)],'t_bin': self.table_cooling['Temp']}
+    q_full_bin, q_low_bin,_,_ = self.cooling_capacity_power_bins()
+    hrs_fraction = {'fraction': self.table_cooling['fraction_hrs'],'t_bin': self.table_cooling['Temp']}
+    for t_bin in self.table_cooling['Temp']:
+        if q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] >= bl['bl'][bl['t_bin'].index(t_bin)]: # e.q. 11.68
+            clf_low_bin['clf'][clf_low_bin['t_bin'].index(t_bin)] = (bl['bl'][bl['t_bin'].index(t_bin)])/(q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)])
+            clf_full_bin['clf'][clf_full_bin['t_bin'].index(t_bin)] = float('nan') #use nan to indicate not defined in this conditions
+        elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_low_full'): # e.q. 11.74
+            clf_low_bin['clf'][clf_low_bin['t_bin'].index(t_bin)] = (q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]-bl['bl'][bl['t_bin'].index(t_bin)])/(q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]-q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)])
+            clf_full_bin['clf'][clf_full_bin['t_bin'].index(t_bin)] = 1 - clf_low_bin['clf'][clf_low_bin['t_bin'].index(t_bin)]
+        elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_off_full'): # e.q. 11.78
+            clf_low_bin['clf'][clf_low_bin['t_bin'].index(t_bin)] = float('nan')
+            clf_full_bin['clf'][clf_full_bin['t_bin'].index(t_bin)] = bl['bl'][bl['t_bin'].index(t_bin)]/q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]
+        else:
+            clf_low_bin['clf'][clf_low_bin['t_bin'].index(t_bin)] = float('nan')
+            clf_full_bin['clf'][clf_full_bin['t_bin'].index(t_bin)] = float('nan')
+    return clf_full_bin, clf_low_bin
+
+  def plf_cooling_bins(self):
+    if len(self.cap_cooling_rated) == 1:
+        plr = 0.5 # part load ratio
+        plf = 1.0 - plr*self.c_d_cooling  # eq. 11.56
+        return plf
+    else:
+        bl = {'bl': self.building_load_cooling(),'t_bin': self.table_cooling['Temp']}
+        q_full_bin, q_low_bin,_,_ = self.cooling_capacity_power_bins()
+        plf_full_bin = {'plf': [i*0 for i in range(8)],'t_bin': self.table_cooling['Temp']}
+        plf_low_bin = {'plf': [i*0 for i in range(8)],'t_bin': self.table_cooling['Temp']}
+        clf_full_bin, clf_low_bin = self.cooling_load_factor()
+        for t_bin in self.table_cooling['Temp']:
+            if q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] >= bl['bl'][bl['t_bin'].index(t_bin)]: # e.q. 11.69
+                plf_low_bin['plf'][plf_low_bin['t_bin'].index(t_bin)] = 1.0- self.c_d_cooling*(1-clf_low_bin['clf'][clf_low_bin['t_bin'].index(t_bin)])
+                plf_full_bin['plf'][plf_full_bin['t_bin'].index(t_bin)] = float('nan') #use nan to indicate not defined in this conditions
+            elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_low_full'):
+                plf_low_bin['plf'][plf_low_bin['t_bin'].index(t_bin)] = float('nan')
+                plf_full_bin['plf'][plf_full_bin['t_bin'].index(t_bin)] = float('nan')
+            elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_off_full'): # e.q. 11.79
+                plf_low_bin['plf'][plf_low_bin['t_bin'].index(t_bin)] = float('nan')
+                plf_full_bin['plf'][plf_full_bin['t_bin'].index(t_bin)] = 1.0- self.c_d_cooling*(1-clf_full_bin['clf'][clf_full_bin['t_bin'].index(t_bin)])
+            else:
+                plf_low_bin['plf'][plf_low_bin['t_bin'].index(t_bin)] = float('nan')
+                plf_full_bin['plf'][plf_full_bin['t_bin'].index(t_bin)] = float('nan')
+        return plf_full_bin, plf_low_bin
+
+  def eer(self, conditions): # e.q. 11.17
+    eer = self.net_total_cooling_capacity(conditions,0)/self.net_cooling_power(conditions,0)
     return eer
 
-  def plf_clg(self, plr):
-    return 1.0 - plr*self.c_d_cooling  # eq. 11.56
-
   def seer(self):
-    seer = self.plf_clg(0.5) * self.eer(self.B_cond) # eq. 11.55
+    if len(self.cap_cooling_rated) == 1:
+        seer = self.plf_cooling_bins() * self.eer(self.B_cond) # eq. 11.55
+    else: # e.q. 11.59
+        q = np.asarray(self.total_bin_capacity_cooling()['cap'])
+        e = np.asarray(self.total_bin_energy_cooling()['e'])
+        seer = np.sum(q)/np.sum(e)
     return convert(seer,'','Btu/Wh')
 
   ### For heating ###
-  def fan_power_htg(self, conditions):
-    return self.fan_eff_heating_rated[conditions.compressor_speed]*self.standard_indoor_airflow_htg(conditions) # eq. 11.16
+  def fan_power_htg(self, conditions, system_stage):
+    return self.fan_eff_heating_rated[system_stage]*self.standard_indoor_airflow_htg(conditions,system_stage) # eq. 11.16
 
-  def fan_heat_htg(self, conditions):
-    return self.fan_power_htg(conditions)# eq. 11.11 (in SI units)
+  def fan_heat_htg(self, conditions, system_stage):
+    return self.fan_power_htg(conditions, system_stage)# eq. 11.11 (in SI units)
 
-  def standard_indoor_airflow_htg(self,conditions):
+  def standard_indoor_airflow_htg(self,conditions,system_stage):
     air_density_standard_conditions = 1.204 # in kg/m3
-    return self.flow_per_cap_heating_rated[conditions.compressor_speed]*self.cap_heating_rated[conditions.compressor_speed]*psychrolib.GetDryAirDensity(convert(conditions.indoor_drybulb,"K","°C"), conditions.press)/air_density_standard_conditions
+    return self.flow_per_cap_heating_rated[system_stage]*self.cap_heating_rated[system_stage]*psychrolib.GetDryAirDensity(convert(conditions.indoor_drybulb,"K","°C"), conditions.press)/air_density_standard_conditions
 
   def building_load_htg(self,conditions):
     agreement_factor = 0.77 # eq. 11.110
@@ -173,55 +291,95 @@ class DXUnit:
        f_def = 1
     return f_def
 
-  def net_total_heating_capacity(self, conditions):
-    return self.gross_stead_state_heating_capacity(conditions,self.cap_heating_rated[conditions.compressor_speed]) + self.fan_heat_htg(conditions) # eq. 11.31
+  def net_total_heating_capacity(self, conditions, system_stage):
+    return self.gross_stead_state_heating_capacity(conditions,self.cap_heating_rated[system_stage],system_stage) + self.fan_heat_htg(conditions, system_stage) # eq. 11.31
 
-  def heating_capacity_bins(self): #  eq. 11.117 and 11.118
+  def heating_capacity_bins(self):
     q_full_bin = {'cap': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
-    for t_bin in self.regions_table_htg['Temp']:
-        if (t_bin >= self.temp_frost_influence_start) or (t_bin <= 17):
-            q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)] = self.net_total_heating_capacity(self.H3_cond) + (self.net_total_heating_capacity(self.H1_cond) - self.net_total_heating_capacity(self.H3_cond)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H1_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
+    for t_bin in self.regions_table_htg['Temp']: #  eq. 11.117 and 11.118
+        if (t_bin >= self.temp_frost_influence_start[0]) or (t_bin <= 17):
+            q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)] = self.net_total_heating_capacity(self.H3_cond,0) + (self.net_total_heating_capacity(self.H1_cond,0) - self.net_total_heating_capacity(self.H3_cond,0)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H1_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
         else:
-            q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)] = self.net_total_heating_capacity(self.H3_cond) + (self.net_total_heating_capacity(self.H2_cond) - self.net_total_heating_capacity(self.H3_cond)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H2_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
-    return q_full_bin
+            q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)] = self.net_total_heating_capacity(self.H3_cond,0) + (self.net_total_heating_capacity(self.H2_cond,0) - self.net_total_heating_capacity(self.H3_cond,0)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H2_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
+    if len(self.cap_heating_rated) == 2: # double-stage system eq. 11.135 to 11.137
+        q_low_bin = {'cap': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
+        for t_bin in self.regions_table_htg['Temp']:
+            if (t_bin >= self.temp_frost_influence_start[1]): # temp_frost_influence_start[1] temperature for 2nd stage eq. 11.134
+                q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] = self.net_total_heating_capacity(self.H1_cond,1) + (self.net_total_heating_capacity(self.H0_cond,1) - self.net_total_heating_capacity(self.H1_cond,1)) * ((u(t_bin,"°F")-self.H1_cond.outdoor_drybulb)/(self.H0_cond.outdoor_drybulb-self.H1_cond.outdoor_drybulb))
+            elif (t_bin > 17) and (t_bin < self.temp_frost_influence_start[1]):
+                q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] = self.net_total_heating_capacity(self.H3_cond,1) + (self.net_total_heating_capacity(self.H2_cond,1) - self.net_total_heating_capacity(self.H3_cond,1)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H2_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
+            else:
+                q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] = self.net_total_heating_capacity(self.H3_cond,1) + (self.net_total_heating_capacity(self.H1_cond,1) - self.net_total_heating_capacity(self.H3_cond,1)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H1_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
+        return q_full_bin, q_low_bin
+    else:
+        return q_full_bin
 
   def heating_power_bins(self): # eq. 11.123 and 11.124
     p_full_bin = {'power': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
     for t_bin in self.regions_table_htg['Temp']:
-        if (t_bin >= self.temp_frost_influence_start) or (t_bin <= 17):
-            p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)] = self.net_heating_power(self.H3_cond) + (self.net_heating_power(self.H1_cond) - self.net_heating_power(self.H3_cond)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H1_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
+        if (t_bin >= self.temp_frost_influence_start[0]) or (t_bin <= 17):
+            p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)] = self.net_heating_power(self.H3_cond,0) + (self.net_heating_power(self.H1_cond,0) - self.net_heating_power(self.H3_cond,0)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H1_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
         else:
-            p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)] = self.net_heating_power(self.H3_cond) + (self.net_heating_power(self.H2_cond) - self.net_heating_power(self.H3_cond)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H2_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
-    return p_full_bin
+            p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)] = self.net_heating_power(self.H3_cond,0) + (self.net_heating_power(self.H2_cond,0) - self.net_heating_power(self.H3_cond,0)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H2_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
+    if len(self.cap_heating_rated) == 2: # double-stage system e.q 11.138 to 11.140
+        p_low_bin = {'power': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
+        for t_bin in self.regions_table_htg['Temp']:
+            if (t_bin >= self.temp_frost_influence_start[1]): # temp_frost_influence_start[1] temperature for 2nd stage eq. 11.134
+                p_low_bin['power'][p_low_bin['t_bin'].index(t_bin)] = self.net_heating_power(self.H1_cond,1) + (self.net_heating_power(self.H0_cond,1) - self.net_heating_power(self.H1_cond,1)) * ((u(t_bin,"°F")-self.H1_cond.outdoor_drybulb)/(self.H0_cond.outdoor_drybulb-self.H1_cond.outdoor_drybulb))
+            elif (t_bin > 17) and (t_bin < self.temp_frost_influence_start[1]):
+                p_low_bin['power'][p_low_bin['t_bin'].index(t_bin)] = self.net_heating_power(self.H3_cond,1) + (self.net_heating_power(self.H2_cond,1) - self.net_heating_power(self.H3_cond,1)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H2_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
+            else:
+                p_low_bin['power'][p_low_bin['t_bin'].index(t_bin)] = self.net_heating_power(self.H3_cond,1) + (self.net_heating_power(self.H1_cond,1) - self.net_heating_power(self.H3_cond,1)) * ((u(t_bin,"°F")-self.H3_cond.outdoor_drybulb)/(self.H1_cond.outdoor_drybulb-self.H3_cond.outdoor_drybulb))
+        return p_full_bin, p_low_bin
+    else:
+        return p_full_bin
 
-  def hp_low_temp_cutout_factor(self): # eq. 11.120 to 11.122
-    delta_bin = {'delta': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
-    q_bin = self.heating_capacity_bins()
-    p_bin = self.heating_power_bins()
+  def hp_low_temp_cutout_factor(self):
+    delta_bin = {'delta': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']} # delta_bin = delta_bin_2 eq. 11.120 to 11.122 or 11.159 to 11.161
+    if len(self.cap_heating_rated) == 1:
+        q_full_bin = self.heating_capacity_bins()
+        p_full_bin = self.heating_power_bins()
+    else:
+        q_full_bin = self.heating_capacity_bins()[0]
+        p_full_bin = self.heating_power_bins()[0]
+
     for t_bin in self.regions_table_htg['Temp']:
-        if ((t_bin <= self.minimum_hp_outdoor_temp_low) or (((q_bin['cap'][q_bin['t_bin'].index(t_bin)])/(p_bin['power'][p_bin['t_bin'].index(t_bin)])) < 1)):
+        if ((t_bin <= self.minimum_hp_outdoor_temp_low) or (((q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)])/(p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)])) < 1)):
             delta_bin['delta'][delta_bin['t_bin'].index(t_bin)] = 0
-        elif ((t_bin <= self.minimum_hp_outdoor_temp_high) and (t_bin > self.minimum_hp_outdoor_temp_low) and (((q_bin['cap'][q_bin['t_bin'].index(t_bin)])/(p_bin['power'][p_bin['t_bin'].index(t_bin)])) >= 1)) :
+        elif ((t_bin <= self.minimum_hp_outdoor_temp_high) and (t_bin > self.minimum_hp_outdoor_temp_low) and (((q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)])/(p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)])) >= 1)) :
             delta_bin['delta'][delta_bin['t_bin'].index(t_bin)] = 0.5
         else:
             delta_bin['delta'][delta_bin['t_bin'].index(t_bin)] = 1
-    return delta_bin
+    if len(self.cap_heating_rated) == 2: # double-stage system 11.147 to 11.149
+        delta_bin_1 = {'delta': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
+        q_low_bin = self.heating_capacity_bins()[1]
+        p_low_bin = self.heating_power_bins()[1]
+        for t_bin in self.regions_table_htg['Temp']:
+            if ((t_bin <= self.minimum_hp_outdoor_temp_low) or (((q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)])/(p_low_bin['power'][p_low_bin['t_bin'].index(t_bin)])) < 1)):
+                delta_bin_1['delta'][delta_bin_1['t_bin'].index(t_bin)] = 0
+            elif ((t_bin <= self.minimum_hp_outdoor_temp_high) and (t_bin > self.minimum_hp_outdoor_temp_low)): # and (((q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)])/(p_low_bin['power'][p_low_bin['t_bin'].index(t_bin)])) >= 1)) : (This is probably wrong!)
+                delta_bin_1['delta'][delta_bin_1['t_bin'].index(t_bin)] = 0.5
+            else:
+                delta_bin_1['delta'][delta_bin_1['t_bin'].index(t_bin)] = 1
+        return delta_bin, delta_bin_1
+    else:
+        return delta_bin
 
-  def net_heating_power(self, conditions):
-    return self.gross_stead_state_heating_power(conditions,self.cop_heating_rated[conditions.compressor_speed],self.cap_heating_rated[conditions.compressor_speed]) - self.fan_power_htg(conditions) # eq. 11.41
+  def net_heating_power(self, conditions, system_stage):
+    return self.gross_stead_state_heating_power(conditions,self.cop_heating_rated[system_stage],self.cap_heating_rated[system_stage],system_stage) - self.fan_power_htg(conditions, system_stage) # eq. 11.41
 
   # def max_design_htg(self,conditions): # This won't be used for now according to note under Table 17 in AHRI standard 2017
   #   if self.climate_region == 5:
   #       dhr_max = 2.2 * self.net_total_heating_capacity(conditions)
   #   else:
-  #       dhr_max = 2 * self.net_total_heating_capacity(conditions) *(u(65,"°F")-u(self.regions_table_htg[self.climate_region]['Out_design_temp'],"°F"))/(u(60,"°R")) 
+  #       dhr_max = 2 * self.net_total_heating_capacity(conditions) *(u(65,"°F")-u(self.regions_table_htg[self.climate_region]['Out_design_temp'],"°F"))/(u(60,"°R"))
   #   return dhr_max
 
   def min_design_htg(self,conditions): # eq. 11.111 to 11.114. The equations seem to be incorrect.
     # if self.climate_region == 5:
     #     dhr_min = self.net_total_heating_capacity(conditions)
     # else:
-    return self.net_total_heating_capacity(conditions) *(u(65,"°F")-u(self.regions_table_htg[self.climate_region]['Out_design_temp'],"°F"))/(u(60,"°R")) 
+    return self.net_total_heating_capacity(conditions,1) *(u(65,"°F")-u(self.regions_table_htg[self.climate_region]['Out_design_temp'],"°F"))/(u(60,"°R"))
 
   def round_to_closet_value(self,dhr):
     standar_design_htg_requirements = np.asarray(self.standar_design_htg_requirements)
@@ -229,96 +387,169 @@ class DXUnit:
     return standar_design_htg_requirements[index]
 
   def hp_htg_load_factor(self): # eq. 11.115 and 11.116
-    hlf_bin = {'hlf': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
-    q_bin = self.heating_capacity_bins()
     bl = {'bl':self.building_load_htg(self.H1_cond),'t_bin': self.regions_table_htg['Temp']}
-    for t_bin in self.regions_table_htg['Temp']:
-        if q_bin['cap'][q_bin['t_bin'].index(t_bin)] > bl['bl'][bl['t_bin'].index(t_bin)]:
-            hlf_bin['hlf'][hlf_bin['t_bin'].index(t_bin)] = (bl['bl'][bl['t_bin'].index(t_bin)])/(q_bin['cap'][q_bin['t_bin'].index(t_bin)])
-        else:
-            hlf_bin['hlf'][hlf_bin['t_bin'].index(t_bin)] = 1
-    return hlf_bin
+    hlf_full_bin = {'hlf': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
+    if len(self.cap_heating_rated) == 1:
+        q_full_bin = self.heating_capacity_bins()
+        for t_bin in self.regions_table_htg['Temp']:
+            if q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)] > bl['bl'][bl['t_bin'].index(t_bin)]:
+                hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)] = (bl['bl'][bl['t_bin'].index(t_bin)])/(q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)])
+            else:
+                hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)] = 1
+        return hlf_full_bin
+    else: # double-stage system
+        hlf_low_bin = {'hlf': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
+        q_full_bin, q_low_bin = self.heating_capacity_bins()
+        for t_bin in self.regions_table_htg['Temp']:
+            if q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] >= bl['bl'][bl['t_bin'].index(t_bin)]: # e.q 11.143
+                hlf_low_bin['hlf'][hlf_low_bin['t_bin'].index(t_bin)] = (bl['bl'][bl['t_bin'].index(t_bin)])/(q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)])
+                hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)] = float('nan') #use nan to indicate not defined in this conditions
+            elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_low_full'): # e.q 11.151 and # e.q 11.152
+                hlf_low_bin['hlf'][hlf_low_bin['t_bin'].index(t_bin)] = (q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]-bl['bl'][bl['t_bin'].index(t_bin)])/(q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]-q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)])
+                hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)] = 1 - hlf_low_bin['hlf'][hlf_low_bin['t_bin'].index(t_bin)]
+            elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_off_full'):  # e.q 11.154 and # e.q 11.155
+                hlf_low_bin['hlf'][hlf_low_bin['t_bin'].index(t_bin)] = float('nan')
+                hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)] = bl['bl'][bl['t_bin'].index(t_bin)]/q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]
+            else:  # e.q 11.158
+                hlf_low_bin['hlf'][hlf_low_bin['t_bin'].index(t_bin)] = float('nan')
+                hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)] = 1
+        return hlf_full_bin, hlf_low_bin
 
   def plf_htg(self): # eq. 11.125
-    hlf = np.asarray(self.hp_htg_load_factor()['hlf'])
-    plf = 1 - self.c_d_heating * (1 - hlf)
-    plf = {'plf':plf,'t_bin': self.regions_table_htg['Temp']}
-    return plf
+    if len(self.cap_heating_rated) == 1:
+        hlf_full_bin = self.hp_htg_load_factor()['hlf']
+        hlf = np.asarray(hlf_full_bin)
+        plf_full = 1 - self.c_d_heating * (1 - hlf)
+        plf_full = {'plf':plf_full,'t_bin': self.regions_table_htg['Temp']}
+        return plf_full
+    else: # double-stage system
+        plf_low = {'plf': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
+        plf_full = {'plf': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
+        q_full_bin,q_low_bin= self.heating_capacity_bins()
+        bl = {'bl':self.building_load_htg(self.H1_cond),'t_bin': self.regions_table_htg['Temp']}
+        hlf_full_bin, hlf_low_bin = self.hp_htg_load_factor()
+        for t_bin in self.regions_table_htg['Temp']:
+            if q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] >= bl['bl'][bl['t_bin'].index(t_bin)]:  # e.q 11.144
+                plf_low['plf'][plf_low['t_bin'].index(t_bin)] = 1 - self.c_d_heating * (1 - hlf_low_bin['hlf'][hlf_low_bin['t_bin'].index(t_bin)])
+                plf_full['plf'][plf_full['t_bin'].index(t_bin)] = float('nan')
+            elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_low_full'):
+                plf_low['plf'][plf_low['t_bin'].index(t_bin)] = float('nan')
+                plf_full['plf'][plf_full['t_bin'].index(t_bin)] = float('nan')
+            elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_off_full'):  # e.q 11.155
+                plf_low['plf'][plf_low['t_bin'].index(t_bin)] = float('nan')
+                plf_full['plf'][plf_full['t_bin'].index(t_bin)] = 1 - self.c_d_heating * (1 - hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)])
+            else:
+                plf_low['plf'][plf_low['t_bin'].index(t_bin)] = float('nan')
+                plf_full['plf'][plf_full['t_bin'].index(t_bin)] = float('nan')
+        return plf_full, plf_low
+
 
   def resistance_heat(self): # eq. 11.126
-    hlf = np.asarray(self.hp_htg_load_factor()['hlf'])
     bl = self.building_load_htg(self.H1_cond)
-    q_bin = self.heating_capacity_bins()
-    q_bin = np.asarray(q_bin['cap'])
-    delta_bin = np.asarray(self.hp_low_temp_cutout_factor()['delta'])
-    hrs_fraction = np.asarray(self.regions_table_htg[self.climate_region]['fraction_hrs'])
-    rh = ((bl-((q_bin*hlf)*delta_bin)))*hrs_fraction
+    if len(self.cap_heating_rated) == 1:
+        hlf_full_bin = self.hp_htg_load_factor()
+        hlf = np.asarray(hlf_full_bin['hlf'])
+        q_full_bin = self.heating_capacity_bins()
+        q_full_bin = np.asarray(q_full_bin['cap'])
+        delta_bin = self.hp_low_temp_cutout_factor()
+        delta_bin = np.asarray(delta_bin['delta'])
+        hrs_fraction = np.asarray(self.regions_table_htg[self.climate_region]['fraction_hrs'])
+        rh = {'rh': ((bl-((q_full_bin*hlf)*delta_bin)))*hrs_fraction,'t_bin': self.regions_table_htg['Temp']}
+    else: # double-stage system
+        rh = {'rh': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
+        plf_low = {'plf': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
+        q_full_bin,q_low_bin= self.heating_capacity_bins()
+        hlf_full_bin,hlf_low_bin= self.hp_htg_load_factor()
+        delta_bin, delta_bin_1 = self.hp_low_temp_cutout_factor()
+        bl = {'bl':bl,'t_bin': self.regions_table_htg['Temp']}
+        hrs_fraction = {'fraction': self.regions_table_htg[1]['fraction_hrs'],'t_bin': self.regions_table_htg['Temp']}
+        for t_bin in self.regions_table_htg['Temp']:
+            if q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] >= bl['bl'][bl['t_bin'].index(t_bin)]: # e.q 11.143
+                rh['rh'][rh['t_bin'].index(t_bin)] = bl['bl'][bl['t_bin'].index(t_bin)]*(1-delta_bin_1['delta'][delta_bin_1['t_bin'].index(t_bin)])*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
+            elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_low_full'): # e.q 11.151 and # e.q 11.152
+                rh['rh'][rh['t_bin'].index(t_bin)] = bl['bl'][bl['t_bin'].index(t_bin)]*(1-delta_bin_1['delta'][delta_bin_1['t_bin'].index(t_bin)])*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
+            elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_off_full'):  # e.q 11.154 and # e.q 11.155
+                rh['rh'][rh['t_bin'].index(t_bin)] = bl['bl'][bl['t_bin'].index(t_bin)]*(1-delta_bin_1['delta'][delta_bin_1['t_bin'].index(t_bin)])*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
+            else:  # e.q 11.158
+                rh['rh'][rh['t_bin'].index(t_bin)] = (bl['bl'][bl['t_bin'].index(t_bin)]-q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]*hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)]*delta_bin['delta'][delta_bin['t_bin'].index(t_bin)])*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
     return rh
 
   def bin_energy(self): # eq. 11.153 and 11.156
     e = {'e': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
-    hlf = self.hp_htg_load_factor()
     bl = {'bl':self.building_load_htg(self.H1_cond),'t_bin': self.regions_table_htg['Temp']}
-    q_bin = self.heating_capacity_bins()
-    p_bin = self.heating_power_bins()
-    plf = self.plf_htg()
-    delta_bin = self.hp_low_temp_cutout_factor()
     hrs_fraction = {'fraction': self.regions_table_htg[1]['fraction_hrs'],'t_bin': self.regions_table_htg['Temp']}
-    for t_bin in self.regions_table_htg['Temp']:
-        e_bin = (p_bin['power'][p_bin['t_bin'].index(t_bin)])*(hlf['hlf'][hlf['t_bin'].index(t_bin)])*(delta_bin['delta'][delta_bin['t_bin'].index(t_bin)])*(hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)])
-        if q_bin['cap'][q_bin['t_bin'].index(t_bin)] > bl['bl'][bl['t_bin'].index(t_bin)]:
-            e_bin = e_bin/(plf['plf'][plf['t_bin'].index(t_bin)])
-        e['e'][e['t_bin'].index(t_bin)] = e_bin
+    if len(self.cap_heating_rated) == 1:
+        hlf_full_bin = self.hp_htg_load_factor()
+        q_full_bin = self.heating_capacity_bins()
+        p_full_bin = self.heating_power_bins()
+        plf_full = self.plf_htg()
+        delta_bin = self.hp_low_temp_cutout_factor()
+        for t_bin in self.regions_table_htg['Temp']:
+            e_bin = (p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)])*(hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)])*(delta_bin['delta'][delta_bin['t_bin'].index(t_bin)])*(hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)])
+            if q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)] > bl['bl'][bl['t_bin'].index(t_bin)]:
+                e_bin = e_bin/(plf_full['plf'][plf_full['t_bin'].index(t_bin)])
+            e['e'][e['t_bin'].index(t_bin)] = e_bin
+    else:
+        hlf_full_bin, hlf_low_bin = self.hp_htg_load_factor()
+        q_full_bin,q_low_bin = self.heating_capacity_bins()
+        p_full_bin,p_low_bin = self.heating_power_bins()
+        plf_full, plf_low = self.plf_htg()
+        delta_bin,delta_bin_1 = self.hp_low_temp_cutout_factor()
+        for t_bin in self.regions_table_htg['Temp']:
+            if q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] >= bl['bl'][bl['t_bin'].index(t_bin)]:  # e.q 11.141
+                e['e'][e['t_bin'].index(t_bin)] = p_low_bin['power'][p_low_bin['t_bin'].index(t_bin)]*hlf_low_bin['hlf'][hlf_low_bin['t_bin'].index(t_bin)]*delta_bin_1['delta'][delta_bin_1['t_bin'].index(t_bin)]*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]/plf_low['plf'][plf_low['t_bin'].index(t_bin)]
+            elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_low_full'):  # e.q 11.150
+                e['e'][e['t_bin'].index(t_bin)] = (p_low_bin['power'][p_low_bin['t_bin'].index(t_bin)]*hlf_low_bin['hlf'][hlf_low_bin['t_bin'].index(t_bin)]+p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)]*hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)])*delta_bin_1['delta'][delta_bin_1['t_bin'].index(t_bin)]*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
+            elif (q_low_bin['cap'][q_low_bin['t_bin'].index(t_bin)] < bl['bl'][bl['t_bin'].index(t_bin)]) and (bl['bl'][bl['t_bin'].index(t_bin)] < q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)]) and (self.cycling == 'between_off_full'):  # e.q 11.153
+                e['e'][e['t_bin'].index(t_bin)] = p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)]*hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)]*delta_bin['delta'][delta_bin['t_bin'].index(t_bin)]*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]/plf_full['plf'][plf_full['t_bin'].index(t_bin)]
+            else:  # e.q 11.156
+                e['e'][e['t_bin'].index(t_bin)] = p_full_bin['power'][p_full_bin['t_bin'].index(t_bin)]*hlf_full_bin['hlf'][hlf_full_bin['t_bin'].index(t_bin)]*delta_bin['delta'][delta_bin['t_bin'].index(t_bin)]*hrs_fraction['fraction'][hrs_fraction['t_bin'].index(t_bin)]
     return e
 
   def hspf(self): # eq. 11.108
     e =  np.asarray(self.bin_energy()['e'])
-    hlf = np.asarray(self.hp_htg_load_factor()['hlf'])
     bl = self.building_load_htg(self.H1_cond)
-    delta_bin = np.asarray(self.hp_low_temp_cutout_factor()['delta'])
     hrs_fraction = np.asarray(self.regions_table_htg[self.climate_region]['fraction_hrs'])
-    rh = self.resistance_heat()
-    plf = np.asarray(self.plf_htg()['plf'])
-    # hspf = ((np.sum(hrs_fraction * bl))/((np.sum((((hrs_fraction * hlf) * delta_bin) * e)/plf)+(np.sum(rh))))) * self.defrost_factor()
-    hspf = ((np.sum(hrs_fraction * bl))/((np.sum(e)+(np.sum(rh))))) * self.defrost_factor() # similar to 2 stage
+    rh = np.asarray(self.resistance_heat()['rh'])
+    hspf = ((np.sum(hrs_fraction * bl))/((np.sum(e)+(np.sum(rh))))) * self.defrost_factor()
     return convert(hspf,'','Btu/Wh')
 
   def writeA205(self):
     '''Write ASHRAE 205 file!!!'''
     return
 
-def cutler_cooling_power(conditions,cop_rated,cap_rated):
+def cutler_cooling_power(conditions,cop_rated,cap_rated,system_stage):
   T_iwb = psychrolib.GetTWetBulbFromRelHum(convert(conditions.indoor_drybulb,"K","°C"),conditions.indoor_rh,conditions.press)
   T_iwb = convert(T_iwb,"°C","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
   eir_FT = calc_biquad([-3.437356399, 0.136656369, -0.001049231, -0.0079378, 0.000185435, -0.0001441], T_iwb, T_odb)
-  eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.mass_flow_fraction)
+  eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.mass_flow_fraction[system_stage])
   cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
-  cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction)
+  cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction[system_stage])
   return eir_FF*cap_FF*eir_FT*cap_FT*cap_rated*(1/cop_rated)
 
-def cutler_cooling_capacity(conditions,cap_rated):
+def cutler_cooling_capacity(conditions,cap_rated,system_stage):
   T_iwb = psychrolib.GetTWetBulbFromRelHum(convert(conditions.indoor_drybulb,"K","°C"),conditions.indoor_rh,conditions.press)
   T_iwb = convert(T_iwb,"°C","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
   cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
-  cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction)
+  cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction[system_stage])
   return cap_FF*cap_FT*cap_rated
 
-def cutler_heating_power(conditions,cop_rated,cap_rated):
+def cutler_heating_power(conditions,cop_rated,cap_rated,system_stage):
   T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
   eir_FT = calc_biquad([0.718398423,0.003498178, 0.000142202, -0.005724331, 0.00014085, -0.000215321], T_idb, T_odb)
-  eir_FF = calc_quad([2.185418751, -1.942827919, 0.757409168], conditions.mass_flow_fraction)
+  eir_FF = calc_quad([2.185418751, -1.942827919, 0.757409168], conditions.mass_flow_fraction[system_stage])
   cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
-  cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
+  cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction[system_stage])
   return eir_FF*cap_FF*eir_FT*cap_FT*cap_rated*(1/cop_rated)
 
-def cutler_heating_capacity(conditions,cap_rated):
+def cutler_heating_capacity(conditions,cap_rated,system_stage):
   T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
   cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
-  cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
+  cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction[system_stage])
   return cap_FF*cap_FT*cap_rated
 
 
@@ -326,17 +557,27 @@ def cutler_heating_capacity(conditions,cap_rated):
 # Move this stuff to a separate
 
 dx_unit = DXUnit(gross_total_cooling_capacity=cutler_cooling_capacity,gross_cooling_power=cutler_cooling_power)
-
+print(f"cooling with: {len(dx_unit.cap_cooling_rated)} stage(s)")
 print(f"SEER: {dx_unit.seer()}")
-print(f"Net power: {dx_unit.net_cooling_power(DXUnit.A_cond)}")
-print(f"Net capacity: {dx_unit.net_total_cooling_capacity(DXUnit.A_cond)}")
+if len(dx_unit.cap_cooling_rated) == 1:
+    print(f"Net power: {dx_unit.net_cooling_power(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-1)}")
+    print(f"Net capacity: {dx_unit.net_total_cooling_capacity(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-1)}")
+else:
+    print(f"Net power for stage {len(dx_unit.cap_cooling_rated)-1} : {dx_unit.net_cooling_power(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-1)}")
+    print(f"Net capacity for stage {len(dx_unit.cap_cooling_rated)-1} : {dx_unit.net_total_cooling_capacity(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-1)}")
+    print(f"Net power for stage {len(dx_unit.cap_cooling_rated)-2} : {dx_unit.net_cooling_power(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-2)}")
+    print(f"Net capacity for stage {len(dx_unit.cap_cooling_rated)-2} : {dx_unit.net_total_cooling_capacity(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-2)}")
 
 # %%
 
 dx_unit = DXUnit(gross_stead_state_heating_capacity=cutler_heating_capacity,gross_stead_state_heating_power=cutler_heating_power)
-
+print(f"heating with: {len(dx_unit.cap_heating_rated)} stage(s)")
 print(f"HSPF: {dx_unit.hspf()}")
-print(f"Net power: {dx_unit.net_heating_power(DXUnit.H1_cond)}")
-print(f"Net capacity: {dx_unit.net_total_heating_capacity(DXUnit.H1_cond)}")
-
-
+if len(dx_unit.cap_heating_rated) == 1:
+    print(f"Net power: {dx_unit.net_heating_power(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-1)}")
+    print(f"Net capacity: {dx_unit.net_total_heating_capacity(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-1)}")
+else:
+    print(f"Net power for stage {len(dx_unit.cap_heating_rated)-1} : {dx_unit.net_heating_power(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-1)}")
+    print(f"Net capacity for stage {len(dx_unit.cap_heating_rated)-1} : {dx_unit.net_total_heating_capacity(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-1)}")
+    print(f"Net power for stage {len(dx_unit.cap_heating_rated)-2} : {dx_unit.net_heating_power(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-2)}")
+    print(f"Net capacity for stage {len(dx_unit.cap_heating_rated)-2} : {dx_unit.net_total_heating_capacity(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-2)}")
