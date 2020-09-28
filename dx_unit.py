@@ -76,17 +76,17 @@ class DXUnit:
                     gross_stead_state_heating_power=lambda conditions, cop_rated,cap_rated,system_stage : 8000, # in base unit to remove confusion
                     gross_integrated_heating_power=lambda conditions : 1.0,
                     c_d_heating=0.2,
-                    fan_eff_heating_rated=[u(0.365,'W/cu_ft/min'),u(0.365,'W/cu_ft/min')],
-                    cop_heating_rated=[2.5, 3.0],
-                    flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration"),u(350.0,"cu_ft/min/ton_of_refrigeration")],
-                    cap_heating_rated=[11000,16000], # # This has same units as gross capacity. This should be in base units to remove confusion.
-                    climate_region = 3,
+                    fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
+                    cop_heating_rated=[2.5],
+                    flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
+                    cap_heating_rated=[11000], # # This has same units as gross capacity. This should be in base units to remove confusion.
+                    climate_region = 4,
                     defrost_strategy = 'demand_defrost',
-                    temp_frost_influence_start = [45, 40], # eq. 11.119 and 11.134 this is in °F
+                    temp_frost_influence_start = [45], # eq. 11.119 and 11.134 this is in °F
                     minimum_hp_outdoor_temp_low = 10.0, # value taken from Scott's script single-stage
                     cycling = 'between_low_full', # 'between_off_full' | 'between_low_full'
                     minimum_hp_outdoor_temp_high = 14.0): # value taken from Scott's script single-stage
-    self.num_coolilng_speeds = len(cop_cooling_rated)
+    self.number_of_speeds = len(cop_cooling_rated)
     self.gross_total_cooling_capacity = gross_total_cooling_capacity # This should be in base units
     self.gross_sensible_cooling_capacity = gross_sensible_cooling_capacity
     self.gross_cooling_power = gross_cooling_power
@@ -96,7 +96,6 @@ class DXUnit:
     self.cop_cooling_rated = cop_cooling_rated
     self.cap_cooling_rated = cap_cooling_rated
     self.flow_per_cap_cooling_rated = flow_per_cap_cooling_rated
-    self.num_heating_speeds = len(cop_heating_rated)
     self.gross_stead_state_heating_capacity = gross_stead_state_heating_capacity
     self.gross_integrated_heating_capacity = gross_integrated_heating_capacity
     self.gross_stead_state_heating_power = gross_stead_state_heating_power
@@ -127,14 +126,30 @@ class DXUnit:
                          }
     self.standar_design_htg_requirements = [(5000+i*5000)/3.412 for i in range(0,8)] + [(50000+i*10000)/3.412 for i in range(0,9)] # division by 3.412 is used for btu/h to w conversion
 
-    ### Check to make sure all cooling arrays are the same size if not output a warning message
-    check_dimension_cooling = (len(self.fan_eff_cooling_rated)+len(self.cop_cooling_rated)+len(self.flow_per_cap_cooling_rated)+len(self.cap_cooling_rated))/4
-    check_dimension_heating = (len(self.fan_eff_heating_rated)+len(self.cop_heating_rated)+len(self.flow_per_cap_heating_rated)+len(self.cap_heating_rated))/4
+    # Check to make sure all cooling arrays are the same size if not output a warning message
+    self.check_array_lengths()
 
-    if  (check_dimension_cooling != 1) and (check_dimension_cooling != 2):
-        sys.exit('Make sure all relevant cooling arrays have same size (e.g. for double stage systems some parameters need low and full stage values)')
-    if  (check_dimension_heating != 1) and (check_dimension_heating != 2):
-        sys.exit('Make sure all relevant heating arrays have same size (e.g. for double stage systems some parameters need low and full stage values)')
+    # Check to make sure arrays are in descending order
+    self.check_array_order(self.cap_cooling_rated)
+    self.check_array_order(self.cap_heating_rated)
+
+  def check_array_length(self, array):
+    if (len(array) != self.number_of_speeds):
+      sys.exit(f'Unexpected array length ({len(array)}). Number of speeds is {self.number_of_speeds}. Array items are {array}')
+
+  def check_array_lengths(self):
+    self.check_array_length(self.fan_eff_cooling_rated)
+    self.check_array_length(self.flow_per_cap_cooling_rated)
+    self.check_array_length(self.cap_cooling_rated)
+    self.check_array_length(self.shr_cooling_rated)
+    self.check_array_length(self.fan_eff_heating_rated)
+    self.check_array_length(self.cop_heating_rated)
+    self.check_array_length(self.flow_per_cap_heating_rated)
+    self.check_array_length(self.cap_heating_rated)
+    self.check_array_length(self.temp_frost_influence_start)
+
+  def check_array_order(self, array):
+    return all(earlier >= later for earlier, later in zip(array, array[1:]))
 
   ### For cooling ###
   def fan_power_clg(self, conditions,system_stage):
@@ -379,7 +394,7 @@ class DXUnit:
     # if self.climate_region == 5:
     #     dhr_min = self.net_total_heating_capacity(conditions)
     # else:
-    return self.net_total_heating_capacity(conditions,1) *(u(65,"°F")-u(self.regions_table_htg[self.climate_region]['Out_design_temp'],"°F"))/(u(60,"°R"))
+    return self.net_total_heating_capacity(conditions,0) *(u(65,"°F")-u(self.regions_table_htg[self.climate_region]['Out_design_temp'],"°F"))/(u(60,"°R"))
 
   def round_to_closet_value(self,dhr):
     standar_design_htg_requirements = np.asarray(self.standar_design_htg_requirements)
@@ -514,6 +529,18 @@ class DXUnit:
     hspf = ((np.sum(hrs_fraction * bl))/((np.sum(e)+(np.sum(rh))))) * self.defrost_factor()
     return convert(hspf,'','Btu/Wh')
 
+  def print_cooling_info(self):
+    print(f"SEER: {self.seer()}")
+    for speed in range(self.number_of_speeds):
+      print(f"Net cooling power for stage {speed + 1} : {self.net_cooling_power(self.A_cond,speed)}")
+      print(f"Net cooling capacity for stage {speed + 1} : {self.net_total_cooling_capacity(self.A_cond,speed)}")
+
+  def print_heating_info(self):
+    print(f"HSPF: {self.hspf()}")
+    for speed in range(self.number_of_speeds):
+      print(f"Net heating power for stage {speed + 1} : {self.net_heating_power(self.H1_cond,speed)}")
+      print(f"Net heating capacity for stage {speed + 1} : {self.net_total_heating_capacity(self.H1_cond,speed)}")
+
   def writeA205(self):
     '''Write ASHRAE 205 file!!!'''
     return
@@ -554,30 +581,39 @@ def cutler_heating_capacity(conditions,cap_rated,system_stage):
 
 
 #%%
-# Move this stuff to a separate
+# Move this stuff to a separate file
 
-dx_unit = DXUnit(gross_total_cooling_capacity=cutler_cooling_capacity,gross_cooling_power=cutler_cooling_power)
-print(f"cooling with: {len(dx_unit.cap_cooling_rated)} stage(s)")
-print(f"SEER: {dx_unit.seer()}")
-if len(dx_unit.cap_cooling_rated) == 1:
-    print(f"Net power: {dx_unit.net_cooling_power(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-1)}")
-    print(f"Net capacity: {dx_unit.net_total_cooling_capacity(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-1)}")
-else:
-    print(f"Net power for stage {len(dx_unit.cap_cooling_rated)-1} : {dx_unit.net_cooling_power(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-1)}")
-    print(f"Net capacity for stage {len(dx_unit.cap_cooling_rated)-1} : {dx_unit.net_total_cooling_capacity(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-1)}")
-    print(f"Net power for stage {len(dx_unit.cap_cooling_rated)-2} : {dx_unit.net_cooling_power(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-2)}")
-    print(f"Net capacity for stage {len(dx_unit.cap_cooling_rated)-2} : {dx_unit.net_total_cooling_capacity(DXUnit.A_cond,len(dx_unit.cap_cooling_rated)-2)}")
+# Single speed
+dx_unit_1_speed = DXUnit(
+  gross_total_cooling_capacity=cutler_cooling_capacity,
+  gross_cooling_power=cutler_cooling_power,
+  gross_stead_state_heating_capacity=cutler_heating_capacity,
+  gross_stead_state_heating_power=cutler_heating_power
+)
 
-# %%
+dx_unit_1_speed.print_cooling_info()
 
-dx_unit = DXUnit(gross_stead_state_heating_capacity=cutler_heating_capacity,gross_stead_state_heating_power=cutler_heating_power)
-print(f"heating with: {len(dx_unit.cap_heating_rated)} stage(s)")
-print(f"HSPF: {dx_unit.hspf()}")
-if len(dx_unit.cap_heating_rated) == 1:
-    print(f"Net power: {dx_unit.net_heating_power(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-1)}")
-    print(f"Net capacity: {dx_unit.net_total_heating_capacity(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-1)}")
-else:
-    print(f"Net power for stage {len(dx_unit.cap_heating_rated)-1} : {dx_unit.net_heating_power(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-1)}")
-    print(f"Net capacity for stage {len(dx_unit.cap_heating_rated)-1} : {dx_unit.net_total_heating_capacity(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-1)}")
-    print(f"Net power for stage {len(dx_unit.cap_heating_rated)-2} : {dx_unit.net_heating_power(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-2)}")
-    print(f"Net capacity for stage {len(dx_unit.cap_heating_rated)-2} : {dx_unit.net_total_heating_capacity(DXUnit.H1_cond,len(dx_unit.cap_heating_rated)-2)}")
+dx_unit_1_speed.print_heating_info()
+
+# Two speed
+dx_unit_2_speed = DXUnit(
+  cop_cooling_rated=[3.0,3.5],
+  fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')]*2,
+  flow_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
+  cap_cooling_rated=[16000,11000],
+  shr_cooling_rated=[0.8]*2,
+  gross_total_cooling_capacity=cutler_cooling_capacity,
+  gross_cooling_power=cutler_cooling_power,
+  fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')]*2,
+  cop_heating_rated=[2.5, 3.0],
+  flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
+  cap_heating_rated=[16000,11000],
+  temp_frost_influence_start=[40, 45],
+  gross_stead_state_heating_capacity=cutler_heating_capacity,
+  gross_stead_state_heating_power=cutler_heating_power
+)
+
+dx_unit_2_speed.print_cooling_info()
+
+dx_unit_2_speed.print_heating_info()
+
