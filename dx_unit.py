@@ -64,18 +64,18 @@ class DXUnit:
   H3_low_cond = HeatingConditions(outdoor_drybulb=u(17.0,"°F"),compressor_speed=1)
   H2_low_cond = HeatingConditions(outdoor_drybulb=u(35.0,"°F"),compressor_speed=1)
 
-  def __init__(self,gross_total_cooling_capacity=lambda conditions,cap_rated : 10000,
+  def __init__(self,gross_total_cooling_capacity=lambda conditions, scalar : 10000,
                     gross_sensible_cooling_capacity=lambda conditions : 1.0,
-                    gross_cooling_power=lambda conditions, cop_rated,cap_rated : 8000,
+                    gross_cooling_power=lambda conditions, scalar : 8000,
                     c_d_cooling=0.2,
                     fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')],
                     cop_cooling_rated=[3.0],
                     flow_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
                     cap_cooling_rated=[11000], # This has same units as gross capacity. This should be in base units to remove confusion.
                     shr_cooling_rated=[0.8], # Sensible heat ratio (Sensible capacity / Total capacity)
-                    gross_stead_state_heating_capacity=lambda conditions,cap_rated : 10000, # in base unit to remove confusion
+                    gross_stead_state_heating_capacity=lambda conditions, scalar : 10000, # in base unit to remove confusion
                     gross_integrated_heating_capacity=lambda conditions : 1.0,
-                    gross_stead_state_heating_power=lambda conditions, cop_rated,cap_rated : 8000, # in base unit to remove confusion
+                    gross_stead_state_heating_power=lambda conditions, scalar : 8000, # in base unit to remove confusion
                     gross_integrated_heating_power=lambda conditions : 1.0,
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
@@ -168,7 +168,7 @@ class DXUnit:
     return self.gross_total_cooling_capacity(conditions,self.cap_cooling_rated[conditions.compressor_speed]) - self.fan_heat_clg(conditions) # eq. 11.3 but not considering duct losses
 
   def net_cooling_power(self, conditions):
-    return self.gross_cooling_power(conditions,self.cop_cooling_rated[conditions.compressor_speed],self.cap_cooling_rated[conditions.compressor_speed]) + self.fan_power_clg(conditions) # eq. 11.15
+    return self.gross_cooling_power(conditions,self.cap_cooling_rated[conditions.compressor_speed]/self.cop_cooling_rated[conditions.compressor_speed]) + self.fan_power_clg(conditions) # eq. 11.15
 
   def building_load_cooling(self):
     sizing_factor = 1.1 # eq. 11.61
@@ -383,7 +383,7 @@ class DXUnit:
         return delta_bin
 
   def net_heating_power(self, conditions):
-    return self.gross_stead_state_heating_power(conditions,self.cop_heating_rated[conditions.compressor_speed],self.cap_heating_rated[conditions.compressor_speed]) - self.fan_power_htg(conditions) # eq. 11.41
+    return self.gross_stead_state_heating_power(conditions,self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power_htg(conditions) # eq. 11.41
 
   # def max_design_htg(self,conditions): # This won't be used for now according to note under Table 17 in AHRI standard 2017
   #   if self.climate_region == 5:
@@ -549,7 +549,7 @@ class DXUnit:
     '''Write ASHRAE 205 file!!!'''
     return
 
-def cutler_cooling_power(conditions,cop_rated,cap_rated):
+def cutler_cooling_power(conditions,scalar):
   T_iwb = psychrolib.GetTWetBulbFromRelHum(convert(conditions.indoor_drybulb,"K","°C"),conditions.indoor_rh,conditions.press)
   T_iwb = convert(T_iwb,"°C","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
@@ -557,31 +557,31 @@ def cutler_cooling_power(conditions,cop_rated,cap_rated):
   eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.mass_flow_fraction)
   cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
   cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction)
-  return eir_FF*cap_FF*eir_FT*cap_FT*cap_rated*(1/cop_rated)
+  return eir_FF*cap_FF*eir_FT*cap_FT*scalar
 
-def cutler_cooling_capacity(conditions,cap_rated):
+def cutler_cooling_capacity(conditions,scalar):
   T_iwb = psychrolib.GetTWetBulbFromRelHum(convert(conditions.indoor_drybulb,"K","°C"),conditions.indoor_rh,conditions.press)
   T_iwb = convert(T_iwb,"°C","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
   cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
   cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction)
-  return cap_FF*cap_FT*cap_rated
+  return cap_FF*cap_FT*scalar
 
-def cutler_heating_power(conditions,cop_rated,cap_rated):
+def cutler_heating_power(conditions,scalar):
   T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
   eir_FT = calc_biquad([0.718398423,0.003498178, 0.000142202, -0.005724331, 0.00014085, -0.000215321], T_idb, T_odb)
   eir_FF = calc_quad([2.185418751, -1.942827919, 0.757409168], conditions.mass_flow_fraction)
   cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
   cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
-  return eir_FF*cap_FF*eir_FT*cap_FT*cap_rated*(1/cop_rated)
+  return eir_FF*cap_FF*eir_FT*cap_FT*scalar
 
-def cutler_heating_capacity(conditions,cap_rated):
+def cutler_heating_capacity(conditions,scalar):
   T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
   cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
   cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
-  return cap_FF*cap_FT*cap_rated
+  return cap_FF*cap_FT*scalar
 
 
 #%%
