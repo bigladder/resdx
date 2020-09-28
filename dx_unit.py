@@ -64,6 +64,34 @@ class DXUnit:
   H3_low_cond = HeatingConditions(outdoor_drybulb=u(17.0,"°F"),compressor_speed=1)
   H2_low_cond = HeatingConditions(outdoor_drybulb=u(35.0,"°F"),compressor_speed=1)
 
+  '''
+  regional_heating_distributions = {
+    1: HeatingDistribution(u(37.0,"°F"), [0.291,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
+    2: HeatingDistribution(u(27.0,"°F"), [0.215,0.189,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
+    3: HeatingDistribution(u(17.0,"°F"), [0.153,0.142,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000]),
+    4: HeatingDistribution(u(5.0,"°F"),  [0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000]),
+    5: HeatingDistribution(u(-10.0,"°F"),[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]),
+    6: HeatingDistribution(u(30.0,"°F"), [0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000])
+    }
+  '''
+
+  regions_table_htg = {1: {'htg_load_hrs':750,'Out_design_temp':37,'fraction_hrs':[0.291,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0,0,0,0,0,0,0,0,0]},
+                            2: {'htg_load_hrs':1250,'Out_design_temp':27,'fraction_hrs':[0.215,0.189,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0,0,0,0,0,0,0,0]},
+                            3: {'htg_load_hrs':1750,'Out_design_temp':17,'fraction_hrs':[0.153,0.142,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0,0,0,0,0]},
+                            4: {'htg_load_hrs':2250,'Out_design_temp':5,'fraction_hrs':[0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0,0,0]},
+                            5: {'htg_load_hrs':2750,'Out_design_temp':-10,'fraction_hrs':[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]},
+                            6: {'htg_load_hrs':2750,'Out_design_temp':30,'fraction_hrs':[0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0,0,0,0,0,0,0,0,0]},
+                            'bin':[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],
+                            'Temp':[62,57,52,47,42,37,32,27,22,17,12,7,2,-3,-8,-13,-18,-23]
+                            }
+
+  table_cooling = {'bin':[1,2,3,4,5,6,7,8],
+                        'Temp': [67,72,77,82,87,92,97,102],
+                        'fraction_hrs': [0.214,0.231,0.216,0.161,0.104,0.052,0.018,0.004]
+                        }
+  standar_design_htg_requirements = [(5000+i*5000)/3.412 for i in range(0,8)] + [(50000+i*10000)/3.412 for i in range(0,9)] # division by 3.412 is used for btu/h to w conversion
+
+
   def __init__(self,gross_total_cooling_capacity=lambda conditions, scalar : 10000,
                     gross_sensible_cooling_capacity=lambda conditions : 1.0,
                     gross_cooling_power=lambda conditions, scalar : 8000,
@@ -113,20 +141,6 @@ class DXUnit:
     self.temp_frost_influence_start = temp_frost_influence_start
     self.minimum_hp_outdoor_temp_low = minimum_hp_outdoor_temp_low
     self.minimum_hp_outdoor_temp_high = minimum_hp_outdoor_temp_high
-    self.regions_table_htg = {1: {'htg_load_hrs':750,'Out_design_temp':37,'fraction_hrs':[0.291,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0,0,0,0,0,0,0,0,0]},
-                              2: {'htg_load_hrs':1250,'Out_design_temp':27,'fraction_hrs':[0.215,0.189,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0,0,0,0,0,0,0,0]},
-                              3: {'htg_load_hrs':1750,'Out_design_temp':17,'fraction_hrs':[0.153,0.142,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0,0,0,0,0]},
-                              4: {'htg_load_hrs':2250,'Out_design_temp':5,'fraction_hrs':[0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0,0,0]},
-                              5: {'htg_load_hrs':2750,'Out_design_temp':-10,'fraction_hrs':[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]},
-                              6: {'htg_load_hrs':2750,'Out_design_temp':30,'fraction_hrs':[0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0,0,0,0,0,0,0,0,0]},
-                              'bin':[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],
-                              'Temp':[62,57,52,47,42,37,32,27,22,17,12,7,2,-3,-8,-13,-18,-23]
-                             }
-    self.table_cooling = {'bin':[1,2,3,4,5,6,7,8],
-                          'Temp': [67,72,77,82,87,92,97,102],
-                          'fraction_hrs': [0.214,0.231,0.216,0.161,0.104,0.052,0.018,0.004]
-                         }
-    self.standar_design_htg_requirements = [(5000+i*5000)/3.412 for i in range(0,8)] + [(50000+i*10000)/3.412 for i in range(0,9)] # division by 3.412 is used for btu/h to w conversion
 
     # Check to make sure all cooling arrays are the same size if not output a warning message
     self.check_array_lengths()
