@@ -33,7 +33,7 @@ class CoolingConditions:
     self.indoor_rh = indoor_rh
     self.indoor_drybulb = indoor_drybulb
     self.press = press
-    self.mass_flow_fraction=mass_flow_fraction
+    self.mass_flow_fraction=mass_flow_fraction  # Still need to figure out how to actually use this
     self.compressor_speed = compressor_speed # compressor speed index (0 = full speed, 1 = next lowest, ...)
 
 class HeatingConditions:
@@ -47,7 +47,7 @@ class HeatingConditions:
     self.outdoor_drybulb = outdoor_drybulb
     self.indoor_drybulb = indoor_drybulb
     self.press = press
-    self.mass_flow_fraction=mass_flow_fraction
+    self.mass_flow_fraction=mass_flow_fraction  # Still need to figure out how to actually use this
     self.compressor_speed = compressor_speed # compressor speed index (0 = full speed, 1 = next lowest, ...)
     self.outdoor_rh = outdoor_rh
 
@@ -137,7 +137,7 @@ class DXUnit:
 
   def check_array_length(self, array):
     if (len(array) != self.number_of_speeds):
-      sys.exit(f'Unexpected array length ({len(array)}). Number of speeds is {self.number_of_speeds}. Array items are {array}')
+      sys.exit(f'Unexpected array length ({len(array)}). Number of speeds is {self.number_of_speeds}. Array items are {array}.')
 
   def check_array_lengths(self):
     self.check_array_length(self.fan_eff_cooling_rated)
@@ -151,7 +151,8 @@ class DXUnit:
     self.check_array_length(self.temp_frost_influence_start)
 
   def check_array_order(self, array):
-    return all(earlier >= later for earlier, later in zip(array, array[1:]))
+    if not all(earlier >= later for earlier, later in zip(array, array[1:])):
+      sys.exit(f'Arrays must be in order of decreasing capacity. Array items are {array}.')
 
   ### For cooling ###
   def fan_power_clg(self, conditions):
