@@ -154,22 +154,29 @@ class DXUnit:
     if not all(earlier >= later for earlier, later in zip(array, array[1:])):
       sys.exit(f'Arrays must be in order of decreasing capacity. Array items are {array}.')
 
-  ### For cooling ###
-  def fan_power_clg(self, conditions):
-    return self.fan_eff_cooling_rated[conditions.compressor_speed]*self.standard_indoor_airflow_clg(conditions) # eq. 11.16
+  def fan_power(self, conditions):
+    if type(conditions) == CoolingConditions:
+      return self.fan_eff_cooling_rated[conditions.compressor_speed]*self.standard_indoor_airflow(conditions) # eq. 11.16
+    else: # if type(conditions) == HeatingConditions:
+      return self.fan_eff_heating_rated[conditions.compressor_speed]*self.standard_indoor_airflow(conditions) # eq. 11.16
 
-  def fan_heat_clg(self, conditions):
-    return self.fan_power_clg(conditions)# eq. 11.11 (in SI units)
+  def fan_heat(self, conditions):
+    return self.fan_power(conditions) # eq. 11.11 (in SI units)
 
-  def standard_indoor_airflow_clg(self,conditions):
+  def standard_indoor_airflow(self,conditions):
     air_density_standard_conditions = 1.204 # in kg/m3
-    return self.flow_per_cap_cooling_rated[conditions.compressor_speed]*self.cap_cooling_rated[conditions.compressor_speed]*psychrolib.GetDryAirDensity(convert(conditions.indoor_drybulb,"K","°C"), conditions.press)/air_density_standard_conditions
+    if type(conditions) == CoolingConditions:
+      flow = self.flow_per_cap_cooling_rated[conditions.compressor_speed]*self.cap_cooling_rated[conditions.compressor_speed]
+    else: # if type(conditions) == HeatingConditions:
+      flow = self.flow_per_cap_heating_rated[conditions.compressor_speed]*self.cap_heating_rated[conditions.compressor_speed]
+    return flow*psychrolib.GetDryAirDensity(convert(conditions.indoor_drybulb,"K","°C"), conditions.press)/air_density_standard_conditions
 
+  ### For cooling ###
   def net_total_cooling_capacity(self, conditions):
-    return self.gross_total_cooling_capacity(conditions,self.cap_cooling_rated[conditions.compressor_speed]) - self.fan_heat_clg(conditions) # eq. 11.3 but not considering duct losses
+    return self.gross_total_cooling_capacity(conditions,self.cap_cooling_rated[conditions.compressor_speed]) - self.fan_heat(conditions) # eq. 11.3 but not considering duct losses
 
   def net_cooling_power(self, conditions):
-    return self.gross_cooling_power(conditions,self.cap_cooling_rated[conditions.compressor_speed]/self.cop_cooling_rated[conditions.compressor_speed]) + self.fan_power_clg(conditions) # eq. 11.15
+    return self.gross_cooling_power(conditions,self.cap_cooling_rated[conditions.compressor_speed]/self.cop_cooling_rated[conditions.compressor_speed]) + self.fan_power(conditions) # eq. 11.15
 
   def building_load_cooling(self):
     sizing_factor = 1.1 # eq. 11.61
@@ -285,16 +292,6 @@ class DXUnit:
     return convert(seer,'','Btu/Wh')
 
   ### For heating ###
-  def fan_power_htg(self, conditions):
-    return self.fan_eff_heating_rated[conditions.compressor_speed]*self.standard_indoor_airflow_htg(conditions) # eq. 11.16
-
-  def fan_heat_htg(self, conditions):
-    return self.fan_power_htg(conditions)# eq. 11.11 (in SI units)
-
-  def standard_indoor_airflow_htg(self,conditions):
-    air_density_standard_conditions = 1.204 # in kg/m3
-    return self.flow_per_cap_heating_rated[conditions.compressor_speed]*self.cap_heating_rated[conditions.compressor_speed]*psychrolib.GetDryAirDensity(convert(conditions.indoor_drybulb,"K","°C"), conditions.press)/air_density_standard_conditions
-
   def building_load_htg(self,conditions):
     agreement_factor = 0.77 # eq. 11.110
     BL = np.asarray([(u(65.0,"°F")-u(self.regions_table_htg['Temp'][i],"°F"))/(u(65,"°F")-u(self.regions_table_htg[self.climate_region]['Out_design_temp'],"°F")) for i in range(0,18)]) * agreement_factor * self.round_to_closet_value(self.min_design_htg(conditions)) # eq. 11.109
@@ -310,7 +307,7 @@ class DXUnit:
     return f_def
 
   def net_total_heating_capacity(self, conditions):
-    return self.gross_stead_state_heating_capacity(conditions,self.cap_heating_rated[conditions.compressor_speed]) + self.fan_heat_htg(conditions) # eq. 11.31
+    return self.gross_stead_state_heating_capacity(conditions,self.cap_heating_rated[conditions.compressor_speed]) + self.fan_heat(conditions) # eq. 11.31
 
   def heating_capacity_bins(self):
     q_full_bin = {'cap': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
@@ -384,7 +381,7 @@ class DXUnit:
         return delta_bin
 
   def net_heating_power(self, conditions):
-    return self.gross_stead_state_heating_power(conditions,self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power_htg(conditions) # eq. 11.41
+    return self.gross_stead_state_heating_power(conditions,self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power(conditions) # eq. 11.41
 
   # def max_design_htg(self,conditions): # This won't be used for now according to note under Table 17 in AHRI standard 2017
   #   if self.climate_region == 5:
