@@ -253,7 +253,7 @@ class DXUnit:
     return clf_full_bin, clf_low_bin
 
   def plf_cooling_bins(self):
-    if len(self.cap_cooling_rated) == 1:
+    if self.number_of_speeds == 1:
         plr = 0.5 # part load ratio
         plf = 1.0 - plr*self.c_d_cooling  # eq. 11.56
         return plf
@@ -283,7 +283,7 @@ class DXUnit:
     return eer
 
   def seer(self):
-    if len(self.cap_cooling_rated) == 1:
+    if self.number_of_speeds == 1:
         seer = self.plf_cooling_bins() * self.eer(self.B_cond) # eq. 11.55
     else: # e.q. 11.59
         q = np.asarray(self.total_bin_capacity_cooling()['cap'])
@@ -316,7 +316,7 @@ class DXUnit:
             q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)] = self.net_total_heating_capacity(self.H3_full_cond) + (self.net_total_heating_capacity(self.H1_full_cond) - self.net_total_heating_capacity(self.H3_full_cond)) * ((u(t_bin,"°F")-self.H3_full_cond.outdoor_drybulb)/(self.H1_full_cond.outdoor_drybulb-self.H3_full_cond.outdoor_drybulb))
         else:
             q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)] = self.net_total_heating_capacity(self.H3_full_cond) + (self.net_total_heating_capacity(self.H2_full_cond) - self.net_total_heating_capacity(self.H3_full_cond)) * ((u(t_bin,"°F")-self.H3_full_cond.outdoor_drybulb)/(self.H2_full_cond.outdoor_drybulb-self.H3_full_cond.outdoor_drybulb))
-    if len(self.cap_heating_rated) == 2: # double-stage system eq. 11.135 to 11.137
+    if self.number_of_speeds == 2: # double-stage system eq. 11.135 to 11.137
         q_low_bin = {'cap': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
         for t_bin in self.regions_table_htg['Temp']:
             if (t_bin >= self.temp_frost_influence_start[1]): # temp_frost_influence_start[1] temperature for 2nd stage eq. 11.134
@@ -351,7 +351,7 @@ class DXUnit:
 
   def hp_low_temp_cutout_factor(self):
     delta_bin = {'delta': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']} # delta_bin = delta_bin_2 eq. 11.120 to 11.122 or 11.159 to 11.161
-    if len(self.cap_heating_rated) == 1:
+    if self.number_of_speeds == 1:
         q_full_bin = self.heating_capacity_bins()
         p_full_bin = self.heating_power_bins()
     else:
@@ -365,7 +365,7 @@ class DXUnit:
             delta_bin['delta'][delta_bin['t_bin'].index(t_bin)] = 0.5
         else:
             delta_bin['delta'][delta_bin['t_bin'].index(t_bin)] = 1
-    if len(self.cap_heating_rated) == 2: # double-stage system 11.147 to 11.149
+    if self.number_of_speeds == 2: # double-stage system 11.147 to 11.149
         delta_bin_1 = {'delta': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
         q_low_bin = self.heating_capacity_bins()[1]
         p_low_bin = self.heating_power_bins()[1]
@@ -404,7 +404,7 @@ class DXUnit:
   def hp_htg_load_factor(self): # eq. 11.115 and 11.116
     bl = {'bl':self.building_load_htg(self.H1_full_cond),'t_bin': self.regions_table_htg['Temp']}
     hlf_full_bin = {'hlf': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
-    if len(self.cap_heating_rated) == 1:
+    if self.number_of_speeds == 1:
         q_full_bin = self.heating_capacity_bins()
         for t_bin in self.regions_table_htg['Temp']:
             if q_full_bin['cap'][q_full_bin['t_bin'].index(t_bin)] > bl['bl'][bl['t_bin'].index(t_bin)]:
@@ -431,7 +431,7 @@ class DXUnit:
         return hlf_full_bin, hlf_low_bin
 
   def plf_htg(self): # eq. 11.125
-    if len(self.cap_heating_rated) == 1:
+    if self.number_of_speeds == 1:
         hlf_full_bin = self.hp_htg_load_factor()['hlf']
         hlf = np.asarray(hlf_full_bin)
         plf_full = 1 - self.c_d_heating * (1 - hlf)
@@ -461,7 +461,7 @@ class DXUnit:
 
   def resistance_heat(self): # eq. 11.126
     bl = self.building_load_htg(self.H1_full_cond)
-    if len(self.cap_heating_rated) == 1:
+    if self.number_of_speeds == 1:
         hlf_full_bin = self.hp_htg_load_factor()
         hlf = np.asarray(hlf_full_bin['hlf'])
         q_full_bin = self.heating_capacity_bins()
@@ -493,7 +493,7 @@ class DXUnit:
     e = {'e': [i*0 for i in range(18)],'t_bin': self.regions_table_htg['Temp']}
     bl = {'bl':self.building_load_htg(self.H1_full_cond),'t_bin': self.regions_table_htg['Temp']}
     hrs_fraction = {'fraction': self.regions_table_htg[1]['fraction_hrs'],'t_bin': self.regions_table_htg['Temp']}
-    if len(self.cap_heating_rated) == 1:
+    if self.number_of_speeds == 1:
         hlf_full_bin = self.hp_htg_load_factor()
         q_full_bin = self.heating_capacity_bins()
         p_full_bin = self.heating_power_bins()
