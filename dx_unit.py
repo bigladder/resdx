@@ -1,4 +1,3 @@
-
 #%%
 import sys
 from enum import Enum
@@ -33,13 +32,13 @@ class CoolingConditions:
                     indoor_rh=0.4,
                     indoor_drybulb=u(80.0,"°F"),
                     press=u(1.0,"atm"),
-                    mass_flow_fraction=1.0, # operating flow/ rated flow
+                    mass_flow_fraction=1.0, # operating flow / rated flow
                     compressor_speed=0):
     self.outdoor_drybulb = outdoor_drybulb
     self.indoor_rh = indoor_rh
     self.indoor_drybulb = indoor_drybulb
     self.press = press
-    self.mass_flow_fraction=mass_flow_fraction  # Still need to figure out how to actually use this
+    self.mass_flow_fraction=mass_flow_fraction  # TODO: Still need to figure out how to actually use this
     self.compressor_speed = compressor_speed # compressor speed index (0 = full speed, 1 = next lowest, ...)
 
 class HeatingConditions:
@@ -48,12 +47,12 @@ class HeatingConditions:
                     outdoor_rh=0.4,
                     indoor_drybulb=u(70.0,"°F"),
                     press=u(1.0,"atm"),
-                    mass_flow_fraction=1.0, # operating flow/ rated flow
+                    mass_flow_fraction=1.0, # operating flow / rated flow
                     compressor_speed=0):
     self.outdoor_drybulb = outdoor_drybulb
     self.indoor_drybulb = indoor_drybulb
     self.press = press
-    self.mass_flow_fraction=mass_flow_fraction  # Still need to figure out how to actually use this
+    self.mass_flow_fraction=mass_flow_fraction  # TODO: Still need to figure out how to actually use this
     self.compressor_speed = compressor_speed # compressor speed index (0 = full speed, 1 = next lowest, ...)
     self.outdoor_rh = outdoor_rh
 
@@ -111,30 +110,30 @@ class DXUnit:
 
   standar_design_htg_requirements = [(5000+i*5000)/3.412 for i in range(0,8)] + [(50000+i*10000)/3.412 for i in range(0,9)] # division by 3.412 is used for btu/h to w conversion
 
-  def __init__(self,gross_total_cooling_capacity=lambda conditions, scalar : 10000,
-                    gross_sensible_cooling_capacity=lambda conditions : 1.0,
-                    gross_cooling_power=lambda conditions, scalar : 8000,
+  def __init__(self,gross_total_cooling_capacity=lambda conditions, scalar : scalar,
+                    gross_sensible_cooling_capacity=lambda conditions, scalar : scalar,
+                    gross_cooling_power=lambda conditions, scalar : scalar,
                     c_d_cooling=0.2,
                     fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')],
                     cop_cooling_rated=[3.0],
                     flow_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
-                    cap_cooling_rated=[11000], # This has same units as gross capacity. This should be in base units to remove confusion.
+                    cap_cooling_rated=[u(3.0,'ton_of_refrigeration')],
                     shr_cooling_rated=[0.8], # Sensible heat ratio (Sensible capacity / Total capacity)
-                    gross_stead_state_heating_capacity=lambda conditions, scalar : 10000, # in base unit to remove confusion
-                    gross_integrated_heating_capacity=lambda conditions : 1.0,
-                    gross_stead_state_heating_power=lambda conditions, scalar : 8000, # in base unit to remove confusion
-                    gross_integrated_heating_power=lambda conditions : 1.0,
+                    gross_stead_state_heating_capacity=lambda conditions, scalar : scalar,
+                    gross_integrated_heating_capacity=lambda conditions, scalar : scalar,
+                    gross_stead_state_heating_power=lambda conditions, scalar : scalar,
+                    gross_integrated_heating_power=lambda conditions, scalar : scalar,
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
                     cop_heating_rated=[2.5],
                     flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
-                    cap_heating_rated=[11000], # # This has same units as gross capacity. This should be in base units to remove confusion.
+                    cap_heating_rated=[u(3.0,'ton_of_refrigeration')],
                     defrost_strategy = DefrostStrategy.TIMED,
-                    cycling = CyclingMethod.BETWEEN_LOW_FULL,
-                    minimum_hp_outdoor_temp_low = u(10.0,"°F"), # value taken from Scott's script single-stage
-                    minimum_hp_outdoor_temp_high = u(14.0,"°F")): # value taken from Scott's script single-stage
+                    cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
+                    heating_off_temperature = u(10.0,"°F"), # value taken from Scott's script single-stage
+                    heating_on_temperature = u(14.0,"°F")): # value taken from Scott's script single-stage
     self.number_of_speeds = len(cop_cooling_rated)
-    self.gross_total_cooling_capacity = gross_total_cooling_capacity # This should be in base units
+    self.gross_total_cooling_capacity = gross_total_cooling_capacity
     self.gross_sensible_cooling_capacity = gross_sensible_cooling_capacity
     self.gross_cooling_power = gross_cooling_power
     self.c_d_cooling = c_d_cooling
@@ -148,14 +147,14 @@ class DXUnit:
     self.gross_stead_state_heating_power = gross_stead_state_heating_power
     self.gross_integrated_heating_power = gross_integrated_heating_power
     self.c_d_heating = c_d_heating
-    self.cycling = cycling
+    self.cycling_method = cycling_method
     self.fan_eff_heating_rated = fan_eff_heating_rated
     self.cop_heating_rated = cop_heating_rated
     self.flow_per_cap_heating_rated = flow_per_cap_heating_rated
     self.cap_heating_rated = cap_heating_rated
     self.defrost_strategy = defrost_strategy
-    self.minimum_hp_outdoor_temp_low = minimum_hp_outdoor_temp_low
-    self.minimum_hp_outdoor_temp_high = minimum_hp_outdoor_temp_high
+    self.heating_off_temperature = heating_off_temperature
+    self.heating_on_temperature = heating_on_temperature
 
     # Check to make sure all cooling arrays are the same size if not output a warning message
     self.check_array_lengths()
@@ -231,12 +230,12 @@ class DXUnit:
           plf_low = 1.0 - self.c_d_cooling*(1.0 - clf_low) # eq. 11.69
           q = clf_low*q_low*n # eq. 11.66
           e = clf_low*p_low*n/plf_low # eq. 11.67
-        elif bl > q_low and bl < q_full and self.cycling == CyclingMethod.BETWEEN_LOW_FULL:
+        elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
           clf_low = (q_full - bl)/(q_full - q_low) # eq. 11.74
           clf_full = 1.0 - clf_low # eq. 11.75
           q = (clf_low*q_low + clf_full*q_full)*n # eq. 11.72
           e = (clf_low*p_low + clf_full*p_full)*n # eq. 11.73
-        elif bl > q_low and bl < q_full and self.cycling == CyclingMethod.BETWEEN_OFF_FULL:
+        elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
           clf_full = bl/q_full # eq. 11.78
           plf_full = 1.0 - self.c_d_cooling*(1.0 - clf_full) # eq. 11.79
           q = clf_full*q_full*n # eq. 11.76
@@ -251,11 +250,17 @@ class DXUnit:
     return convert(seer,'','Btu/Wh')
 
   ### For heating ###
-  def net_total_heating_capacity(self, conditions):
+  def net_steady_state_heating_capacity(self, conditions):
     return self.gross_stead_state_heating_capacity(conditions,self.cap_heating_rated[conditions.compressor_speed]) + self.fan_heat(conditions) # eq. 11.31
 
-  def net_heating_power(self, conditions):
+  def net_steady_state_heating_power(self, conditions):
     return self.gross_stead_state_heating_power(conditions,self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power(conditions) # eq. 11.41
+
+  def net_integrated_heating_capacity(self, conditions):
+    return self.gross_integrated_heating_capacity(conditions,self.cap_heating_rated[conditions.compressor_speed]) + self.fan_heat(conditions) # eq. 11.31
+
+  def net_integrated_heating_power(self, conditions):
+    return self.gross_integrated_heating_power(conditions,self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power(conditions) # eq. 11.41
 
   def round_to_closet_value(self,dhr):
     standar_design_htg_requirements = np.asarray(self.standar_design_htg_requirements)
@@ -263,7 +268,7 @@ class DXUnit:
     return standar_design_htg_requirements[index]
 
   def hspf(self, climate_region=4):
-    nbl_sum = 0.0
+    q_sum = 0.0
     e_sum = 0.0
     rh_sum = 0.0
 
@@ -274,21 +279,21 @@ class DXUnit:
       t = self.regional_heating_distributions[climate_region].outdoor_drybulbs[i]
       n = self.regional_heating_distributions[climate_region].fractional_hours[i]
 
-      dhr_min = self.net_total_heating_capacity(self.H1_full_cond)*(u(65,"°F")-t_od)/(u(60,"°R")) # eq. 11.111 TODO: round
+      dhr_min = self.net_integrated_heating_capacity(self.H1_full_cond)*(u(65,"°F")-t_od)/(u(60,"°R")) # eq. 11.111 TODO: round
       bl = (u(65,"°F")-t)/(u(65,"°F")-t_od)*c*dhr_min # eq. 11.109
 
       t_ob = u(45,"°F") # eq. 11.119
       if t >= t_ob or t <= u(17,"°F"):
-        q_full = interpolate(self.net_total_heating_capacity, self.H3_full_cond, self.H1_full_cond, t) # eq. 11.117
-        p_full = interpolate(self.net_heating_power, self.H3_full_cond, self.H1_full_cond, t) # eq. 11.117
+        q_full = interpolate(self.net_integrated_heating_capacity, self.H3_full_cond, self.H1_full_cond, t) # eq. 11.117
+        p_full = interpolate(self.net_integrated_heating_power, self.H3_full_cond, self.H1_full_cond, t) # eq. 11.117
       else: # elif t > u(17,"°F") and t < t_ob
-        q_full = interpolate(self.net_total_heating_capacity, self.H3_full_cond, self.H2_full_cond, t) # eq. 11.118
-        p_full = interpolate(self.net_heating_power, self.H3_full_cond, self.H2_full_cond, t) # eq. 11.117
+        q_full = interpolate(self.net_integrated_heating_capacity, self.H3_full_cond, self.H2_full_cond, t) # eq. 11.118
+        p_full = interpolate(self.net_integrated_heating_power, self.H3_full_cond, self.H2_full_cond, t) # eq. 11.117
       cop_full = q_full/p_full
 
-      if t <= self.minimum_hp_outdoor_temp_low or cop_full < 1.0:
+      if t <= self.heating_off_temperature or cop_full < 1.0:
         delta_full = 0.0 # eq. 11.120 & 11.159
-      elif t > self.minimum_hp_outdoor_temp_high and cop_full >= 1.0:
+      elif t > self.heating_on_temperature and cop_full >= 1.0:
         delta_full = 1.0 # eq. 11.122 & 11.160
       else:
         delta_full = 0.5 # eq. 11.121 & 11.161
@@ -305,19 +310,19 @@ class DXUnit:
       else: # elif self.number_of_speeds == 2:
         t_ob = u(45,"°F") # eq. 11.134
         if t >= t_ob:
-          q_low = interpolate(self.net_total_heating_capacity, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.135
-          p_low = interpolate(self.net_heating_power, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.138
+          q_low = interpolate(self.net_integrated_heating_capacity, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.135
+          p_low = interpolate(self.net_integrated_heating_power, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.138
         elif t <= u(17.0,"°F"):
-          q_low = interpolate(self.net_total_heating_capacity, self.H1_low_cond, self.H3_low_cond, t) # eq. 11.137
-          p_low = interpolate(self.net_heating_power, self.H1_low_cond, self.H3_low_cond, t) # eq. 11.140
+          q_low = interpolate(self.net_integrated_heating_capacity, self.H1_low_cond, self.H3_low_cond, t) # eq. 11.137
+          p_low = interpolate(self.net_integrated_heating_power, self.H1_low_cond, self.H3_low_cond, t) # eq. 11.140
         else:
-          q_low = interpolate(self.net_total_heating_capacity, self.H2_low_cond, self.H3_low_cond, t) # eq. 11.136
-          p_low = interpolate(self.net_heating_power, self.H2_low_cond, self.H3_low_cond, t) # eq. 11.139
+          q_low = interpolate(self.net_integrated_heating_capacity, self.H2_low_cond, self.H3_low_cond, t) # eq. 11.136
+          p_low = interpolate(self.net_integrated_heating_power, self.H2_low_cond, self.H3_low_cond, t) # eq. 11.139
 
         cop_low = q_low/p_low
-        if t <= self.minimum_hp_outdoor_temp_low or cop_low < 1.0:
+        if t <= self.heating_off_temperature or cop_low < 1.0:
           delta_low = 0.0 # eq. 11.147
-        elif t > self.minimum_hp_outdoor_temp_high and cop_low >= 1.0:
+        elif t > self.heating_on_temperature and cop_low >= 1.0:
           delta_low = 1.0 # eq. 11.149
         else:
           delta_low = 0.5 # eq. 11.148
@@ -327,12 +332,12 @@ class DXUnit:
           plf_low = 1.0 - self.c_d_heating*(1.0 - hlf_low) # eq. 11.144
           e = p_low*hlf_low*delta_low*n/plf_low # eq. 11.141
           rh = bl*(1.0 - delta_low)*n # eq. 11.142
-        elif bl > q_low and bl < q_full and self.cycling == CyclingMethod.BETWEEN_LOW_FULL:
+        elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
           hlf_low = (q_full - bl)/(q_full - q_low) # eq. 11.151
           hlf_full = 1.0 - hlf_low # eq. 11.152
           e = (p_low*hlf_low+p_full*hlf_full)*delta_low*n # eq. 11.150
           rh = bl*(1.0 - delta_low)*n # eq. 11.142
-        elif bl > q_low and bl < q_full and self.cycling == CyclingMethod.BETWEEN_OFF_FULL:
+        elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
           hlf_low = (q_full - bl)/(q_full - q_low) # eq. 11.151
           plf_full = 1.0 - self.c_d_heating*(1.0 - hlf_low) # eq. 11.155
           e = p_full*hlf_full*delta_full*n/plf_full # eq. 11.150
@@ -342,7 +347,7 @@ class DXUnit:
           e = p_full*hlf_full*delta_full*n # eq. 11.156
           rh = (bl - q_full*hlf_full*delta_full)*n # eq. 11.157
 
-      nbl_sum += n*bl
+      q_sum += n*bl
       e_sum += e
       rh_sum += rh
 
@@ -354,7 +359,7 @@ class DXUnit:
     else:
       f_def = 1 # eq. 11.130
 
-    hspf = nbl_sum/(e_sum + rh_sum) * f_def # eq. 11.133
+    hspf = q_sum/(e_sum + rh_sum) * f_def # eq. 11.133
     return convert(hspf,'','Btu/Wh')
 
   def print_cooling_info(self):
@@ -430,19 +435,21 @@ dx_unit_2_speed = DXUnit(
   cop_cooling_rated=[3.0,3.5],
   fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')]*2,
   flow_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
-  cap_cooling_rated=[16000,11000],
+  cap_cooling_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
   shr_cooling_rated=[0.8]*2,
   gross_total_cooling_capacity=cutler_cooling_capacity,
   gross_cooling_power=cutler_cooling_power,
   fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')]*2,
   cop_heating_rated=[2.5, 3.0],
   flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
-  cap_heating_rated=[16000,11000],
+  cap_heating_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
   gross_stead_state_heating_capacity=cutler_heating_capacity,
-  gross_stead_state_heating_power=cutler_heating_power
+  gross_stead_state_heating_power=cutler_heating_power,
+  gross_integrated_heating_capacity=cutler_heating_capacity,
+  gross_integrated_heating_power=cutler_heating_power
 )
 
 dx_unit_2_speed.print_cooling_info()
 
 dx_unit_2_speed.print_heating_info()
-
+dx_unit_2_speed.print_heating_info(region=2)
