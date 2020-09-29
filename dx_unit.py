@@ -26,6 +26,16 @@ def calc_quad(coeff, in_1):
 def interpolate(f, cond_1, cond_2, x):
   return f(cond_1) + (f(cond_2) - f(cond_1))/(cond_2.outdoor_drybulb - cond_1.outdoor_drybulb)*(x - cond_1.outdoor_drybulb)
 
+def find_nearest(array, value):
+  closest_diff = abs(array[0] - value)
+  closest_value = array[0]
+  for option in array:
+    diff = abs(option - value)
+    if diff < closest_diff:
+      closest_diff = diff
+      closest_value = option
+  return closest_value
+
 #%%
 class CoolingConditions:
   def __init__(self,outdoor_drybulb=u(95.0,"°F"),
@@ -108,7 +118,7 @@ class DXUnit:
 
   cooling_distribution = CoolingDistribution()
 
-  standar_design_htg_requirements = [(5000+i*5000)/3.412 for i in range(0,8)] + [(50000+i*10000)/3.412 for i in range(0,9)] # division by 3.412 is used for btu/h to w conversion
+  standard_design_heating_requirements = [(u(5000,"Btu/hr")+i*u(5000,"Btu/hr")) for i in range(0,8)] + [(u(50000,"Btu/hr")+i*u(10000,"Btu/hr")) for i in range(0,9)]
 
   def __init__(self,gross_total_cooling_capacity=lambda conditions, scalar : scalar,
                     gross_sensible_cooling_capacity=lambda conditions, scalar : scalar,
@@ -264,11 +274,6 @@ class DXUnit:
   def net_integrated_heating_power(self, conditions):
     return self.gross_integrated_heating_power(conditions,self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power(conditions) # eq. 11.41
 
-  def round_to_closet_value(self,dhr):
-    standar_design_htg_requirements = np.asarray(self.standar_design_htg_requirements)
-    index = (np.abs(standar_design_htg_requirements - dhr)).argmin()
-    return standar_design_htg_requirements[index]
-
   def hspf(self, climate_region=4):
     q_sum = 0.0
     e_sum = 0.0
@@ -277,11 +282,12 @@ class DXUnit:
     c = 0.77 # eq. 11.110 (agreement factor)
     t_od = self.regional_heating_distributions[climate_region].outdoor_design_temperature
 
+    dhr_min = self.net_integrated_heating_capacity(self.H1_full_cond)*(u(65,"°F")-t_od)/(u(60,"°R")) # eq. 11.111
+    dhr_min = find_nearest(self.standard_design_heating_requirements, dhr_min)
+
     for i in range(self.regional_heating_distributions[climate_region].number_of_bins):
       t = self.regional_heating_distributions[climate_region].outdoor_drybulbs[i]
       n = self.regional_heating_distributions[climate_region].fractional_hours[i]
-
-      dhr_min = self.net_integrated_heating_capacity(self.H1_full_cond)*(u(65,"°F")-t_od)/(u(60,"°R")) # eq. 11.111 TODO: round
       bl = (u(65,"°F")-t)/(u(65,"°F")-t_od)*c*dhr_min # eq. 11.109
 
       t_ob = u(45,"°F") # eq. 11.119
