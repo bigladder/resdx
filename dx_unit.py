@@ -123,6 +123,7 @@ class DXUnit:
                     gross_integrated_heating_capacity=lambda conditions, scalar : scalar,
                     gross_stead_state_heating_power=lambda conditions, scalar : scalar,
                     gross_integrated_heating_power=lambda conditions, scalar : scalar,
+                    defrost_time_fraction=lambda conditions : 0.0,
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
                     cop_heating_rated=[2.5],
@@ -146,6 +147,7 @@ class DXUnit:
     self.gross_integrated_heating_capacity = gross_integrated_heating_capacity
     self.gross_stead_state_heating_power = gross_stead_state_heating_power
     self.gross_integrated_heating_power = gross_integrated_heating_power
+    self.defrost_time_fraction = defrost_time_fraction
     self.c_d_heating = c_d_heating
     self.cycling_method = cycling_method
     self.fan_eff_heating_rated = fan_eff_heating_rated
@@ -377,10 +379,10 @@ class DXUnit:
       print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")
 
   def writeA205(self):
-    '''Write ASHRAE 205 file!!!'''
+    '''TODO: Write ASHRAE 205 file!!!'''
     return
 
-def cutler_cooling_power(conditions,scalar):
+def cutler_cooling_power(conditions, scalar):
   T_iwb = psychrolib.GetTWetBulbFromRelHum(convert(conditions.indoor_drybulb,"K","°C"),conditions.indoor_rh,conditions.press)
   T_iwb = convert(T_iwb,"°C","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
@@ -390,7 +392,7 @@ def cutler_cooling_power(conditions,scalar):
   cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction)
   return eir_FF*cap_FF*eir_FT*cap_FT*scalar
 
-def cutler_cooling_capacity(conditions,scalar):
+def cutler_total_cooling_capacity(conditions, scalar):
   T_iwb = psychrolib.GetTWetBulbFromRelHum(convert(conditions.indoor_drybulb,"K","°C"),conditions.indoor_rh,conditions.press)
   T_iwb = convert(T_iwb,"°C","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
@@ -398,7 +400,11 @@ def cutler_cooling_capacity(conditions,scalar):
   cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction)
   return cap_FF*cap_FT*scalar
 
-def cutler_heating_power(conditions,scalar):
+def adp_bf_sensible_cooling_capacity(conditions, scalar):
+  # TODO: Add function to calculate sensible cooling capacity using the apparatus dew point and bypass factor approach
+  return 0.8
+
+def cutler_steady_state_heating_power(conditions, scalar):
   T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
   eir_FT = calc_biquad([0.718398423,0.003498178, 0.000142202, -0.005724331, 0.00014085, -0.000215321], T_idb, T_odb)
@@ -407,23 +413,36 @@ def cutler_heating_power(conditions,scalar):
   cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
   return eir_FF*cap_FF*eir_FT*cap_FT*scalar
 
-def cutler_heating_capacity(conditions,scalar):
+def cutler_stead_state_heating_capacity(conditions, scalar):
   T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
   cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
   cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
   return cap_FF*cap_FT*scalar
 
+def epri_integrated_heating_capacity(conditions, scalar):
+  # TODO: Do stuff from EPRI report described in EnergyPlus documentation
+  return cutler_stead_state_heating_capacity(conditions,scalar) # Do this for now...actual result will be applied on top
+
+def epri_integrated_heating_power(conditions, scalar):
+  # TODO: Do stuff from EPRI report described in EnergyPlus documentation
+  return cutler_steady_state_heating_power(conditions,scalar) # Do this for now...actual result will be applied on top
+
+def epri_defrost_time_fraction(condtions):
+  # TODO: Add function for defrost time fraction from EPRI report described in EnergyPlus documentation
+  return 0.0
 
 #%%
 # Move this stuff to a separate file
 
 # Single speed
 dx_unit_1_speed = DXUnit(
-  gross_total_cooling_capacity=cutler_cooling_capacity,
+  gross_total_cooling_capacity=cutler_total_cooling_capacity,
   gross_cooling_power=cutler_cooling_power,
-  gross_stead_state_heating_capacity=cutler_heating_capacity,
-  gross_stead_state_heating_power=cutler_heating_power
+  gross_stead_state_heating_capacity=cutler_stead_state_heating_capacity,
+  gross_stead_state_heating_power=cutler_steady_state_heating_power,
+  gross_integrated_heating_capacity=epri_integrated_heating_capacity,
+  gross_integrated_heating_power=epri_integrated_heating_power
 )
 
 dx_unit_1_speed.print_cooling_info()
@@ -437,16 +456,16 @@ dx_unit_2_speed = DXUnit(
   flow_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
   cap_cooling_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
   shr_cooling_rated=[0.8]*2,
-  gross_total_cooling_capacity=cutler_cooling_capacity,
+  gross_total_cooling_capacity=cutler_total_cooling_capacity,
   gross_cooling_power=cutler_cooling_power,
   fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')]*2,
   cop_heating_rated=[2.5, 3.0],
   flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
   cap_heating_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
-  gross_stead_state_heating_capacity=cutler_heating_capacity,
-  gross_stead_state_heating_power=cutler_heating_power,
-  gross_integrated_heating_capacity=cutler_heating_capacity,
-  gross_integrated_heating_power=cutler_heating_power
+  gross_stead_state_heating_capacity=cutler_stead_state_heating_capacity,
+  gross_stead_state_heating_power=cutler_steady_state_heating_power,
+  gross_integrated_heating_capacity=epri_integrated_heating_capacity,
+  gross_integrated_heating_power=epri_integrated_heating_power
 )
 
 dx_unit_2_speed.print_cooling_info()
