@@ -119,7 +119,6 @@ class DXUnit:
                     cop_heating_rated=[2.5],
                     flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
                     cap_heating_rated=[11000], # # This has same units as gross capacity. This should be in base units to remove confusion.
-                    climate_region = 4,
                     defrost_strategy = 'demand_defrost',
                     cycling = 'between_low_full', # 'between_off_full' | 'between_low_full'
                     minimum_hp_outdoor_temp_low = u(10.0,"°F"), # value taken from Scott's script single-stage
@@ -144,7 +143,6 @@ class DXUnit:
     self.cop_heating_rated = cop_heating_rated
     self.flow_per_cap_heating_rated = flow_per_cap_heating_rated
     self.cap_heating_rated = cap_heating_rated
-    self.climate_region = climate_region
     self.defrost_strategy = defrost_strategy
     self.minimum_hp_outdoor_temp_low = minimum_hp_outdoor_temp_low
     self.minimum_hp_outdoor_temp_high = minimum_hp_outdoor_temp_high
@@ -254,17 +252,17 @@ class DXUnit:
     index = (np.abs(standar_design_htg_requirements - dhr)).argmin()
     return standar_design_htg_requirements[index]
 
-  def hspf(self):
+  def hspf(self, climate_region=4):
     nbl_sum = 0.0
     e_sum = 0.0
     rh_sum = 0.0
 
     c = 0.77 # eq. 11.110 (agreement factor)
-    t_od = self.regional_heating_distributions[self.climate_region].outdoor_design_temperature
+    t_od = self.regional_heating_distributions[climate_region].outdoor_design_temperature
 
-    for i in range(self.regional_heating_distributions[self.climate_region].number_of_bins):
-      t = self.regional_heating_distributions[self.climate_region].outdoor_drybulbs[i]
-      n = self.regional_heating_distributions[self.climate_region].fractional_hours[i]
+    for i in range(self.regional_heating_distributions[climate_region].number_of_bins):
+      t = self.regional_heating_distributions[climate_region].outdoor_drybulbs[i]
+      n = self.regional_heating_distributions[climate_region].fractional_hours[i]
 
       dhr_min = self.net_total_heating_capacity(self.H1_full_cond)*(u(65,"°F")-t_od)/(u(60,"°R")) # eq. 11.111 TODO: round
       bl = (u(65,"°F")-t)/(u(65,"°F")-t_od)*c*dhr_min # eq. 11.109
