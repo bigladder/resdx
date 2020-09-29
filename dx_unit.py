@@ -1,7 +1,10 @@
 
 #%%
-import numpy as np
 import sys
+from enum import Enum
+
+import numpy as np
+
 import pint # 0.15 or higher
 ureg = pint.UnitRegistry()
 
@@ -73,6 +76,14 @@ class CoolingDistribution:
   def __init__(self):
     self.number_of_bins = len(self.fractional_hours)
 
+class DefrostStrategy(Enum):
+  TIMED = 1,
+  DEMAND = 2
+
+class CyclingMethod(Enum):
+  BETWEEN_LOW_FULL = 1
+  BETWEEN_OFF_FULL = 2
+
 class DXUnit:
 
   A_full_cond = CoolingConditions()
@@ -100,7 +111,6 @@ class DXUnit:
 
   standar_design_htg_requirements = [(5000+i*5000)/3.412 for i in range(0,8)] + [(50000+i*10000)/3.412 for i in range(0,9)] # division by 3.412 is used for btu/h to w conversion
 
-
   def __init__(self,gross_total_cooling_capacity=lambda conditions, scalar : 10000,
                     gross_sensible_cooling_capacity=lambda conditions : 1.0,
                     gross_cooling_power=lambda conditions, scalar : 8000,
@@ -119,8 +129,8 @@ class DXUnit:
                     cop_heating_rated=[2.5],
                     flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
                     cap_heating_rated=[11000], # # This has same units as gross capacity. This should be in base units to remove confusion.
-                    defrost_strategy = 'demand_defrost',
-                    cycling = 'between_low_full', # 'between_off_full' | 'between_low_full'
+                    defrost_strategy = DefrostStrategy.TIMED,
+                    cycling = CyclingMethod.BETWEEN_LOW_FULL,
                     minimum_hp_outdoor_temp_low = u(10.0,"°F"), # value taken from Scott's script single-stage
                     minimum_hp_outdoor_temp_high = u(14.0,"°F")): # value taken from Scott's script single-stage
     self.number_of_speeds = len(cop_cooling_rated)
@@ -221,12 +231,12 @@ class DXUnit:
           plf_low = 1.0 - self.c_d_cooling*(1.0 - clf_low) # eq. 11.69
           q = clf_low*q_low*n # eq. 11.66
           e = clf_low*p_low*n/plf_low # eq. 11.67
-        elif bl > q_low and bl < q_full and self.cycling == 'between_low_full':
+        elif bl > q_low and bl < q_full and self.cycling == CyclingMethod.BETWEEN_LOW_FULL:
           clf_low = (q_full - bl)/(q_full - q_low) # eq. 11.74
           clf_full = 1.0 - clf_low # eq. 11.75
           q = (clf_low*q_low + clf_full*q_full)*n # eq. 11.72
           e = (clf_low*p_low + clf_full*p_full)*n # eq. 11.73
-        elif bl > q_low and bl < q_full and self.cycling == 'between_off_full':
+        elif bl > q_low and bl < q_full and self.cycling == CyclingMethod.BETWEEN_OFF_FULL:
           clf_full = bl/q_full # eq. 11.78
           plf_full = 1.0 - self.c_d_cooling*(1.0 - clf_full) # eq. 11.79
           q = clf_full*q_full*n # eq. 11.76
@@ -317,12 +327,12 @@ class DXUnit:
           plf_low = 1.0 - self.c_d_heating*(1.0 - hlf_low) # eq. 11.144
           e = p_low*hlf_low*delta_low*n/plf_low # eq. 11.141
           rh = bl*(1.0 - delta_low)*n # eq. 11.142
-        elif bl > q_low and bl < q_full and self.cycling == 'between_low_full':
+        elif bl > q_low and bl < q_full and self.cycling == CyclingMethod.BETWEEN_LOW_FULL:
           hlf_low = (q_full - bl)/(q_full - q_low) # eq. 11.151
           hlf_full = 1.0 - hlf_low # eq. 11.152
           e = (p_low*hlf_low+p_full*hlf_full)*delta_low*n # eq. 11.150
           rh = bl*(1.0 - delta_low)*n # eq. 11.142
-        elif bl > q_low and bl < q_full and self.cycling == 'between_off_full':
+        elif bl > q_low and bl < q_full and self.cycling == CyclingMethod.BETWEEN_OFF_FULL:
           hlf_low = (q_full - bl)/(q_full - q_low) # eq. 11.151
           plf_full = 1.0 - self.c_d_heating*(1.0 - hlf_low) # eq. 11.155
           e = p_full*hlf_full*delta_full*n/plf_full # eq. 11.150
@@ -339,7 +349,7 @@ class DXUnit:
     t_test = u(90.0,'min') # TODO: make input
     t_max  = u(720.0,'min') # TODO: make input
 
-    if self.defrost_strategy == 'demand_defrost':
+    if self.defrost_strategy == DefrostStrategy.DEMAND:
       f_def = 1 + 0.03 * (1 - (t_test-u(90.0,'min'))/(t_max-u(90.0,'min'))) # eq. 11.129
     else:
       f_def = 1 # eq. 11.130
