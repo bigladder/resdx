@@ -369,12 +369,12 @@ class DXUnit:
       print(f"Net cooling power for stage {speed + 1} : {self.net_cooling_power(conditions)}")
       print(f"Net cooling capacity for stage {speed + 1} : {self.net_total_cooling_capacity(conditions)}")
 
-  def print_heating_info(self):
-    print(f"HSPF: {self.hspf()}")
+  def print_heating_info(self, region=4):
+    print(f"HSPF (region {region}): {self.hspf(region)}")
     for speed in range(self.number_of_speeds):
       conditions = HeatingConditions(compressor_speed=speed)
-      print(f"Net heating power for stage {speed + 1} : {self.net_heating_power(conditions)}")
-      print(f"Net heating capacity for stage {speed + 1} : {self.net_total_heating_capacity(conditions)}")
+      print(f"Net heating power for stage {speed + 1} : {self.net_integrated_heating_power(conditions)}")
+      print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")
 
   def writeA205(self):
     '''Write ASHRAE 205 file!!!'''
