@@ -85,9 +85,13 @@ class CoolingDistribution:
   def __init__(self):
     self.number_of_bins = len(self.fractional_hours)
 
-class DefrostStrategy(Enum):
+class DefrostControl(Enum):
   TIMED = 1,
   DEMAND = 2
+
+class DefrostStrategy(Enum):
+  reverse_cycle = 1,
+  resistive = 2
 
 class CyclingMethod(Enum):
   BETWEEN_LOW_FULL = 1
@@ -130,16 +134,18 @@ class DXUnit:
                     cap_cooling_rated=[u(3.0,'ton_of_refrigeration')],
                     shr_cooling_rated=[0.8], # Sensible heat ratio (Sensible capacity / Total capacity)
                     gross_stead_state_heating_capacity=lambda conditions, scalar : scalar,
-                    gross_integrated_heating_capacity=lambda conditions, scalar : scalar,
+                    gross_integrated_heating_capacity=lambda conditions, scalar1, scalar2, defrost_control, defrost_strategy : scalar1, # scalar1 = timde defrost fraction, scalar2 = heating capacity rated, scalar3 = resistive heater capacity
                     gross_stead_state_heating_power=lambda conditions, scalar : scalar,
-                    gross_integrated_heating_power=lambda conditions, scalar : scalar,
-                    defrost_time_fraction=lambda conditions : 0.0,
+                    gross_integrated_heating_power=lambda conditions, scalar1, scalar2, scalar3, defrost_control, defrost_strategy : scalar1,
+                    defrost_time_fraction=lambda conditions : 3.5/60.0,
+                    resistive_heater_power = 4000,
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
                     cop_heating_rated=[2.5],
                     flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
                     cap_heating_rated=[u(3.0,'ton_of_refrigeration')],
-                    defrost_strategy = DefrostStrategy.TIMED,
+                    defrost_control = DefrostControl.DEMAND,
+                    defrost_strategy = DefrostStrategy.resistive,
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
                     heating_off_temperature = u(10.0,"°F"), # value taken from Scott's script single-stage
                     heating_on_temperature = u(14.0,"°F")): # value taken from Scott's script single-stage
@@ -158,12 +164,14 @@ class DXUnit:
     self.gross_stead_state_heating_power = gross_stead_state_heating_power
     self.gross_integrated_heating_power = gross_integrated_heating_power
     self.defrost_time_fraction = defrost_time_fraction
+    self.resistive_heater_power = resistive_heater_power
     self.c_d_heating = c_d_heating
     self.cycling_method = cycling_method
     self.fan_eff_heating_rated = fan_eff_heating_rated
     self.cop_heating_rated = cop_heating_rated
     self.flow_per_cap_heating_rated = flow_per_cap_heating_rated
     self.cap_heating_rated = cap_heating_rated
+    self.defrost_control = defrost_control
     self.defrost_strategy = defrost_strategy
     self.heating_off_temperature = heating_off_temperature
     self.heating_on_temperature = heating_on_temperature
@@ -269,10 +277,10 @@ class DXUnit:
     return self.gross_stead_state_heating_power(conditions,self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power(conditions) # eq. 11.41
 
   def net_integrated_heating_capacity(self, conditions):
-    return self.gross_integrated_heating_capacity(conditions,self.cap_heating_rated[conditions.compressor_speed]) + self.fan_heat(conditions) # eq. 11.31
+    return self.gross_integrated_heating_capacity(conditions,self.defrost_time_fraction(conditions),self.cap_heating_rated[conditions.compressor_speed], self.defrost_control, self.defrost_strategy) + self.fan_heat(conditions) # eq. 11.31
 
   def net_integrated_heating_power(self, conditions):
-    return self.gross_integrated_heating_power(conditions,self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power(conditions) # eq. 11.41
+    return self.gross_integrated_heating_power(conditions,self.defrost_time_fraction(conditions),self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed],self.resistive_heater_power, self.defrost_control, self.defrost_strategy) - self.fan_power(conditions) # eq. 11.41
 
   def hspf(self, climate_region=4):
     q_sum = 0.0
@@ -362,7 +370,7 @@ class DXUnit:
     t_test = u(90.0,'min') # TODO: make input
     t_max  = u(720.0,'min') # TODO: make input
 
-    if self.defrost_strategy == DefrostStrategy.DEMAND:
+    if self.defrost_control == DefrostControl.DEMAND:
       f_def = 1 + 0.03 * (1 - (t_test-u(90.0,'min'))/(t_max-u(90.0,'min'))) # eq. 11.129
     else:
       f_def = 1 # eq. 11.130
@@ -419,24 +427,54 @@ def cutler_steady_state_heating_power(conditions, scalar):
   cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
   return eir_FF*cap_FF*eir_FT*cap_FT*scalar
 
-def cutler_stead_state_heating_capacity(conditions, scalar):
+def cutler_steady_state_heating_capacity(conditions, scalar):
   T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
   cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
   cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
   return cap_FF*cap_FT*scalar
 
-def epri_integrated_heating_capacity(conditions, scalar):
+def epri_integrated_heating_capacity(conditions, scalar1, scalar2, defrost_control, defrost_strategy):
   # TODO: Do stuff from EPRI report described in EnergyPlus documentation
-  return cutler_stead_state_heating_capacity(conditions,scalar) # Do this for now...actual result will be applied on top
+  if defrost_control ==DefrostControl.TIMED:
+      heating_capacity_multiplier = 0.909 - 107.33 * coil_diff_outdoor_air_humidity(conditions)
+  else:
+      heating_capacity_multiplier = 0.875 * (1-scalar1)
+        
+  if defrost_strategy == DefrostStrategy.reverse_cycle:
+      Q_defrost_indoor_u = 0.01 * (7.222 - convert(conditions.outdoor_drybulb,"°K","°C")) * (scalar2/1.01667)
+  else:
+      Q_defrost_indoor_u = 0
 
-def epri_integrated_heating_power(conditions, scalar):
+  Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,scalar2) * heating_capacity_multiplier
+  return Q_with_frost_indoor_u * (1-scalar1) - Q_defrost_indoor_u * scalar1 # Do this for now...actual result will be applied on top
+
+def epri_integrated_heating_power(conditions, scalar1, scalar2, scalar3, defrost_control, defrost_strategy):
   # TODO: Do stuff from EPRI report described in EnergyPlus documentation
-  return cutler_steady_state_heating_power(conditions,scalar) # Do this for now...actual result will be applied on top
+  if defrost_control == DefrostControl.TIMED:
+      input_power_multiplier = 0.9 - 36.45 * coil_diff_outdoor_air_humidity(conditions)
+  else:
+      input_power_multiplier = 0.954 * (1-scalar1)
+        
+  if defrost_strategy == DefrostStrategy.reverse_cycle:
+      P_defrost = 0.1528 * (scalar2/1.01667)
+  else:
+      P_defrost = scalar3
 
-def epri_defrost_time_fraction(condtions):
+  P_with_frost = cutler_steady_state_heating_power(conditions,scalar2) * input_power_multiplier
+  return P_with_frost * (1-scalar1) + P_defrost * scalar1 # Do this for now...actual result will be applied on top
+
+def epri_defrost_time_fraction(conditions):
   # TODO: Add function for defrost time fraction from EPRI report described in EnergyPlus documentation
-  return 0.0
+  return 1/(1+(0.01446/coil_diff_outdoor_air_humidity(conditions)))
+
+def coil_diff_outdoor_air_humidity(conditions):
+  # TODO: Add function for defrost time fraction from EPRI report described in EnergyPlus documentation
+  T_coil_outdoor = 0.82 * convert(conditions.outdoor_drybulb,"°K","°C") - 8.589
+  outdoor_air_himidity_ratio   = psychrolib.GetHumRatioFromRelHum(convert(conditions.outdoor_drybulb,"°K","°C"),conditions.outdoor_rh,conditions.press)
+  saturated_air_himidity_ratio = psychrolib.GetSatHumRatio(T_coil_outdoor,conditions.press) # pressure in Pa already
+  humidity_diff = outdoor_air_himidity_ratio - saturated_air_himidity_ratio
+  return max(0.000001,humidity_diff)
 
 #%%
 # Move this stuff to a separate file
