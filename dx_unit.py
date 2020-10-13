@@ -10,6 +10,10 @@ ureg = pint.UnitRegistry()
 import psychrolib
 psychrolib.SetUnitSystem(psychrolib.SI)
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set()
+
 ## Move to a util file?
 def u(value,unit):
   return ureg.Quantity(value, unit).to_base_units().magnitude
@@ -483,10 +487,11 @@ def coil_diff_outdoor_air_humidity(conditions):
 dx_unit_1_speed = DXUnit(
   gross_total_cooling_capacity=cutler_total_cooling_capacity,
   gross_cooling_power=cutler_cooling_power,
-  gross_stead_state_heating_capacity=cutler_stead_state_heating_capacity,
+  gross_stead_state_heating_capacity=cutler_steady_state_heating_capacity,
   gross_stead_state_heating_power=cutler_steady_state_heating_power,
   gross_integrated_heating_capacity=epri_integrated_heating_capacity,
-  gross_integrated_heating_power=epri_integrated_heating_power
+  gross_integrated_heating_power=epri_integrated_heating_power,
+  defrost_time_fraction=epri_defrost_time_fraction
 )
 
 dx_unit_1_speed.print_cooling_info()
@@ -506,13 +511,49 @@ dx_unit_2_speed = DXUnit(
   cop_heating_rated=[2.5, 3.0],
   flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
   cap_heating_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
-  gross_stead_state_heating_capacity=cutler_stead_state_heating_capacity,
+  gross_stead_state_heating_capacity=cutler_steady_state_heating_capacity,
   gross_stead_state_heating_power=cutler_steady_state_heating_power,
   gross_integrated_heating_capacity=epri_integrated_heating_capacity,
-  gross_integrated_heating_power=epri_integrated_heating_power
+  gross_integrated_heating_power=epri_integrated_heating_power,
+  defrost_time_fraction=epri_defrost_time_fraction
 )
 
 dx_unit_2_speed.print_cooling_info()
 
 dx_unit_2_speed.print_heating_info()
 dx_unit_2_speed.print_heating_info(region=2)
+
+#%%
+# Plot integrated power and capacity
+P_integrated = []
+Q_integrated = []
+T_outdoor = []
+for T_out in np.arange(-23,75+1,1): #np.arange(-23,40+1,1):
+    conditions = HeatingConditions(outdoor_drybulb=u(T_out,"°F"))
+    if T_out <= 45:
+        Q = epri_integrated_heating_capacity(conditions, dx_unit_1_speed.defrost_time_fraction(conditions), dx_unit_1_speed.cap_heating_rated[0], dx_unit_1_speed.defrost_control, dx_unit_1_speed.defrost_strategy)
+        P = epri_integrated_heating_power(conditions, dx_unit_1_speed.defrost_time_fraction(conditions), dx_unit_1_speed.cap_heating_rated[0]/dx_unit_1_speed.cop_heating_rated[0], dx_unit_1_speed.resistive_heater_power, dx_unit_1_speed.defrost_control, dx_unit_1_speed.defrost_strategy)
+    else:
+        Q = cutler_steady_state_heating_capacity(conditions, dx_unit_1_speed.cap_heating_rated[0])
+        P = cutler_steady_state_heating_power(conditions, dx_unit_1_speed.cap_heating_rated[0]/dx_unit_1_speed.cop_heating_rated[0])
+    Q_integrated.append(Q)
+    P_integrated.append(P)
+    T_outdoor.append(T_out)
+
+fig, ax1 = plt.subplots()
+
+color = 'tab:red'
+ax1.set_xlabel('Temp (°F)')
+ax1.set_ylabel('Capacity (W)', color=color)
+ax1.plot(T_outdoor, Q_integrated, color=color)
+ax1.tick_params(axis='y', labelcolor=color)
+
+ax2 = ax1.twinx() 
+
+color = 'tab:blue'
+ax2.set_ylabel('Power (W)', color=color)
+ax2.plot(T_outdoor, P_integrated, color=color)
+ax2.tick_params(axis='y', labelcolor=color)
+
+fig.tight_layout()
+plt.show()
