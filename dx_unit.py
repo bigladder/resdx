@@ -94,8 +94,8 @@ class DefrostControl(Enum):
   DEMAND = 2
 
 class DefrostStrategy(Enum):
-  reverse_cycle = 1,
-  resistive = 2
+  REVERSE_CYCLE = 1,
+  RESISTIVE = 2
 
 class CyclingMethod(Enum):
   BETWEEN_LOW_FULL = 1
@@ -149,7 +149,7 @@ class DXUnit:
                     flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
                     cap_heating_rated=[u(3.0,'ton_of_refrigeration')],
                     defrost_control = DefrostControl.DEMAND,
-                    defrost_strategy = DefrostStrategy.resistive,
+                    defrost_strategy = DefrostStrategy.RESISTIVE,
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
                     heating_off_temperature = u(10.0,"°F"), # value taken from Scott's script single-stage
                     heating_on_temperature = u(14.0,"°F")): # value taken from Scott's script single-stage
@@ -444,8 +444,8 @@ def epri_integrated_heating_capacity(conditions, scalar1, scalar2, defrost_contr
       heating_capacity_multiplier = 0.909 - 107.33 * coil_diff_outdoor_air_humidity(conditions)
   else:
       heating_capacity_multiplier = 0.875 * (1-scalar1)
-        
-  if defrost_strategy == DefrostStrategy.reverse_cycle:
+
+  if defrost_strategy == DefrostStrategy.REVERSE_CYCLE:
       Q_defrost_indoor_u = 0.01 * (7.222 - convert(conditions.outdoor_drybulb,"°K","°C")) * (scalar2/1.01667)
   else:
       Q_defrost_indoor_u = 0
@@ -459,8 +459,8 @@ def epri_integrated_heating_power(conditions, scalar1, scalar2, scalar3, defrost
       input_power_multiplier = 0.9 - 36.45 * coil_diff_outdoor_air_humidity(conditions)
   else:
       input_power_multiplier = 0.954 * (1-scalar1)
-        
-  if defrost_strategy == DefrostStrategy.reverse_cycle:
+
+  if defrost_strategy == DefrostStrategy.REVERSE_CYCLE:
       P_defrost = 0.1528 * (scalar2/1.01667)
   else:
       P_defrost = scalar3
