@@ -138,9 +138,9 @@ class DXUnit:
                     cap_cooling_rated=[u(3.0,'ton_of_refrigeration')],
                     shr_cooling_rated=[0.8], # Sensible heat ratio (Sensible capacity / Total capacity)
                     gross_stead_state_heating_capacity=lambda conditions, scalar : scalar,
-                    gross_integrated_heating_capacity=lambda conditions, scalar1, scalar2, defrost_control, defrost_strategy : scalar1, # scalar1 = timde defrost fraction, scalar2 = heating capacity rated, scalar3 = resistive heater capacity
+                    gross_integrated_heating_capacity=lambda conditions, defrost_time_fraction, scalar, defrost_control, defrost_strategy : defrost_time_fraction,
                     gross_stead_state_heating_power=lambda conditions, scalar : scalar,
-                    gross_integrated_heating_power=lambda conditions, scalar1, scalar2, scalar3, defrost_control, defrost_strategy : scalar1,
+                    gross_integrated_heating_power=lambda conditions, defrost_time_fraction, scalar, defrost_resistive_power, defrost_control, defrost_strategy : defrost_time_fraction,
                     defrost_time_fraction=lambda conditions : u(3.5,'min')/u(60.0,'min'),
                     defrost_resistive_power = 0,
                     c_d_heating=0.2,
@@ -444,47 +444,47 @@ def cutler_steady_state_heating_capacity(conditions, scalar):
   cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
   return cap_FF*cap_FT*scalar
 
-def epri_integrated_heating_capacity(conditions, scalar1, scalar2, defrost_control, defrost_strategy):
-  # TODO: Do stuff from EPRI report described in EnergyPlus documentation
+def epri_integrated_heating_capacity(conditions, defrost_time_fraction, scalar, defrost_control, defrost_strategy):
+  # EPRI algorithm as described in EnergyPlus documentation
   if defrost_control ==DefrostControl.TIMED:
       heating_capacity_multiplier = 0.909 - 107.33 * coil_diff_outdoor_air_humidity(conditions)
   else:
-      heating_capacity_multiplier = 0.875 * (1-scalar1)
+      heating_capacity_multiplier = 0.875 * (1-defrost_time_fraction)
 
   if defrost_strategy == DefrostStrategy.REVERSE_CYCLE:
-      Q_defrost_indoor_u = 0.01 * (7.222 - convert(conditions.outdoor_drybulb,"°K","°C")) * (scalar2/1.01667)
+      Q_defrost_indoor_u = 0.01 * (7.222 - convert(conditions.outdoor_drybulb,"°K","°C")) * (scalar/1.01667)
   else:
       Q_defrost_indoor_u = 0
 
-  Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,scalar2) * heating_capacity_multiplier
-  return Q_with_frost_indoor_u * (1-scalar1) - Q_defrost_indoor_u * scalar1 # Do this for now...actual result will be applied on top
+  Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,scalar) * heating_capacity_multiplier
+  return Q_with_frost_indoor_u * (1-defrost_time_fraction) - Q_defrost_indoor_u * defrost_time_fraction # Do this for now...actual result will be applied on top
 
-def epri_integrated_heating_power(conditions, scalar1, scalar2, scalar3, defrost_control, defrost_strategy):
-  # TODO: Do stuff from EPRI report described in EnergyPlus documentation
+def epri_integrated_heating_power(conditions, defrost_time_fraction, scalar, defrost_resistive_power, defrost_control, defrost_strategy):
+  # EPRI algorithm as described in EnergyPlus documentation
   if defrost_control == DefrostControl.TIMED:
       input_power_multiplier = 0.9 - 36.45 * coil_diff_outdoor_air_humidity(conditions)
   else:
-      input_power_multiplier = 0.954 * (1-scalar1)
+      input_power_multiplier = 0.954 * (1-defrost_time_fraction)
 
   if defrost_strategy == DefrostStrategy.REVERSE_CYCLE:
-      P_defrost = 0.1528 * (scalar2/1.01667)
+      P_defrost = 0.1528 * (scalar/1.01667)
   else:
-      P_defrost = scalar3
+      P_defrost = defrost_resistive_power
 
-  P_with_frost = cutler_steady_state_heating_power(conditions,scalar2) * input_power_multiplier
-  return P_with_frost * (1-scalar1) + P_defrost * scalar1 # Do this for now...actual result will be applied on top
+  P_with_frost = cutler_steady_state_heating_power(conditions,scalar) * input_power_multiplier
+  return P_with_frost * (1-defrost_time_fraction) + P_defrost * defrost_time_fraction # Do this for now...actual result will be applied on top
 
 def epri_defrost_time_fraction(conditions):
-  # TODO: Add function for defrost time fraction from EPRI report described in EnergyPlus documentation
+  # EPRI algorithm as described in EnergyPlus documentation
   return 1/(1+(0.01446/coil_diff_outdoor_air_humidity(conditions)))
 
 def coil_diff_outdoor_air_humidity(conditions):
-  # TODO: Add function for defrost time fraction from EPRI report described in EnergyPlus documentation
-  T_coil_outdoor = 0.82 * convert(conditions.outdoor_drybulb,"°K","°C") - 8.589
+  # EPRI algorithm as described in EnergyPlus documentation
+  T_coil_outdoor = 0.82 * convert(conditions.outdoor_drybulb,"°K","°C") - 8.589  # In C
   outdoor_air_himidity_ratio   = psychrolib.GetHumRatioFromRelHum(convert(conditions.outdoor_drybulb,"°K","°C"),conditions.outdoor_rh,conditions.press)
   saturated_air_himidity_ratio = psychrolib.GetSatHumRatio(T_coil_outdoor,conditions.press) # pressure in Pa already
   humidity_diff = outdoor_air_himidity_ratio - saturated_air_himidity_ratio
-  return max(0.000001,humidity_diff)
+  return max(1.0e-6,humidity_diff)
 
 #%%
 # Move this stuff to a separate file
@@ -554,7 +554,7 @@ ax1.set_ylabel('Capacity (W)', color=color)
 ax1.plot(T_outdoor, Q_integrated, color=color)
 ax1.tick_params(axis='y', labelcolor=color)
 
-ax2 = ax1.twinx() 
+ax2 = ax1.twinx()
 
 color = 'tab:blue'
 ax2.set_ylabel('Power (W)', color=color)
