@@ -142,7 +142,7 @@ class DXUnit:
                     gross_stead_state_heating_power=lambda conditions, scalar : scalar,
                     gross_integrated_heating_power=lambda conditions, scalar1, scalar2, scalar3, defrost_control, defrost_strategy : scalar1,
                     defrost_time_fraction=lambda conditions : 3.5/60.0,
-                    resistive_heater_power = 4000,
+                    defrost_resistive_power = 4000,
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
                     cop_heating_rated=[2.5],
@@ -168,7 +168,7 @@ class DXUnit:
     self.gross_stead_state_heating_power = gross_stead_state_heating_power
     self.gross_integrated_heating_power = gross_integrated_heating_power
     self.defrost_time_fraction = defrost_time_fraction
-    self.resistive_heater_power = resistive_heater_power
+    self.defrost_resistive_power = defrost_resistive_power
     self.c_d_heating = c_d_heating
     self.cycling_method = cycling_method
     self.fan_eff_heating_rated = fan_eff_heating_rated
@@ -284,7 +284,7 @@ class DXUnit:
     return self.gross_integrated_heating_capacity(conditions,self.defrost_time_fraction(conditions),self.cap_heating_rated[conditions.compressor_speed], self.defrost_control, self.defrost_strategy) + self.fan_heat(conditions) # eq. 11.31
 
   def net_integrated_heating_power(self, conditions):
-    return self.gross_integrated_heating_power(conditions,self.defrost_time_fraction(conditions),self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed],self.resistive_heater_power, self.defrost_control, self.defrost_strategy) - self.fan_power(conditions) # eq. 11.41
+    return self.gross_integrated_heating_power(conditions,self.defrost_time_fraction(conditions),self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed],self.defrost_resistive_power, self.defrost_control, self.defrost_strategy) - self.fan_power(conditions) # eq. 11.41
 
   def hspf(self, climate_region=4):
     q_sum = 0.0
@@ -532,7 +532,7 @@ for T_out in np.arange(-23,75+1,1): #np.arange(-23,40+1,1):
     conditions = HeatingConditions(outdoor_drybulb=u(T_out,"°F"))
     if T_out <= 45:
         Q = epri_integrated_heating_capacity(conditions, dx_unit_1_speed.defrost_time_fraction(conditions), dx_unit_1_speed.cap_heating_rated[0], dx_unit_1_speed.defrost_control, dx_unit_1_speed.defrost_strategy)
-        P = epri_integrated_heating_power(conditions, dx_unit_1_speed.defrost_time_fraction(conditions), dx_unit_1_speed.cap_heating_rated[0]/dx_unit_1_speed.cop_heating_rated[0], dx_unit_1_speed.resistive_heater_power, dx_unit_1_speed.defrost_control, dx_unit_1_speed.defrost_strategy)
+        P = epri_integrated_heating_power(conditions, dx_unit_1_speed.defrost_time_fraction(conditions), dx_unit_1_speed.cap_heating_rated[0]/dx_unit_1_speed.cop_heating_rated[0], dx_unit_1_speed.defrost_resistive_power, dx_unit_1_speed.defrost_control, dx_unit_1_speed.defrost_strategy)
     else:
         Q = cutler_steady_state_heating_capacity(conditions, dx_unit_1_speed.cap_heating_rated[0])
         P = cutler_steady_state_heating_power(conditions, dx_unit_1_speed.cap_heating_rated[0]/dx_unit_1_speed.cop_heating_rated[0])
