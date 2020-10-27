@@ -141,18 +141,20 @@ class DXUnit:
                     gross_integrated_heating_capacity=lambda conditions, scalar1, scalar2, defrost_control, defrost_strategy : scalar1, # scalar1 = timde defrost fraction, scalar2 = heating capacity rated, scalar3 = resistive heater capacity
                     gross_stead_state_heating_power=lambda conditions, scalar : scalar,
                     gross_integrated_heating_power=lambda conditions, scalar1, scalar2, scalar3, defrost_control, defrost_strategy : scalar1,
-                    defrost_time_fraction=lambda conditions : 3.5/60.0,
-                    defrost_resistive_power = 4000,
+                    defrost_time_fraction=lambda conditions : u(3.5,'min')/u(60.0,'min'),
+                    defrost_resistive_power = 0,
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
                     cop_heating_rated=[2.5],
                     flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
                     cap_heating_rated=[u(3.0,'ton_of_refrigeration')],
-                    defrost_control = DefrostControl.DEMAND,
-                    defrost_strategy = DefrostStrategy.RESISTIVE,
+                    defrost_control = DefrostControl.TIMED,
+                    defrost_strategy = DefrostStrategy.REVERSE_CYCLE,
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
                     heating_off_temperature = u(10.0,"°F"), # value taken from Scott's script single-stage
                     heating_on_temperature = u(14.0,"°F")): # value taken from Scott's script single-stage
+
+    # Initialize values
     self.number_of_speeds = len(cop_cooling_rated)
     self.gross_total_cooling_capacity = gross_total_cooling_capacity
     self.gross_sensible_cooling_capacity = gross_sensible_cooling_capacity
@@ -180,12 +182,16 @@ class DXUnit:
     self.heating_off_temperature = heating_off_temperature
     self.heating_on_temperature = heating_on_temperature
 
+    ## Check for errors
+
     # Check to make sure all cooling arrays are the same size if not output a warning message
     self.check_array_lengths()
 
     # Check to make sure arrays are in descending order
     self.check_array_order(self.cap_cooling_rated)
     self.check_array_order(self.cap_heating_rated)
+
+    # TODO: Resistive defrost needs > 0 resistive power
 
   def check_array_length(self, array):
     if (len(array) != self.number_of_speeds):
