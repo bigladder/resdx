@@ -156,19 +156,19 @@ class DXUnit:
 
   standard_design_heating_requirements = [(u(5000,"Btu/hr")+i*u(5000,"Btu/hr")) for i in range(0,8)] + [(u(50000,"Btu/hr")+i*u(10000,"Btu/hr")) for i in range(0,9)]
 
-  def __init__(self,gross_total_cooling_capacity=lambda conditions, scalar : scalar,
-                    gross_sensible_cooling_capacity=lambda conditions, scalar : scalar,
-                    gross_cooling_power=lambda conditions, scalar : scalar,
+  def __init__(self,gross_total_cooling_capacity_fn=lambda conditions, scalar : scalar,
+                    gross_sensible_cooling_capacity_fn=lambda conditions, scalar : scalar,
+                    gross_cooling_power_fn=lambda conditions, scalar : scalar,
                     c_d_cooling=0.2,
                     fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')],
                     cop_cooling_rated=[3.0],
                     flow_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
                     cap_cooling_rated=[u(3.0,'ton_of_refrigeration')],
                     shr_cooling_rated=[0.8], # Sensible heat ratio (Sensible capacity / Total capacity)
-                    gross_stead_state_heating_capacity=lambda conditions, scalar : scalar,
-                    gross_integrated_heating_capacity=lambda conditions, scalar, defrost : scalar,
-                    gross_stead_state_heating_power=lambda conditions, scalar : scalar,
-                    gross_integrated_heating_power=lambda conditions, scalar, defrost : scalar,
+                    gross_steady_state_heating_capacity_fn=lambda conditions, scalar : scalar,
+                    gross_integrated_heating_capacity_fn=lambda conditions, scalar, defrost : scalar,
+                    gross_steady_state_heating_power_fn=lambda conditions, scalar : scalar,
+                    gross_integrated_heating_power_fn=lambda conditions, scalar, defrost : scalar,
                     defrost=Defrost(),
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
@@ -181,19 +181,19 @@ class DXUnit:
 
     # Initialize values
     self.number_of_speeds = len(cop_cooling_rated)
-    self.gross_total_cooling_capacity = gross_total_cooling_capacity
-    self.gross_sensible_cooling_capacity = gross_sensible_cooling_capacity
-    self.gross_cooling_power = gross_cooling_power
+    self.gross_total_cooling_capacity_fn = gross_total_cooling_capacity_fn
+    self.gross_sensible_cooling_capacity_fn = gross_sensible_cooling_capacity_fn
+    self.gross_cooling_power_fn = gross_cooling_power_fn
     self.c_d_cooling = c_d_cooling
     self.fan_eff_cooling_rated = fan_eff_cooling_rated
     self.shr_cooling_rated = shr_cooling_rated
     self.cop_cooling_rated = cop_cooling_rated
     self.cap_cooling_rated = cap_cooling_rated
     self.flow_per_cap_cooling_rated = flow_per_cap_cooling_rated
-    self.gross_stead_state_heating_capacity = gross_stead_state_heating_capacity
-    self.gross_integrated_heating_capacity = gross_integrated_heating_capacity
-    self.gross_stead_state_heating_power = gross_stead_state_heating_power
-    self.gross_integrated_heating_power = gross_integrated_heating_power
+    self.gross_steady_state_heating_capacity_fn = gross_steady_state_heating_capacity_fn
+    self.gross_integrated_heating_capacity_fn = gross_integrated_heating_capacity_fn
+    self.gross_steady_state_heating_power_fn = gross_steady_state_heating_power_fn
+    self.gross_integrated_heating_power_fn = gross_integrated_heating_power_fn
     self.defrost = defrost
     self.c_d_heating = c_d_heating
     self.cycling_method = cycling_method
@@ -249,15 +249,26 @@ class DXUnit:
     return flow*psychrolib.GetDryAirDensity(convert(conditions.indoor_drybulb,"K","°C"), conditions.press)/air_density_standard_conditions
 
   ### For cooling ###
+  def gross_total_cooling_capacity(self, conditions):
+    return self.gross_total_cooling_capacity_fn(conditions,self.cap_cooling_rated[conditions.compressor_speed])
+
+  def gross_cooling_power(self, conditions):
+    return self.gross_cooling_power_fn(conditions,self.cap_cooling_rated[conditions.compressor_speed]/self.cop_cooling_rated[conditions.compressor_speed])
+
   def net_total_cooling_capacity(self, conditions):
-    return self.gross_total_cooling_capacity(conditions,self.cap_cooling_rated[conditions.compressor_speed]) - self.fan_heat(conditions) # eq. 11.3 but not considering duct losses
+    return self.gross_total_cooling_capacity(conditions) - self.fan_heat(conditions) # eq. 11.3 but not considering duct losses
 
   def net_cooling_power(self, conditions):
-    return self.gross_cooling_power(conditions,self.cap_cooling_rated[conditions.compressor_speed]/self.cop_cooling_rated[conditions.compressor_speed]) + self.fan_power(conditions) # eq. 11.15
+    return self.gross_cooling_power(conditions) + self.fan_power(conditions) # eq. 11.15
 
-  def eer(self, conditions): # e.q. 11.17
-    eer = self.net_total_cooling_capacity(conditions)/self.net_cooling_power(conditions)
-    return eer
+  def gross_cooling_cop(self, conditions):
+    return self.gross_total_cooling_capacity(conditions)/self.gross_cooling_power(conditions)
+
+  def net_cooling_cop(self, conditions):
+    return self.net_total_cooling_capacity(conditions)/self.net_cooling_power(conditions)
+
+  def eer(self, conditions):
+    return self.net_cooling_cop(conditions) # In SI units
 
   def seer(self):
     if self.number_of_speeds == 1:
@@ -300,17 +311,41 @@ class DXUnit:
     return convert(seer,'','Btu/Wh')
 
   ### For heating ###
+  def gross_steady_state_heating_capacity(self, conditions):
+    return self.gross_steady_state_heating_capacity_fn(conditions, self.cap_heating_rated[conditions.compressor_speed])
+
+  def gross_steady_state_heating_power(self, conditions):
+    return self.gross_steady_state_heating_power_fn(conditions, self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed])
+
+  def gross_integrated_heating_capacity(self, conditions):
+    return self.gross_integrated_heating_capacity_fn(conditions, self.cap_heating_rated[conditions.compressor_speed], self.defrost)
+
+  def gross_integrated_heating_power(self, conditions):
+    return self.gross_integrated_heating_power_fn(conditions, self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed], self.defrost)
+
   def net_steady_state_heating_capacity(self, conditions):
-    return self.gross_stead_state_heating_capacity(conditions, self.cap_heating_rated[conditions.compressor_speed]) + self.fan_heat(conditions) # eq. 11.31
+    return self.gross_steady_state_heating_capacity(conditions) + self.fan_heat(conditions) # eq. 11.31
 
   def net_steady_state_heating_power(self, conditions):
-    return self.gross_stead_state_heating_power(conditions, self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power(conditions) # eq. 11.41
+    return self.gross_steady_state_heating_power(conditions) - self.fan_power(conditions) # eq. 11.41
 
   def net_integrated_heating_capacity(self, conditions):
-    return self.gross_integrated_heating_capacity(conditions, self.cap_heating_rated[conditions.compressor_speed], self.defrost) + self.fan_heat(conditions) # eq. 11.31
+    return self.gross_integrated_heating_capacity(conditions) + self.fan_heat(conditions) # eq. 11.31
 
   def net_integrated_heating_power(self, conditions):
-    return self.gross_integrated_heating_power(conditions, self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed], self.defrost) - self.fan_power(conditions) # eq. 11.41
+    return self.gross_integrated_heating_power(conditions) - self.fan_power(conditions) # eq. 11.41
+
+  def gross_steady_state_heating_cop(self, conditions):
+    return self.gross_steady_state_heating_capacity(conditions)/self.gross_steady_state_heating_power(conditions)
+
+  def gross_integrated_heating_cop(self, conditions):
+    return self.gross_integrated_heating_capacity(conditions)/self.gross_integrated_heating_power(conditions)
+
+  def net_steady_state_heating_cop(self, conditions):
+    return self.net_steady_state_heating_capacity(conditions)/self.net_steady_state_heating_power(conditions)
+
+  def net_integrated_heating_cop(self, conditions):
+    return self.net_integrated_heating_capacity(conditions)/self.net_integrated_heating_power(conditions)
 
   def hspf(self, climate_region=4):
     q_sum = 0.0
@@ -519,12 +554,12 @@ def coil_diff_outdoor_air_humidity(conditions):
 
 # Single speed
 dx_unit_1_speed = DXUnit(
-  gross_total_cooling_capacity=cutler_total_cooling_capacity,
-  gross_cooling_power=cutler_cooling_power,
-  gross_stead_state_heating_capacity=cutler_steady_state_heating_capacity,
-  gross_stead_state_heating_power=cutler_steady_state_heating_power,
-  gross_integrated_heating_capacity=epri_integrated_heating_capacity,
-  gross_integrated_heating_power=epri_integrated_heating_power
+  gross_total_cooling_capacity_fn=cutler_total_cooling_capacity,
+  gross_cooling_power_fn=cutler_cooling_power,
+  gross_steady_state_heating_capacity_fn=cutler_steady_state_heating_capacity,
+  gross_steady_state_heating_power_fn=cutler_steady_state_heating_power,
+  gross_integrated_heating_capacity_fn=epri_integrated_heating_capacity,
+  gross_integrated_heating_power_fn=epri_integrated_heating_power
 )
 
 dx_unit_1_speed.print_cooling_info()
@@ -538,16 +573,16 @@ dx_unit_2_speed = DXUnit(
   flow_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
   cap_cooling_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
   shr_cooling_rated=[0.8]*2,
-  gross_total_cooling_capacity=cutler_total_cooling_capacity,
-  gross_cooling_power=cutler_cooling_power,
+  gross_total_cooling_capacity_fn=cutler_total_cooling_capacity,
+  gross_cooling_power_fn=cutler_cooling_power,
   fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')]*2,
   cop_heating_rated=[2.5, 3.0],
   flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
   cap_heating_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
-  gross_stead_state_heating_capacity=cutler_steady_state_heating_capacity,
-  gross_stead_state_heating_power=cutler_steady_state_heating_power,
-  gross_integrated_heating_capacity=epri_integrated_heating_capacity,
-  gross_integrated_heating_power=epri_integrated_heating_power
+  gross_steady_state_heating_capacity_fn=cutler_steady_state_heating_capacity,
+  gross_steady_state_heating_power_fn=cutler_steady_state_heating_power,
+  gross_integrated_heating_capacity_fn=epri_integrated_heating_capacity,
+  gross_integrated_heating_power_fn=epri_integrated_heating_power
 )
 
 dx_unit_2_speed.print_cooling_info()
