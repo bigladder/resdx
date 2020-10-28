@@ -101,6 +101,34 @@ class CyclingMethod(Enum):
   BETWEEN_LOW_FULL = 1
   BETWEEN_OFF_FULL = 2
 
+class Defrost:
+
+  def __init__(self,time_fraction = lambda conditions : u(3.5,'min')/u(60.0,'min'),
+                    resistive_power = 0,
+                    control = DefrostControl.TIMED,
+                    strategy = DefrostStrategy.REVERSE_CYCLE,
+                    high_temperature=u(45,"°F"),
+                    low_temperature=None):
+
+    # Initialize member values
+    self.time_fraction = time_fraction
+    self.resistive_power = resistive_power
+    self.control = control
+    self.strategy = strategy
+    self.high_temperature = high_temperature
+    self.low_temperature = low_temperature
+
+    # TODO: Resistive defrost needs > 0 resistive power
+
+  def in_defrost(self, conditions):
+    if self.low_temperature is not None:
+      if conditions.outdoor_drybulb > self.low_temperature and conditions.outdoor_drybulb < self.high_temperature:
+        return True
+    else:
+      if conditions.outdoor_drybulb < self.high_temperature:
+        return True
+    return False
+
 class DXUnit:
 
   A_full_cond = CoolingConditions()
@@ -138,18 +166,15 @@ class DXUnit:
                     cap_cooling_rated=[u(3.0,'ton_of_refrigeration')],
                     shr_cooling_rated=[0.8], # Sensible heat ratio (Sensible capacity / Total capacity)
                     gross_stead_state_heating_capacity=lambda conditions, scalar : scalar,
-                    gross_integrated_heating_capacity=lambda conditions, scalar, defrost_time_fraction, defrost_control, defrost_strategy : scalar,
+                    gross_integrated_heating_capacity=lambda conditions, scalar, defrost : scalar,
                     gross_stead_state_heating_power=lambda conditions, scalar : scalar,
-                    gross_integrated_heating_power=lambda conditions, scalar, defrost_time_fraction, defrost_resistive_power, defrost_control, defrost_strategy : scalar,
-                    defrost_time_fraction=lambda conditions : u(3.5,'min')/u(60.0,'min'),
-                    defrost_resistive_power = 0,
+                    gross_integrated_heating_power=lambda conditions, scalar, defrost : scalar,
+                    defrost=Defrost(),
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
                     cop_heating_rated=[2.5],
                     flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
                     cap_heating_rated=[u(3.0,'ton_of_refrigeration')],
-                    defrost_control = DefrostControl.TIMED,
-                    defrost_strategy = DefrostStrategy.REVERSE_CYCLE,
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
                     heating_off_temperature = u(10.0,"°F"), # value taken from Scott's script single-stage
                     heating_on_temperature = u(14.0,"°F")): # value taken from Scott's script single-stage
@@ -169,16 +194,13 @@ class DXUnit:
     self.gross_integrated_heating_capacity = gross_integrated_heating_capacity
     self.gross_stead_state_heating_power = gross_stead_state_heating_power
     self.gross_integrated_heating_power = gross_integrated_heating_power
-    self.defrost_time_fraction = defrost_time_fraction
-    self.defrost_resistive_power = defrost_resistive_power
+    self.defrost = defrost
     self.c_d_heating = c_d_heating
     self.cycling_method = cycling_method
     self.fan_eff_heating_rated = fan_eff_heating_rated
     self.cop_heating_rated = cop_heating_rated
     self.flow_per_cap_heating_rated = flow_per_cap_heating_rated
     self.cap_heating_rated = cap_heating_rated
-    self.defrost_control = defrost_control
-    self.defrost_strategy = defrost_strategy
     self.heating_off_temperature = heating_off_temperature
     self.heating_on_temperature = heating_on_temperature
 
@@ -190,8 +212,6 @@ class DXUnit:
     # Check to make sure arrays are in descending order
     self.check_array_order(self.cap_cooling_rated)
     self.check_array_order(self.cap_heating_rated)
-
-    # TODO: Resistive defrost needs > 0 resistive power
 
   def check_array_length(self, array):
     if (len(array) != self.number_of_speeds):
@@ -281,16 +301,16 @@ class DXUnit:
 
   ### For heating ###
   def net_steady_state_heating_capacity(self, conditions):
-    return self.gross_stead_state_heating_capacity(conditions,self.cap_heating_rated[conditions.compressor_speed]) + self.fan_heat(conditions) # eq. 11.31
+    return self.gross_stead_state_heating_capacity(conditions, self.cap_heating_rated[conditions.compressor_speed]) + self.fan_heat(conditions) # eq. 11.31
 
   def net_steady_state_heating_power(self, conditions):
-    return self.gross_stead_state_heating_power(conditions,self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power(conditions) # eq. 11.41
+    return self.gross_stead_state_heating_power(conditions, self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed]) - self.fan_power(conditions) # eq. 11.41
 
   def net_integrated_heating_capacity(self, conditions):
-    return self.gross_integrated_heating_capacity(conditions,self.defrost_time_fraction(conditions),self.cap_heating_rated[conditions.compressor_speed], self.defrost_control, self.defrost_strategy) + self.fan_heat(conditions) # eq. 11.31
+    return self.gross_integrated_heating_capacity(conditions, self.cap_heating_rated[conditions.compressor_speed], self.defrost) + self.fan_heat(conditions) # eq. 11.31
 
   def net_integrated_heating_power(self, conditions):
-    return self.gross_integrated_heating_power(conditions,self.defrost_time_fraction(conditions),self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed],self.defrost_resistive_power, self.defrost_control, self.defrost_strategy) - self.fan_power(conditions) # eq. 11.41
+    return self.gross_integrated_heating_power(conditions, self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed], self.defrost) - self.fan_power(conditions) # eq. 11.41
 
   def hspf(self, climate_region=4):
     q_sum = 0.0
@@ -380,7 +400,7 @@ class DXUnit:
     t_test = u(90.0,'min') # TODO: make input
     t_max  = u(720.0,'min') # TODO: make input
 
-    if self.defrost_control == DefrostControl.DEMAND:
+    if self.defrost.control == DefrostControl.DEMAND:
       f_def = 1 + 0.03 * (1 - (t_test-u(90.0,'min'))/(t_max-u(90.0,'min'))) # eq. 11.129
     else:
       f_def = 1 # eq. 11.130
@@ -444,35 +464,43 @@ def cutler_steady_state_heating_capacity(conditions, scalar):
   cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
   return cap_FF*cap_FT*scalar
 
-def epri_integrated_heating_capacity(conditions, scalar, defrost_time_fraction, defrost_control, defrost_strategy):
+def epri_integrated_heating_capacity(conditions, scalar, defrost):
   # EPRI algorithm as described in EnergyPlus documentation
-  if defrost_control ==DefrostControl.TIMED:
-      heating_capacity_multiplier = 0.909 - 107.33 * coil_diff_outdoor_air_humidity(conditions)
+  if defrost.in_defrost(conditions):
+    t_defrost = defrost.time_fraction(conditions)
+    if defrost.control ==DefrostControl.TIMED:
+        heating_capacity_multiplier = 0.909 - 107.33 * coil_diff_outdoor_air_humidity(conditions)
+    else:
+        heating_capacity_multiplier = 0.875 * (1-t_defrost)
+
+    if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
+        Q_defrost_indoor_u = 0.01 * (7.222 - convert(conditions.outdoor_drybulb,"°K","°C")) * (scalar/1.01667)
+    else:
+        Q_defrost_indoor_u = 0
+
+    Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,scalar) * heating_capacity_multiplier
+    return Q_with_frost_indoor_u * (1-t_defrost) - Q_defrost_indoor_u * t_defrost # Do this for now...actual result will be applied on top
   else:
-      heating_capacity_multiplier = 0.875 * (1-defrost_time_fraction)
+    return cutler_steady_state_heating_capacity(conditions,scalar)
 
-  if defrost_strategy == DefrostStrategy.REVERSE_CYCLE:
-      Q_defrost_indoor_u = 0.01 * (7.222 - convert(conditions.outdoor_drybulb,"°K","°C")) * (scalar/1.01667)
-  else:
-      Q_defrost_indoor_u = 0
-
-  Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,scalar) * heating_capacity_multiplier
-  return Q_with_frost_indoor_u * (1-defrost_time_fraction) - Q_defrost_indoor_u * defrost_time_fraction # Do this for now...actual result will be applied on top
-
-def epri_integrated_heating_power(conditions, scalar, defrost_time_fraction, defrost_resistive_power, defrost_control, defrost_strategy):
+def epri_integrated_heating_power(conditions, scalar, defrost):
   # EPRI algorithm as described in EnergyPlus documentation
-  if defrost_control == DefrostControl.TIMED:
-      input_power_multiplier = 0.9 - 36.45 * coil_diff_outdoor_air_humidity(conditions)
-  else:
-      input_power_multiplier = 0.954 * (1-defrost_time_fraction)
+  if defrost.in_defrost(conditions):
+    t_defrost = defrost.time_fraction(conditions)
+    if defrost.control == DefrostControl.TIMED:
+        input_power_multiplier = 0.9 - 36.45 * coil_diff_outdoor_air_humidity(conditions)
+    else:
+        input_power_multiplier = 0.954 * (1-t_defrost)
 
-  if defrost_strategy == DefrostStrategy.REVERSE_CYCLE:
-      P_defrost = 0.1528 * (scalar/1.01667)
-  else:
-      P_defrost = defrost_resistive_power
+    if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
+        P_defrost = 0.1528 * (scalar/1.01667)
+    else:
+        P_defrost = defrost.resistive_power
 
-  P_with_frost = cutler_steady_state_heating_power(conditions,scalar) * input_power_multiplier
-  return P_with_frost * (1-defrost_time_fraction) + P_defrost * defrost_time_fraction # Do this for now...actual result will be applied on top
+    P_with_frost = cutler_steady_state_heating_power(conditions,scalar) * input_power_multiplier
+    return P_with_frost * (1-t_defrost) + P_defrost * t_defrost # Do this for now...actual result will be applied on top
+  else:
+    return cutler_steady_state_heating_power(conditions,scalar)
 
 def epri_defrost_time_fraction(conditions):
   # EPRI algorithm as described in EnergyPlus documentation
@@ -496,8 +524,7 @@ dx_unit_1_speed = DXUnit(
   gross_stead_state_heating_capacity=cutler_steady_state_heating_capacity,
   gross_stead_state_heating_power=cutler_steady_state_heating_power,
   gross_integrated_heating_capacity=epri_integrated_heating_capacity,
-  gross_integrated_heating_power=epri_integrated_heating_power,
-  defrost_time_fraction=epri_defrost_time_fraction
+  gross_integrated_heating_power=epri_integrated_heating_power
 )
 
 dx_unit_1_speed.print_cooling_info()
@@ -520,8 +547,7 @@ dx_unit_2_speed = DXUnit(
   gross_stead_state_heating_capacity=cutler_steady_state_heating_capacity,
   gross_stead_state_heating_power=cutler_steady_state_heating_power,
   gross_integrated_heating_capacity=epri_integrated_heating_capacity,
-  gross_integrated_heating_power=epri_integrated_heating_power,
-  defrost_time_fraction=epri_defrost_time_fraction
+  gross_integrated_heating_power=epri_integrated_heating_power
 )
 
 dx_unit_2_speed.print_cooling_info()
@@ -536,12 +562,8 @@ Q_integrated = []
 T_outdoor = []
 for T_out in np.arange(-23,75+1,1): #np.arange(-23,40+1,1):
     conditions = HeatingConditions(outdoor_drybulb=u(T_out,"°F"))
-    if T_out <= 45:
-        Q = epri_integrated_heating_capacity(conditions, dx_unit_1_speed.defrost_time_fraction(conditions), dx_unit_1_speed.cap_heating_rated[0], dx_unit_1_speed.defrost_control, dx_unit_1_speed.defrost_strategy)
-        P = epri_integrated_heating_power(conditions, dx_unit_1_speed.defrost_time_fraction(conditions), dx_unit_1_speed.cap_heating_rated[0]/dx_unit_1_speed.cop_heating_rated[0], dx_unit_1_speed.defrost_resistive_power, dx_unit_1_speed.defrost_control, dx_unit_1_speed.defrost_strategy)
-    else:
-        Q = cutler_steady_state_heating_capacity(conditions, dx_unit_1_speed.cap_heating_rated[0])
-        P = cutler_steady_state_heating_power(conditions, dx_unit_1_speed.cap_heating_rated[0]/dx_unit_1_speed.cop_heating_rated[0])
+    Q = dx_unit_1_speed.net_integrated_heating_capacity(conditions)
+    P = dx_unit_1_speed.net_integrated_heating_power(conditions)
     Q_integrated.append(Q)
     P_integrated.append(P)
     T_outdoor.append(T_out)
