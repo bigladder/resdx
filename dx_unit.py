@@ -107,7 +107,7 @@ class Defrost:
                     resistive_power = 0,
                     control = DefrostControl.TIMED,
                     strategy = DefrostStrategy.REVERSE_CYCLE,
-                    high_temperature=u(45,"°F"),
+                    high_temperature=u(41,"°F"),
                     low_temperature=None):
 
     # Initialize member values
@@ -128,6 +128,106 @@ class Defrost:
       if conditions.outdoor_drybulb < self.high_temperature:
         return True
     return False
+
+## Model functions
+
+# Unified Model
+def cutler_cooling_power(conditions, power_scalar):
+  T_iwb = psychrolib.GetTWetBulbFromRelHum(convert(conditions.indoor_drybulb,"K","°C"),conditions.indoor_rh,conditions.press)
+  T_iwb = convert(T_iwb,"°C","°F") # Cutler curves use °F
+  T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
+  eir_FT = calc_biquad([-3.437356399, 0.136656369, -0.001049231, -0.0079378, 0.000185435, -0.0001441], T_iwb, T_odb)
+  eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.mass_flow_fraction)
+  cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
+  cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction)
+  return eir_FF*cap_FF*eir_FT*cap_FT*power_scalar
+
+def cutler_total_cooling_capacity(conditions, capacity_scalar):
+  T_iwb = psychrolib.GetTWetBulbFromRelHum(convert(conditions.indoor_drybulb,"K","°C"),conditions.indoor_rh,conditions.press)
+  T_iwb = convert(T_iwb,"°C","°F") # Cutler curves use °F
+  T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
+  cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
+  cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction)
+  return cap_FF*cap_FT*capacity_scalar
+
+def adp_bf_sensible_cooling_capacity(conditions, capacity_scalar):
+  # TODO: Add function to calculate sensible cooling capacity using the apparatus dew point and bypass factor approach
+  return 0.8
+
+def cutler_steady_state_heating_power(conditions, power_scalar):
+  T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
+  T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
+  eir_FT = calc_biquad([0.718398423,0.003498178, 0.000142202, -0.005724331, 0.00014085, -0.000215321], T_idb, T_odb)
+  eir_FF = calc_quad([2.185418751, -1.942827919, 0.757409168], conditions.mass_flow_fraction)
+  cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
+  cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
+  return eir_FF*cap_FF*eir_FT*cap_FT*power_scalar
+
+def cutler_steady_state_heating_capacity(conditions, capacity_scalar):
+  T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
+  T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
+  cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
+  cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
+  return cap_FF*cap_FT*capacity_scalar
+
+def epri_integrated_heating_capacity(conditions, capacity_scalar, defrost):
+  # EPRI algorithm as described in EnergyPlus documentation
+  if defrost.in_defrost(conditions):
+    t_defrost = defrost.time_fraction(conditions)
+    if defrost.control ==DefrostControl.TIMED:
+        heating_capacity_multiplier = 0.909 - 107.33 * coil_diff_outdoor_air_humidity(conditions)
+    else:
+        heating_capacity_multiplier = 0.875 * (1-t_defrost)
+
+    if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
+        Q_defrost_indoor_u = 0.01 * (7.222 - convert(conditions.outdoor_drybulb,"°K","°C")) * (capacity_scalar/1.01667)
+    else:
+        Q_defrost_indoor_u = 0
+
+    Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,capacity_scalar) * heating_capacity_multiplier
+    return Q_with_frost_indoor_u * (1-t_defrost) - Q_defrost_indoor_u * t_defrost # Do this for now...actual result will be applied on top
+  else:
+    return cutler_steady_state_heating_capacity(conditions,capacity_scalar)
+
+def epri_integrated_heating_power(conditions, power_scalar, capacity_scalar, defrost):
+  # EPRI algorithm as described in EnergyPlus documentation
+  if defrost.in_defrost(conditions):
+    t_defrost = defrost.time_fraction(conditions)
+    if defrost.control == DefrostControl.TIMED:
+        input_power_multiplier = 0.9 - 36.45 * coil_diff_outdoor_air_humidity(conditions)
+    else:
+        input_power_multiplier = 0.954 * (1-t_defrost)
+
+    if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
+        P_defrost = 0.1528 * (capacity_scalar/1.01667)
+    else:
+        P_defrost = defrost.resistive_power
+
+    P_with_frost = cutler_steady_state_heating_power(conditions,power_scalar) * input_power_multiplier
+    return P_with_frost * (1-t_defrost) + P_defrost * t_defrost # Do this for now...actual result will be applied on top
+  else:
+    return cutler_steady_state_heating_power(conditions,power_scalar)
+
+def epri_defrost_time_fraction(conditions):
+  # EPRI algorithm as described in EnergyPlus documentation
+  return 1/(1+(0.01446/coil_diff_outdoor_air_humidity(conditions)))
+
+def coil_diff_outdoor_air_humidity(conditions):
+  # EPRI algorithm as described in EnergyPlus documentation
+  T_coil_outdoor = 0.82 * convert(conditions.outdoor_drybulb,"°K","°C") - 8.589  # In C
+  outdoor_air_himidity_ratio   = psychrolib.GetHumRatioFromRelHum(convert(conditions.outdoor_drybulb,"°K","°C"),conditions.outdoor_rh,conditions.press)
+  saturated_air_himidity_ratio = psychrolib.GetSatHumRatio(T_coil_outdoor,conditions.press) # pressure in Pa already
+  humidity_diff = outdoor_air_himidity_ratio - saturated_air_himidity_ratio
+  return max(1.0e-6,humidity_diff)
+
+# NREL Model
+
+# FSEC Model
+
+# Title 24 Model
+
+
+
 
 class DXUnit:
 
@@ -156,19 +256,19 @@ class DXUnit:
 
   standard_design_heating_requirements = [(u(5000,"Btu/hr")+i*u(5000,"Btu/hr")) for i in range(0,8)] + [(u(50000,"Btu/hr")+i*u(10000,"Btu/hr")) for i in range(0,9)]
 
-  def __init__(self,gross_total_cooling_capacity_fn=lambda conditions, scalar : scalar,
-                    gross_sensible_cooling_capacity_fn=lambda conditions, scalar : scalar,
-                    gross_cooling_power_fn=lambda conditions, scalar : scalar,
+  def __init__(self,gross_total_cooling_capacity_fn=cutler_total_cooling_capacity,
+                    gross_sensible_cooling_capacity_fn=adp_bf_sensible_cooling_capacity,
+                    gross_cooling_power_fn=cutler_cooling_power,
                     c_d_cooling=0.2,
                     fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')],
                     cop_cooling_rated=[3.0],
                     flow_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")],
                     cap_cooling_rated=[u(3.0,'ton_of_refrigeration')],
                     shr_cooling_rated=[0.8], # Sensible heat ratio (Sensible capacity / Total capacity)
-                    gross_steady_state_heating_capacity_fn=lambda conditions, scalar : scalar,
-                    gross_integrated_heating_capacity_fn=lambda conditions, scalar, defrost : scalar,
-                    gross_steady_state_heating_power_fn=lambda conditions, scalar : scalar,
-                    gross_integrated_heating_power_fn=lambda conditions, scalar, defrost : scalar,
+                    gross_steady_state_heating_capacity_fn=cutler_steady_state_heating_capacity,
+                    gross_integrated_heating_capacity_fn=epri_integrated_heating_capacity,
+                    gross_steady_state_heating_power_fn=cutler_steady_state_heating_power,
+                    gross_integrated_heating_power_fn=epri_integrated_heating_power,
                     defrost=Defrost(),
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
@@ -321,19 +421,19 @@ class DXUnit:
     return self.gross_integrated_heating_capacity_fn(conditions, self.cap_heating_rated[conditions.compressor_speed], self.defrost)
 
   def gross_integrated_heating_power(self, conditions):
-    return self.gross_integrated_heating_power_fn(conditions, self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed], self.defrost)
+    return self.gross_integrated_heating_power_fn(conditions, self.cap_heating_rated[conditions.compressor_speed]/self.cop_heating_rated[conditions.compressor_speed], self.cap_heating_rated[conditions.compressor_speed], self.defrost)
 
   def net_steady_state_heating_capacity(self, conditions):
     return self.gross_steady_state_heating_capacity(conditions) + self.fan_heat(conditions) # eq. 11.31
 
   def net_steady_state_heating_power(self, conditions):
-    return self.gross_steady_state_heating_power(conditions) - self.fan_power(conditions) # eq. 11.41
+    return self.gross_steady_state_heating_power(conditions) + self.fan_power(conditions) # eq. 11.41
 
   def net_integrated_heating_capacity(self, conditions):
     return self.gross_integrated_heating_capacity(conditions) + self.fan_heat(conditions) # eq. 11.31
 
   def net_integrated_heating_power(self, conditions):
-    return self.gross_integrated_heating_power(conditions) - self.fan_power(conditions) # eq. 11.41
+    return self.gross_integrated_heating_power(conditions) + self.fan_power(conditions) # eq. 11.41
 
   def gross_steady_state_heating_cop(self, conditions):
     return self.gross_steady_state_heating_capacity(conditions)/self.gross_steady_state_heating_power(conditions)
@@ -461,106 +561,11 @@ class DXUnit:
     '''TODO: Write ASHRAE 205 file!!!'''
     return
 
-def cutler_cooling_power(conditions, scalar):
-  T_iwb = psychrolib.GetTWetBulbFromRelHum(convert(conditions.indoor_drybulb,"K","°C"),conditions.indoor_rh,conditions.press)
-  T_iwb = convert(T_iwb,"°C","°F") # Cutler curves use °F
-  T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
-  eir_FT = calc_biquad([-3.437356399, 0.136656369, -0.001049231, -0.0079378, 0.000185435, -0.0001441], T_iwb, T_odb)
-  eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.mass_flow_fraction)
-  cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
-  cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction)
-  return eir_FF*cap_FF*eir_FT*cap_FT*scalar
-
-def cutler_total_cooling_capacity(conditions, scalar):
-  T_iwb = psychrolib.GetTWetBulbFromRelHum(convert(conditions.indoor_drybulb,"K","°C"),conditions.indoor_rh,conditions.press)
-  T_iwb = convert(T_iwb,"°C","°F") # Cutler curves use °F
-  T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
-  cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
-  cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_flow_fraction)
-  return cap_FF*cap_FT*scalar
-
-def adp_bf_sensible_cooling_capacity(conditions, scalar):
-  # TODO: Add function to calculate sensible cooling capacity using the apparatus dew point and bypass factor approach
-  return 0.8
-
-def cutler_steady_state_heating_power(conditions, scalar):
-  T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
-  T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
-  eir_FT = calc_biquad([0.718398423,0.003498178, 0.000142202, -0.005724331, 0.00014085, -0.000215321], T_idb, T_odb)
-  eir_FF = calc_quad([2.185418751, -1.942827919, 0.757409168], conditions.mass_flow_fraction)
-  cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
-  cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
-  return eir_FF*cap_FF*eir_FT*cap_FT*scalar
-
-def cutler_steady_state_heating_capacity(conditions, scalar):
-  T_idb = convert(conditions.indoor_drybulb,"°K","°F") # Cutler curves use °F
-  T_odb = convert(conditions.outdoor_drybulb,"K","°F") # Cutler curves use °F
-  cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
-  cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_flow_fraction)
-  return cap_FF*cap_FT*scalar
-
-def epri_integrated_heating_capacity(conditions, scalar, defrost):
-  # EPRI algorithm as described in EnergyPlus documentation
-  if defrost.in_defrost(conditions):
-    t_defrost = defrost.time_fraction(conditions)
-    if defrost.control ==DefrostControl.TIMED:
-        heating_capacity_multiplier = 0.909 - 107.33 * coil_diff_outdoor_air_humidity(conditions)
-    else:
-        heating_capacity_multiplier = 0.875 * (1-t_defrost)
-
-    if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
-        Q_defrost_indoor_u = 0.01 * (7.222 - convert(conditions.outdoor_drybulb,"°K","°C")) * (scalar/1.01667)
-    else:
-        Q_defrost_indoor_u = 0
-
-    Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,scalar) * heating_capacity_multiplier
-    return Q_with_frost_indoor_u * (1-t_defrost) - Q_defrost_indoor_u * t_defrost # Do this for now...actual result will be applied on top
-  else:
-    return cutler_steady_state_heating_capacity(conditions,scalar)
-
-def epri_integrated_heating_power(conditions, scalar, defrost):
-  # EPRI algorithm as described in EnergyPlus documentation
-  if defrost.in_defrost(conditions):
-    t_defrost = defrost.time_fraction(conditions)
-    if defrost.control == DefrostControl.TIMED:
-        input_power_multiplier = 0.9 - 36.45 * coil_diff_outdoor_air_humidity(conditions)
-    else:
-        input_power_multiplier = 0.954 * (1-t_defrost)
-
-    if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
-        P_defrost = 0.1528 * (scalar/1.01667)
-    else:
-        P_defrost = defrost.resistive_power
-
-    P_with_frost = cutler_steady_state_heating_power(conditions,scalar) * input_power_multiplier
-    return P_with_frost * (1-t_defrost) + P_defrost * t_defrost # Do this for now...actual result will be applied on top
-  else:
-    return cutler_steady_state_heating_power(conditions,scalar)
-
-def epri_defrost_time_fraction(conditions):
-  # EPRI algorithm as described in EnergyPlus documentation
-  return 1/(1+(0.01446/coil_diff_outdoor_air_humidity(conditions)))
-
-def coil_diff_outdoor_air_humidity(conditions):
-  # EPRI algorithm as described in EnergyPlus documentation
-  T_coil_outdoor = 0.82 * convert(conditions.outdoor_drybulb,"°K","°C") - 8.589  # In C
-  outdoor_air_himidity_ratio   = psychrolib.GetHumRatioFromRelHum(convert(conditions.outdoor_drybulb,"°K","°C"),conditions.outdoor_rh,conditions.press)
-  saturated_air_himidity_ratio = psychrolib.GetSatHumRatio(T_coil_outdoor,conditions.press) # pressure in Pa already
-  humidity_diff = outdoor_air_himidity_ratio - saturated_air_himidity_ratio
-  return max(1.0e-6,humidity_diff)
-
 #%%
 # Move this stuff to a separate file
 
 # Single speed
-dx_unit_1_speed = DXUnit(
-  gross_total_cooling_capacity_fn=cutler_total_cooling_capacity,
-  gross_cooling_power_fn=cutler_cooling_power,
-  gross_steady_state_heating_capacity_fn=cutler_steady_state_heating_capacity,
-  gross_steady_state_heating_power_fn=cutler_steady_state_heating_power,
-  gross_integrated_heating_capacity_fn=epri_integrated_heating_capacity,
-  gross_integrated_heating_power_fn=epri_integrated_heating_power
-)
+dx_unit_1_speed = DXUnit()
 
 dx_unit_1_speed.print_cooling_info()
 
@@ -573,16 +578,10 @@ dx_unit_2_speed = DXUnit(
   flow_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
   cap_cooling_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
   shr_cooling_rated=[0.8]*2,
-  gross_total_cooling_capacity_fn=cutler_total_cooling_capacity,
-  gross_cooling_power_fn=cutler_cooling_power,
   fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')]*2,
   cop_heating_rated=[2.5, 3.0],
   flow_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
-  cap_heating_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
-  gross_steady_state_heating_capacity_fn=cutler_steady_state_heating_capacity,
-  gross_steady_state_heating_power_fn=cutler_steady_state_heating_power,
-  gross_integrated_heating_capacity_fn=epri_integrated_heating_capacity,
-  gross_integrated_heating_power_fn=epri_integrated_heating_power
+  cap_heating_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')]
 )
 
 dx_unit_2_speed.print_cooling_info()
@@ -592,30 +591,25 @@ dx_unit_2_speed.print_heating_info(region=2)
 
 #%%
 # Plot integrated power and capacity
-P_integrated = []
-Q_integrated = []
-T_outdoor = []
-for T_out in np.arange(-23,75+1,1): #np.arange(-23,40+1,1):
-    conditions = HeatingConditions(outdoor_drybulb=u(T_out,"°F"))
-    Q = dx_unit_1_speed.net_integrated_heating_capacity(conditions)
-    P = dx_unit_1_speed.net_integrated_heating_power(conditions)
-    Q_integrated.append(Q)
-    P_integrated.append(P)
-    T_outdoor.append(T_out)
+T_out = np.arange(-23,75+1,1)
+Q_integrated = [dx_unit_1_speed.gross_integrated_heating_capacity(HeatingConditions(outdoor_drybulb=u(T,"°F"))) for T in T_out]
+P_integrated = [dx_unit_1_speed.gross_integrated_heating_power(HeatingConditions(outdoor_drybulb=u(T,"°F"))) for T in T_out]
+COP_integrated = [dx_unit_1_speed.gross_integrated_heating_cop(HeatingConditions(outdoor_drybulb=u(T,"°F"))) for T in T_out]
 
 fig, ax1 = plt.subplots()
 
 color = 'tab:red'
 ax1.set_xlabel('Temp (°F)')
-ax1.set_ylabel('Capacity (W)', color=color)
-ax1.plot(T_outdoor, Q_integrated, color=color)
+ax1.set_ylabel('Capacity/Power (W)', color=color)
+ax1.plot(T_out, Q_integrated, color=color)
+ax1.plot(T_out, P_integrated, color=color)
 ax1.tick_params(axis='y', labelcolor=color)
 
 ax2 = ax1.twinx()
 
 color = 'tab:blue'
-ax2.set_ylabel('Power (W)', color=color)
-ax2.plot(T_outdoor, P_integrated, color=color)
+ax2.set_ylabel('COP', color=color)
+ax2.plot(T_out, COP_integrated, color=color)
 ax2.tick_params(axis='y', labelcolor=color)
 
 fig.tight_layout()
