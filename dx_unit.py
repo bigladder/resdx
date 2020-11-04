@@ -489,7 +489,7 @@ class DXUnit:
         e = p_full*hlf_full*delta_full*n/plf_full # eq. 11.156 (not shown for single stage)
         rh = (bl - q_full*hlf_full*delta_full)*n # eq. 11.126
       else: # elif self.number_of_speeds == 2:
-        t_ob = u(45,"°F") # eq. 11.134
+        t_ob = u(40,"°F") # eq. 11.134
         if t >= t_ob:
           q_low = interpolate(self.net_integrated_heating_capacity, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.135
           p_low = interpolate(self.net_integrated_heating_power, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.138
