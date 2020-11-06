@@ -411,7 +411,7 @@ class DXUnit:
 
       self.shr_cooling_rated += [title24_shr(self.A_low_cond)]
 
-    self.bypass_factor = []*self.number_of_speeds
+    self.bypass_factor_rated = []*self.number_of_speeds
 
     ## Check for errors
 
@@ -484,7 +484,11 @@ class DXUnit:
   def net_cooling_cop(self, conditions):
     return self.net_total_cooling_capacity(conditions)/self.net_cooling_power(conditions)
 
-  def calculate_bypass_factor(self, conditions):
+  def calculate_bypass_factor(self, speed):
+    if speed == 0:
+      conditions = self.A_full_cond
+    else:
+      conditions = self.A_low_cond
     T_idb = conditions.indoor.db_C
     w_i = conditions.indoor.get_hr()
     h_i = conditions.indoor.get_h()
@@ -495,11 +499,12 @@ class DXUnit:
     C_p = u(1.006,"kJ/kg-K") # Specific heat of air
     T_odb = T_idb - Q_s_rated/(m_dot_rated*C_p)
     w_o = psychrolib.GetHumRatioFromEnthalpyAndTDryBulb(h_o,T_odb)
-    root_fn = lambda T_ADP : psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, conditions.press) - (w_i - (w_i - w_o)/(T_idb - Todb)*(T_idb - T_ADP))
+    root_fn = lambda T_ADP : psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, conditions.indoor.p) - (w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP))
     T_ADP = optimize.newton(root_fn, T_odb)
     w_ADP = w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP)
     h_ADP = psychrolib.GetMoistAirEnthalpy(T_ADP,w_ADP)
-    self.bypass_factor[conditions.compressor_speed] = (h_i - h_o)/(h_i - h_ADP)
+    self.bypass_factor_rated[conditions.compressor_speed] = (h_i - h_o)/(h_i - h_ADP)
+    # Also calculate A_o so we can calculate bypass factor at other flow rates
 
   def eer(self, conditions):
     return convert(self.net_cooling_cop(conditions),'','Btu/Wh')
