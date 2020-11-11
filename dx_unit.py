@@ -5,6 +5,8 @@ from enum import Enum
 import numpy as np
 from scipy import optimize
 
+import math
+
 import pint # 0.15 or higher
 ureg = pint.UnitRegistry()
 
@@ -78,9 +80,14 @@ class PsychState:
 
   def set_hr(self, hr):
     self.hr = hr
-    self.set_wb(convert(psychrolib.GetTWetBulbFromRelHum(self.db_C, self.hr, self.p),"°C","K"))
+    self.set_wb(convert(psychrolib.GetTWetBulbFromHumRatio(self.db_C, self.hr, self.p),"°C","K"))
     self.hr_set = True
     return self.hr
+
+  def set_h(self, h):
+    self.h = h
+    self.h_set = True
+    return self.h
 
   def get_wb(self):
     if self.wb_set:
@@ -110,6 +117,13 @@ class PsychState:
       return self.hr
     else:
       return self.set_hr(psychrolib.GetHumRatioFromTWetBulb(self.db_C, self.get_wb_C(), self.p))
+  
+  def get_h(self):
+    if self.h_set:
+        return self.h
+    else:
+      return self.set_h(psychrolib.GetMoistAirEnthalpy(self.db_C,self.get_hr()))
+
 
 STANDARD_CONDITIONS = PsychState(drybulb=u(70.0,"°F"),hum_rat=0.0)
 
@@ -295,6 +309,22 @@ def coil_diff_outdoor_air_humidity(conditions):
   humidity_diff = conditions.outdoor.get_hr() - saturated_air_himidity_ratio
   return max(1.0e-6,humidity_diff)
 
+# EnergyPlus model
+def energyplus_sensible_cooling_capacity(conditions,bypass_factor_scalar,capacity_scalar):
+  Q_t = cutler_total_cooling_capacity(conditions,capacity_scalar)
+  h_i = conditions.indoor.get_h()
+  m_dot = conditions.air_mass_flow
+  h_ADP = h_i - Q_t/(m_dot * (1-bypass_factor_scalar))
+  root_fn = lambda T_ADP : psychrolib.GetSatAirEnthalpy(T_ADP, conditions.indoor.p) - h_ADP
+  T_ADP = optimize.newton(root_fn, conditions.indoor.db_C)
+  w_ADP = psychrolib.GetSatHumRatio(T_ADP, conditions.indoor.p)
+  h_sensible = psychrolib.GetMoistAirEnthalpy(conditions.indoor.db_C,w_ADP)
+  return Q_t * (h_sensible - h_ADP)/(h_i - h_ADP)
+
+def energyplus_shr(conditions,bypass_factor_scalar,capacity_scalar):
+  Q_t = cutler_total_cooling_capacity(conditions,capacity_scalar)
+  return energyplus_sensible_cooling_capacity(conditions,bypass_factor_scalar)/Q_t
+
 # NREL Model
 
 # FSEC Model
@@ -340,12 +370,12 @@ class DXUnit:
   standard_design_heating_requirements = [(u(5000,"Btu/hr")+i*u(5000,"Btu/hr")) for i in range(0,8)] + [(u(50000,"Btu/hr")+i*u(10000,"Btu/hr")) for i in range(0,9)]
 
   def __init__(self,gross_total_cooling_capacity_fn=cutler_total_cooling_capacity,
-                    gross_sensible_cooling_capacity_fn=lambda : 1.0,
+                    gross_sensible_cooling_capacity_fn=energyplus_sensible_cooling_capacity,
                     gross_cooling_power_fn=cutler_cooling_power,
                     c_d_cooling=0.2,
                     fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')],
                     gross_cooling_cop_rated=[3.0],
-                    flow_rated_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")], # TODO: Check assumption (varies by climate?)
+                    flow_rated_per_cap_cooling_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration")], # TODO: Check assumption (varies by climate?)
                     net_total_cooling_capacity_rated=[u(3.0,'ton_of_refrigeration')],
                     gross_steady_state_heating_capacity_fn=cutler_steady_state_heating_capacity,
                     gross_integrated_heating_capacity_fn=epri_integrated_heating_capacity,
@@ -355,7 +385,7 @@ class DXUnit:
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
                     gross_heating_cop_rated=[2.5],
-                    flow_rated_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")], # TODO: Check assumption
+                    flow_rated_per_cap_heating_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration")], # TODO: Check assumption
                     net_heating_capacity_rated=[u(3.0,'ton_of_refrigeration')],
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
                     heating_off_temperature = u(10.0,"°F"), # TODO: Check value taken from Scott's script single-stage
@@ -388,7 +418,8 @@ class DXUnit:
     self.number_of_speeds = len(self.gross_cooling_cop_rated)
     self.gross_total_cooling_capacity_rated = [self.net_total_cooling_capacity_rated[i]*(1 + self.fan_eff_cooling_rated[i]*self.flow_rated_per_cap_cooling_rated[i]) for i in range(self.number_of_speeds)]
     self.gross_heating_capacity_rated = [self.net_heating_capacity_rated[i]*(1 + self.fan_eff_heating_rated[i]*self.flow_rated_per_cap_heating_rated[i]) for i in range(self.number_of_speeds)]
-
+    self.bypass_factor_rated = [None]*self.number_of_speeds
+    
     ## Set rating conditions
     self.A_full_cond = self.make_condition(CoolingConditions)
     self.B_full_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=u(82.0,"°F"),wetbulb=u(65.0,"°F")))
@@ -398,6 +429,7 @@ class DXUnit:
     self.H3_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(17.0,"°F"),wetbulb=u(15.0,"°F")))
 
     self.shr_cooling_rated = [title24_shr(self.A_full_cond)]
+    self.calculate_bypass_factor_rated(0)
 
     if self.number_of_speeds > 1:
       self.A_low_cond = self.make_condition(CoolingConditions,compressor_speed=1) # Not used in AHRI ratings, only used for 'rated' SHR calculations at low speeds
@@ -410,8 +442,9 @@ class DXUnit:
       self.H3_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(17.0,"°F"),wetbulb=u(15.0,"°F")),compressor_speed=1)
 
       self.shr_cooling_rated += [title24_shr(self.A_low_cond)]
+      self.calculate_bypass_factor_rated(1)
 
-    self.bypass_factor_rated = []*self.number_of_speeds
+   
 
     ## Check for errors
 
@@ -467,7 +500,7 @@ class DXUnit:
     return self.gross_total_cooling_capacity_fn(conditions,self.gross_total_cooling_capacity_rated[conditions.compressor_speed])
 
   def gross_sensible_cooling_capacity(self, conditions):
-    return self.gross_sensible_cooling_capacity_fn(conditions,self.gross_total_cooling_capacity_rated[conditions.compressor_speed])
+    return self.gross_sensible_cooling_capacity_fn(conditions,self.bypass_factor_rated[conditions.compressor_speed],self.gross_total_cooling_capacity_rated[conditions.compressor_speed])
 
   def gross_cooling_power(self, conditions):
     return self.gross_cooling_power_fn(conditions,self.gross_total_cooling_capacity_rated[conditions.compressor_speed]/self.gross_cooling_cop_rated[conditions.compressor_speed])
@@ -484,7 +517,7 @@ class DXUnit:
   def net_cooling_cop(self, conditions):
     return self.net_total_cooling_capacity(conditions)/self.net_cooling_power(conditions)
 
-  def calculate_bypass_factor(self, speed):
+  def calculate_bypass_factor_rated(self, speed): # for rated flow rate
     if speed == 0:
       conditions = self.A_full_cond
     else:
@@ -496,15 +529,19 @@ class DXUnit:
     m_dot_rated = conditions.air_mass_flow
     h_o = h_i - Q_t_rated/m_dot_rated
     Q_s_rated = self.shr_cooling_rated[conditions.compressor_speed]*Q_t_rated
-    C_p = u(1.006,"kJ/kg-K") # Specific heat of air
+    C_p = u(1.006,"kJ/kg/K") # Specific heat of air
     T_odb = T_idb - Q_s_rated/(m_dot_rated*C_p)
     w_o = psychrolib.GetHumRatioFromEnthalpyAndTDryBulb(h_o,T_odb)
     root_fn = lambda T_ADP : psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, conditions.indoor.p) - (w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP))
     T_ADP = optimize.newton(root_fn, T_odb)
     w_ADP = w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP)
     h_ADP = psychrolib.GetMoistAirEnthalpy(T_ADP,w_ADP)
-    self.bypass_factor_rated[conditions.compressor_speed] = (h_i - h_o)/(h_i - h_ADP)
-    # Also calculate A_o so we can calculate bypass factor at other flow rates
+    self.bypass_factor_rated[conditions.compressor_speed] = (h_o - h_ADP)/(h_i - h_ADP)
+    self.normalized_NTU = - conditions.air_mass_flow * math.log(self.bypass_factor_rated[conditions.compressor_speed]) # A0 = - m_dot * ln(BF)
+
+  def calculate_bypass_factor(self,conditions):
+      m_dot = conditions.air_mass_flow
+      return math.exp(-self.normalized_NTU/m_dot)
 
   def eer(self, conditions):
     return convert(self.net_cooling_cop(conditions),'','Btu/Wh')
