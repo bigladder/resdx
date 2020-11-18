@@ -117,7 +117,7 @@ class PsychState:
       return self.hr
     else:
       return self.set_hr(psychrolib.GetHumRatioFromTWetBulb(self.db_C, self.get_wb_C(), self.p))
-  
+
   def get_h(self):
     if self.h_set:
         return self.h
@@ -310,20 +310,16 @@ def coil_diff_outdoor_air_humidity(conditions):
   return max(1.0e-6,humidity_diff)
 
 # EnergyPlus model
-def energyplus_sensible_cooling_capacity(conditions,bypass_factor_scalar,capacity_scalar):
-  Q_t = cutler_total_cooling_capacity(conditions,capacity_scalar)
+def energyplus_sensible_cooling_capacity(conditions,total_capacity,bypass_factor):
+  Q_t = total_capacity
   h_i = conditions.indoor.get_h()
   m_dot = conditions.air_mass_flow
-  h_ADP = h_i - Q_t/(m_dot * (1-bypass_factor_scalar))
+  h_ADP = h_i - Q_t/(m_dot * (1-bypass_factor))
   root_fn = lambda T_ADP : psychrolib.GetSatAirEnthalpy(T_ADP, conditions.indoor.p) - h_ADP
   T_ADP = optimize.newton(root_fn, conditions.indoor.db_C)
   w_ADP = psychrolib.GetSatHumRatio(T_ADP, conditions.indoor.p)
   h_sensible = psychrolib.GetMoistAirEnthalpy(conditions.indoor.db_C,w_ADP)
   return Q_t * (h_sensible - h_ADP)/(h_i - h_ADP)
-
-def energyplus_shr(conditions,bypass_factor_scalar,capacity_scalar):
-  Q_t = cutler_total_cooling_capacity(conditions,capacity_scalar)
-  return energyplus_sensible_cooling_capacity(conditions,bypass_factor_scalar)/Q_t
 
 # NREL Model
 
@@ -419,7 +415,8 @@ class DXUnit:
     self.gross_total_cooling_capacity_rated = [self.net_total_cooling_capacity_rated[i]*(1 + self.fan_eff_cooling_rated[i]*self.flow_rated_per_cap_cooling_rated[i]) for i in range(self.number_of_speeds)]
     self.gross_heating_capacity_rated = [self.net_heating_capacity_rated[i]*(1 + self.fan_eff_heating_rated[i]*self.flow_rated_per_cap_heating_rated[i]) for i in range(self.number_of_speeds)]
     self.bypass_factor_rated = [None]*self.number_of_speeds
-    
+    self.normalized_ntu = [None]*self.number_of_speeds
+
     ## Set rating conditions
     self.A_full_cond = self.make_condition(CoolingConditions)
     self.B_full_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=u(82.0,"°F"),wetbulb=u(65.0,"°F")))
@@ -443,8 +440,6 @@ class DXUnit:
 
       self.shr_cooling_rated += [title24_shr(self.A_low_cond)]
       self.calculate_bypass_factor_rated(1)
-
-   
 
     ## Check for errors
 
@@ -500,13 +495,22 @@ class DXUnit:
     return self.gross_total_cooling_capacity_fn(conditions,self.gross_total_cooling_capacity_rated[conditions.compressor_speed])
 
   def gross_sensible_cooling_capacity(self, conditions):
-    return self.gross_sensible_cooling_capacity_fn(conditions,self.bypass_factor_rated[conditions.compressor_speed],self.gross_total_cooling_capacity_rated[conditions.compressor_speed])
+    return self.gross_sensible_cooling_capacity_fn(conditions,self.gross_total_cooling_capacity(conditions),self.bypass_factor(conditions))
+
+  def gross_shr(self, conditions):
+    return self.gross_sensible_cooling_capacity(conditions)/self.gross_total_cooling_capacity(conditions)
 
   def gross_cooling_power(self, conditions):
     return self.gross_cooling_power_fn(conditions,self.gross_total_cooling_capacity_rated[conditions.compressor_speed]/self.gross_cooling_cop_rated[conditions.compressor_speed])
 
   def net_total_cooling_capacity(self, conditions):
     return self.gross_total_cooling_capacity(conditions) - self.fan_heat(conditions) # eq. 11.3 but not considering duct losses
+
+  def net_sensible_cooling_capacity(self, conditions):
+    return self.gross_sensible_cooling_capacity(conditions) - self.fan_heat(conditions)
+
+  def net_shr(self, conditions):
+    return self.net_sensible_cooling_capacity(conditions)/self.net_total_cooling_capacity(conditions)
 
   def net_cooling_power(self, conditions):
     return self.gross_cooling_power(conditions) + self.fan_power(conditions) # eq. 11.15
@@ -537,11 +541,10 @@ class DXUnit:
     w_ADP = w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP)
     h_ADP = psychrolib.GetMoistAirEnthalpy(T_ADP,w_ADP)
     self.bypass_factor_rated[conditions.compressor_speed] = (h_o - h_ADP)/(h_i - h_ADP)
-    self.normalized_NTU = - conditions.air_mass_flow * math.log(self.bypass_factor_rated[conditions.compressor_speed]) # A0 = - m_dot * ln(BF)
+    self.normalized_ntu[conditions.compressor_speed] = - conditions.air_mass_flow * math.log(self.bypass_factor_rated[conditions.compressor_speed]) # A0 = - m_dot * ln(BF)
 
-  def calculate_bypass_factor(self,conditions):
-      m_dot = conditions.air_mass_flow
-      return math.exp(-self.normalized_NTU/m_dot)
+  def bypass_factor(self,conditions):
+      return math.exp(-self.normalized_ntu[conditions.compressor_speed]/conditions.air_mass_flow)
 
   def eer(self, conditions):
     return convert(self.net_cooling_cop(conditions),'','Btu/Wh')
@@ -726,6 +729,7 @@ class DXUnit:
       conditions.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[speed], self.gross_total_cooling_capacity_rated[speed])
       print(f"Net cooling power for stage {speed + 1} : {self.net_cooling_power(conditions)}")
       print(f"Net cooling capacity for stage {speed + 1} : {self.net_total_cooling_capacity(conditions)}")
+      print(f"Net SHR for stage {speed + 1} : {self.net_shr(conditions)}")
 
   def print_heating_info(self, region=4):
     print(f"HSPF (region {region}): {self.hspf(region)}")
