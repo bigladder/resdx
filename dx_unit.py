@@ -298,14 +298,17 @@ def epri_integrated_heating_power(conditions, power_scalar, capacity_scalar, def
   if defrost.in_defrost(conditions):
     t_defrost = defrost.time_fraction(conditions)
     if defrost.control == DefrostControl.TIMED:
-        input_power_multiplier = 0.9 - 36.45 * coil_diff_outdoor_air_humidity(conditions)
+      input_power_multiplier = 0.9 - 36.45 * coil_diff_outdoor_air_humidity(conditions)
     else:
-        input_power_multiplier = 0.954 * (1-t_defrost)
+      input_power_multiplier = 0.954 * (1-t_defrost)
 
     if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
-        P_defrost = 0.1528 * (capacity_scalar/1.01667)
+      T_iwb = convert(conditions.indoor.wb,"K","°C")
+      T_odb = conditions.outdoor.db_C
+      defEIRfT = calc_biquad([0.1528, 0, 0, 0, 0, 0], T_iwb, T_odb) # TODO: Check assumption from BEopt
+      P_defrost = defEIRfT*(capacity_scalar/1.01667)
     else:
-        P_defrost = defrost.resistive_power
+      P_defrost = defrost.resistive_power
 
     P_with_frost = cutler_steady_state_heating_power(conditions,power_scalar) * input_power_multiplier
     return P_with_frost * (1-t_defrost) + P_defrost * t_defrost # Do this for now...actual result will be applied on top
@@ -584,7 +587,7 @@ class DXUnit:
     self.normalized_ntu[conditions.compressor_speed] = - conditions.air_mass_flow * math.log(self.bypass_factor_rated[conditions.compressor_speed]) # A0 = - m_dot * ln(BF)
 
   def bypass_factor(self,conditions):
-      return math.exp(-self.normalized_ntu[conditions.compressor_speed]/conditions.air_mass_flow)
+    return math.exp(-self.normalized_ntu[conditions.compressor_speed]/conditions.air_mass_flow)
 
   def get_adp_state_from_conditions(self, conditions):
     outlet_state = self.get_outlet_state(conditions)
