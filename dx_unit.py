@@ -63,6 +63,8 @@ class PsychState:
       self.set_hr(kwargs["hum_rat"])
     elif "rel_hum" in kwargs:
       self.set_rh(kwargs["rel_hum"])
+    elif "enthalpy" in kwargs:
+      self.set_h(kwargs["enthalpy"])
     else:
       sys.exit(f'Unknonw key word argument {kwargs}.')
 
@@ -74,18 +76,22 @@ class PsychState:
 
   def set_rh(self, rh):
     self.rh = rh
-    self.set_wb(convert(psychrolib.GetTWetBulbFromRelHum(self.db_C, self.rh, self.p),"°C","K"))
+    if not self.wb_set:
+      self.set_wb(convert(psychrolib.GetTWetBulbFromRelHum(self.db_C, self.rh, self.p),"°C","K"))
     self.rh_set = True
     return self.rh
 
   def set_hr(self, hr):
     self.hr = hr
-    self.set_wb(convert(psychrolib.GetTWetBulbFromHumRatio(self.db_C, self.hr, self.p),"°C","K"))
+    if not self.wb_set:
+      self.set_wb(convert(psychrolib.GetTWetBulbFromHumRatio(self.db_C, self.hr, self.p),"°C","K"))
     self.hr_set = True
     return self.hr
 
   def set_h(self, h):
     self.h = h
+    if not self.hr_set:
+      self.set_hr(psychrolib.GetHumRatioFromEnthalpyAndTDryBulb(self.h, self.db_C))
     self.h_set = True
     return self.h
 
@@ -538,30 +544,51 @@ class DXUnit:
   def net_cooling_cop(self, conditions):
     return self.net_total_cooling_capacity(conditions)/self.net_cooling_power(conditions)
 
+  def get_outlet_state(self, conditions, gross_total_capacity=None, gross_sensible_capacity=None):
+    if gross_total_capacity is None:
+      gross_total_capacity = self.gross_total_cooling_capacity(conditions)
+
+    if gross_sensible_capacity is None:
+      gross_sensible_capacity = self.gross_sensible_cooling_capacity(conditions)
+
+    T_idb = conditions.indoor.db
+    h_i = conditions.indoor.get_h()
+    m_dot_rated = conditions.air_mass_flow
+    h_o = h_i - gross_total_capacity/m_dot_rated
+    C_p = u(1.006,"kJ/kg/K") # Specific heat of air
+    T_odb = T_idb - gross_sensible_capacity/(m_dot_rated*C_p)
+    return PsychState(T_odb,pressure=conditions.indoor.p,enthalpy=h_o)
+
+  def get_adp_state(self, inlet_state, outlet_state):
+    T_idb = inlet_state.db_C
+    w_i = inlet_state.get_hr()
+    T_odb = outlet_state.db_C
+    w_o = outlet_state.get_hr()
+    root_fn = lambda T_ADP : psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, inlet_state.p) - (w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP))
+    T_ADP = optimize.newton(root_fn, T_idb)
+    w_ADP = w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP)
+    return PsychState(convert(T_ADP,"°C","K"),pressure=inlet_state.p,hum_rat=w_ADP)
+
   def calculate_bypass_factor_rated(self, speed): # for rated flow rate
     if speed == 0:
       conditions = self.A_full_cond
     else:
       conditions = self.A_low_cond
-    T_idb = conditions.indoor.db_C
-    w_i = conditions.indoor.get_hr()
+    Q_s_rated = self.shr_cooling_rated[conditions.compressor_speed]*self.gross_total_cooling_capacity(conditions)
+    outlet_state = self.get_outlet_state(conditions,gross_sensible_capacity=Q_s_rated)
+    ADP_state = self.get_adp_state(conditions.indoor,outlet_state)
     h_i = conditions.indoor.get_h()
-    Q_t_rated = self.gross_total_cooling_capacity(conditions)
-    m_dot_rated = conditions.air_mass_flow
-    h_o = h_i - Q_t_rated/m_dot_rated
-    Q_s_rated = self.shr_cooling_rated[conditions.compressor_speed]*Q_t_rated
-    C_p = u(1.006,"kJ/kg/K") # Specific heat of air
-    T_odb = T_idb - Q_s_rated/(m_dot_rated*C_p)
-    w_o = psychrolib.GetHumRatioFromEnthalpyAndTDryBulb(h_o,T_odb)
-    root_fn = lambda T_ADP : psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, conditions.indoor.p) - (w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP))
-    T_ADP = optimize.newton(root_fn, T_odb)
-    w_ADP = w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP)
-    h_ADP = psychrolib.GetMoistAirEnthalpy(T_ADP,w_ADP)
+    h_o = outlet_state.get_h()
+    h_ADP = ADP_state.get_h()
     self.bypass_factor_rated[conditions.compressor_speed] = (h_o - h_ADP)/(h_i - h_ADP)
     self.normalized_ntu[conditions.compressor_speed] = - conditions.air_mass_flow * math.log(self.bypass_factor_rated[conditions.compressor_speed]) # A0 = - m_dot * ln(BF)
 
   def bypass_factor(self,conditions):
       return math.exp(-self.normalized_ntu[conditions.compressor_speed]/conditions.air_mass_flow)
+
+  def get_adp_state_from_conditions(self, conditions):
+    outlet_state = self.get_outlet_state(conditions)
+    return self.get_adp_state(conditions.indoor,outlet_state)
 
   def eer(self, conditions):
     return convert(self.net_cooling_cop(conditions),'','Btu/Wh')
