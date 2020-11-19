@@ -778,6 +778,7 @@ class DXUnit:
       conditions.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[speed], self.gross_total_cooling_capacity_rated[speed])
       print(f"Net cooling power for stage {speed + 1} : {self.net_cooling_power(conditions)}")
       print(f"Net cooling capacity for stage {speed + 1} : {self.net_total_cooling_capacity(conditions)}")
+      print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions)}")
       print(f"Net SHR for stage {speed + 1} : {self.net_shr(conditions)}")
 
   def print_heating_info(self, region=4):
@@ -806,11 +807,11 @@ dx_unit_1_speed.print_heating_info()
 dx_unit_2_speed = DXUnit(
   gross_cooling_cop_rated=[3.0,3.5],
   fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')]*2,
-  flow_rated_per_cap_cooling_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
+  flow_rated_per_cap_cooling_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration"),u(300.0,"cu_ft/min/ton_of_refrigeration")],
   net_total_cooling_capacity_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
   fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')]*2,
   gross_heating_cop_rated=[2.5, 3.0],
-  flow_rated_per_cap_heating_rated = [u(350.0,"cu_ft/min/ton_of_refrigeration")]*2,
+  flow_rated_per_cap_heating_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration"),u(300.0,"cu_ft/min/ton_of_refrigeration")],
   net_heating_capacity_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')]
 )
 
