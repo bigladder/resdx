@@ -289,7 +289,7 @@ def epri_integrated_heating_capacity(conditions, capacity_scalar, defrost):
         Q_defrost_indoor_u = 0
 
     Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,capacity_scalar) * heating_capacity_multiplier
-    return Q_with_frost_indoor_u * (1-t_defrost) - Q_defrost_indoor_u * t_defrost # Do this for now...actual result will be applied on top
+    return Q_with_frost_indoor_u * (1-t_defrost) - Q_defrost_indoor_u * t_defrost
   else:
     return cutler_steady_state_heating_capacity(conditions,capacity_scalar)
 
@@ -311,7 +311,7 @@ def epri_integrated_heating_power(conditions, power_scalar, capacity_scalar, def
       P_defrost = defrost.resistive_power
 
     P_with_frost = cutler_steady_state_heating_power(conditions,power_scalar) * input_power_multiplier
-    return P_with_frost * (1-t_defrost) + P_defrost * t_defrost # Do this for now...actual result will be applied on top
+    return P_with_frost * (1-t_defrost) + P_defrost * t_defrost
   else:
     return cutler_steady_state_heating_power(conditions,power_scalar)
 
