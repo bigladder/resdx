@@ -203,8 +203,10 @@ class Defrost:
                     resistive_power = 0,
                     control = DefrostControl.TIMED,
                     strategy = DefrostStrategy.REVERSE_CYCLE,
-                    high_temperature=u(41,"°F"),
-                    low_temperature=None):
+                    high_temperature=u(41,"°F"),  # Maximum temperature for defrost operation
+                    low_temperature=None,  # Minimum temperature for defrost operation
+                    period=u(90,'min'),  # Time between defrost terminations (for testing)
+                    max_time=u(720,"min")):  # Maximum time between defrosts allowed by controls
 
     # Initialize member values
     self.time_fraction = time_fraction
@@ -213,8 +215,12 @@ class Defrost:
     self.strategy = strategy
     self.high_temperature = high_temperature
     self.low_temperature = low_temperature
+    self.period = period
+    self.max_time = max_time
 
-    # TODO: Resistive defrost needs > 0 resistive power
+    # Check inputs
+    if self.strategy == DefrostStrategy.RESISTIVE and self.resistive_power <= 0:
+      sys.exit(f'Defrost stratege=RESISTIVE, but resistive_power is not greater than zero.')
 
   def in_defrost(self, conditions):
     if self.low_temperature is not None:
@@ -722,8 +728,8 @@ class DXUnit:
       e_sum += e
       rh_sum += rh
 
-    t_test = u(90.0,'min') # TODO: make input
-    t_max  = u(720.0,'min') # TODO: make input
+    t_test = max(self.defrost.period, u(90,"min"))
+    t_max  = min(self.defrost.max_time, u(720.0,'min'))
 
     if self.defrost.control == DefrostControl.DEMAND:
       f_def = 1 + 0.03 * (1 - (t_test-u(90.0,'min'))/(t_max-u(90.0,'min'))) # eq. 11.129
