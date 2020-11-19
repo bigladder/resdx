@@ -136,7 +136,7 @@ class OperatingConditions:
     self.compressor_speed = compressor_speed # compressor speed index (0 = full speed, 1 = next lowest, ...)
     self.rated_air_flow_set = False
 
-  def set_rated_air_flow(self, air_vol_flow_per_rated_cap, capacity_rated): # TODO: use net rated capacity
+  def set_rated_air_flow(self, air_vol_flow_per_rated_cap, capacity_rated):
     self.capacity_rated = capacity_rated
     self.std_air_vol_flow_rated = air_vol_flow_per_rated_cap*capacity_rated
     self.air_vol_flow_rated = self.std_air_vol_flow_rated*STANDARD_CONDITIONS.get_rho()/self.indoor.get_rho()
@@ -227,7 +227,9 @@ class Defrost:
 
 ## Model functions
 
-# Unified Model
+# NREL Model
+'''Based on Cutler et al, but also includes internal EnergyPlus calculations'''
+
 def cutler_cooling_power(conditions, power_scalar):
   T_iwb = convert(conditions.indoor.get_wb(),"K","°F") # Cutler curves use °F
   T_odb = convert(conditions.outdoor.db,"K","°F") # Cutler curves use °F
@@ -309,7 +311,6 @@ def coil_diff_outdoor_air_humidity(conditions):
   humidity_diff = conditions.outdoor.get_hr() - saturated_air_himidity_ratio
   return max(1.0e-6,humidity_diff)
 
-# EnergyPlus model
 def energyplus_sensible_cooling_capacity(conditions,total_capacity,bypass_factor):
   Q_t = total_capacity
   h_i = conditions.indoor.get_h()
@@ -320,8 +321,6 @@ def energyplus_sensible_cooling_capacity(conditions,total_capacity,bypass_factor
   w_ADP = psychrolib.GetSatHumRatio(T_ADP, conditions.indoor.p)
   h_sensible = psychrolib.GetMoistAirEnthalpy(conditions.indoor.db_C,w_ADP)
   return Q_t * (h_sensible - h_ADP)/(h_i - h_ADP)
-
-# NREL Model
 
 # FSEC Model
 
@@ -350,6 +349,16 @@ def title24_shr(conditions):
   SHR = CA_regression(coeffs,T_iwb,T_odb,T_idb,CFM_per_ton)
   return min(1.0, SHR)
 
+# Unified RESNET Model
+resnet_cooling_power = cutler_cooling_power
+resnet_total_cooling_capacity = cutler_total_cooling_capacity
+resnet_sensible_cooling_capacity = energyplus_sensible_cooling_capacity
+resnet_shr_rated = title24_shr
+resnet_steady_state_heating_capacity = cutler_steady_state_heating_capacity
+resnet_integrated_heating_capacity = epri_integrated_heating_capacity
+resnet_steady_state_heating_power = cutler_steady_state_heating_power
+resnet_integrated_heating_power = epri_integrated_heating_power
+
 class DXUnit:
 
   regional_heating_distributions = {
@@ -366,17 +375,18 @@ class DXUnit:
   standard_design_heating_requirements = [(u(5000,"Btu/hr")+i*u(5000,"Btu/hr")) for i in range(0,8)] + [(u(50000,"Btu/hr")+i*u(10000,"Btu/hr")) for i in range(0,9)]
 
   def __init__(self,gross_total_cooling_capacity_fn=cutler_total_cooling_capacity,
-                    gross_sensible_cooling_capacity_fn=energyplus_sensible_cooling_capacity,
-                    gross_cooling_power_fn=cutler_cooling_power,
+                    gross_sensible_cooling_capacity_fn=resnet_sensible_cooling_capacity,
+                    gross_cooling_power_fn=resnet_cooling_power,
+                    shr_rated_fn=resnet_shr_rated,
                     c_d_cooling=0.2,
                     fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')],
                     gross_cooling_cop_rated=[3.0],
                     flow_rated_per_cap_cooling_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration")], # TODO: Check assumption (varies by climate?)
                     net_total_cooling_capacity_rated=[u(3.0,'ton_of_refrigeration')],
-                    gross_steady_state_heating_capacity_fn=cutler_steady_state_heating_capacity,
-                    gross_integrated_heating_capacity_fn=epri_integrated_heating_capacity,
-                    gross_steady_state_heating_power_fn=cutler_steady_state_heating_power,
-                    gross_integrated_heating_power_fn=epri_integrated_heating_power,
+                    gross_steady_state_heating_capacity_fn=resnet_steady_state_heating_capacity,
+                    gross_integrated_heating_capacity_fn=resnet_integrated_heating_capacity,
+                    gross_steady_state_heating_power_fn=resnet_steady_state_heating_power,
+                    gross_integrated_heating_power_fn=resnet_integrated_heating_power,
                     defrost=Defrost(),
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
@@ -391,6 +401,7 @@ class DXUnit:
     self.gross_total_cooling_capacity_fn = gross_total_cooling_capacity_fn
     self.gross_sensible_cooling_capacity_fn = gross_sensible_cooling_capacity_fn
     self.gross_cooling_power_fn = gross_cooling_power_fn
+    self.shr_rated_fn = shr_rated_fn
     self.c_d_cooling = c_d_cooling
     self.fan_eff_cooling_rated = fan_eff_cooling_rated
     self.gross_cooling_cop_rated = gross_cooling_cop_rated
@@ -425,7 +436,7 @@ class DXUnit:
     self.H2_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(35.0,"°F"),wetbulb=u(33.0,"°F")))
     self.H3_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(17.0,"°F"),wetbulb=u(15.0,"°F")))
 
-    self.shr_cooling_rated = [title24_shr(self.A_full_cond)]
+    self.shr_cooling_rated = [self.shr_rated_fn(self.A_full_cond)]
     self.calculate_bypass_factor_rated(0)
 
     if self.number_of_speeds > 1:
@@ -438,7 +449,7 @@ class DXUnit:
       self.H2_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(35.0,"°F"),wetbulb=u(33.0,"°F")),compressor_speed=1)
       self.H3_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(17.0,"°F"),wetbulb=u(15.0,"°F")),compressor_speed=1)
 
-      self.shr_cooling_rated += [title24_shr(self.A_low_cond)]
+      self.shr_cooling_rated += [self.shr_rated_fn(self.A_low_cond)]
       self.calculate_bypass_factor_rated(1)
 
     ## Check for errors
