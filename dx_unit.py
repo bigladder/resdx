@@ -279,17 +279,17 @@ def epri_integrated_heating_capacity(conditions, capacity_scalar, defrost):
   if defrost.in_defrost(conditions):
     t_defrost = defrost.time_fraction(conditions)
     if defrost.control ==DefrostControl.TIMED:
-        heating_capacity_multiplier = 0.909 - 107.33 * coil_diff_outdoor_air_humidity(conditions)
+        heating_capacity_multiplier = 0.909 - 107.33*coil_diff_outdoor_air_humidity(conditions)
     else:
-        heating_capacity_multiplier = 0.875 * (1-t_defrost)
+        heating_capacity_multiplier = 0.875*(1 - t_defrost)
 
     if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
-        Q_defrost_indoor_u = 0.01 * (7.222 - convert(conditions.outdoor.db,"°K","°C")) * (capacity_scalar/1.01667)
+        Q_defrost_indoor_u = 0.01*(7.222 - convert(conditions.outdoor.db,"°K","°C"))*(capacity_scalar/1.01667)
     else:
         Q_defrost_indoor_u = 0
 
-    Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,capacity_scalar) * heating_capacity_multiplier
-    return Q_with_frost_indoor_u * (1-t_defrost) - Q_defrost_indoor_u * t_defrost
+    Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,capacity_scalar)*heating_capacity_multiplier
+    return Q_with_frost_indoor_u*(1 - t_defrost) - Q_defrost_indoor_u*t_defrost
   else:
     return cutler_steady_state_heating_capacity(conditions,capacity_scalar)
 
@@ -298,9 +298,9 @@ def epri_integrated_heating_power(conditions, power_scalar, capacity_scalar, def
   if defrost.in_defrost(conditions):
     t_defrost = defrost.time_fraction(conditions)
     if defrost.control == DefrostControl.TIMED:
-      input_power_multiplier = 0.9 - 36.45 * coil_diff_outdoor_air_humidity(conditions)
+      input_power_multiplier = 0.9 - 36.45*coil_diff_outdoor_air_humidity(conditions)
     else:
-      input_power_multiplier = 0.954 * (1-t_defrost)
+      input_power_multiplier = 0.954*(1 - t_defrost)
 
     if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
       T_iwb = convert(conditions.indoor.wb,"K","°C")
@@ -310,8 +310,8 @@ def epri_integrated_heating_power(conditions, power_scalar, capacity_scalar, def
     else:
       P_defrost = defrost.resistive_power
 
-    P_with_frost = cutler_steady_state_heating_power(conditions,power_scalar) * input_power_multiplier
-    return P_with_frost * (1-t_defrost) + P_defrost * t_defrost
+    P_with_frost = cutler_steady_state_heating_power(conditions,power_scalar)*input_power_multiplier
+    return P_with_frost*(1 - t_defrost) + P_defrost*t_defrost
   else:
     return cutler_steady_state_heating_power(conditions,power_scalar)
 
@@ -324,18 +324,18 @@ def coil_diff_outdoor_air_humidity(conditions):
   T_coil_outdoor = 0.82 * convert(conditions.outdoor.db,"°K","°C") - 8.589  # In C
   saturated_air_himidity_ratio = psychrolib.GetSatHumRatio(T_coil_outdoor,conditions.outdoor.p) # pressure in Pa already
   humidity_diff = conditions.outdoor.get_hr() - saturated_air_himidity_ratio
-  return max(1.0e-6,humidity_diff)
+  return max(1.0e-6, humidity_diff)
 
 def energyplus_sensible_cooling_capacity(conditions,total_capacity,bypass_factor):
   Q_t = total_capacity
   h_i = conditions.indoor.get_h()
   m_dot = conditions.air_mass_flow
-  h_ADP = h_i - Q_t/(m_dot * (1-bypass_factor))
+  h_ADP = h_i - Q_t/(m_dot*(1 - bypass_factor))
   root_fn = lambda T_ADP : psychrolib.GetSatAirEnthalpy(T_ADP, conditions.indoor.p) - h_ADP
   T_ADP = optimize.newton(root_fn, conditions.indoor.db_C)
   w_ADP = psychrolib.GetSatHumRatio(T_ADP, conditions.indoor.p)
   h_sensible = psychrolib.GetMoistAirEnthalpy(conditions.indoor.db_C,w_ADP)
-  return Q_t * (h_sensible - h_ADP)/(h_i - h_ADP)
+  return Q_t*(h_sensible - h_ADP)/(h_i - h_ADP)
 
 # FSEC Model
 
@@ -509,12 +509,12 @@ class DXUnit:
 
   def fan_power(self, conditions):
     if type(conditions) == CoolingConditions:
-      return self.fan_eff_cooling_rated[conditions.compressor_speed]*conditions.std_air_vol_flow # eq. 11.16
+      return self.fan_eff_cooling_rated[conditions.compressor_speed]*conditions.std_air_vol_flow
     else: # if type(conditions) == HeatingConditions:
-      return self.fan_eff_heating_rated[conditions.compressor_speed]*conditions.std_air_vol_flow # eq. 11.16
+      return self.fan_eff_heating_rated[conditions.compressor_speed]*conditions.std_air_vol_flow
 
   def fan_heat(self, conditions):
-    return self.fan_power(conditions) # eq. 11.11 (in SI units)
+    return self.fan_power(conditions)
 
   ### For cooling ###
   def gross_total_cooling_capacity(self, conditions):
@@ -530,7 +530,7 @@ class DXUnit:
     return self.gross_cooling_power_fn(conditions,self.gross_total_cooling_capacity_rated[conditions.compressor_speed]/self.gross_cooling_cop_rated[conditions.compressor_speed])
 
   def net_total_cooling_capacity(self, conditions):
-    return self.gross_total_cooling_capacity(conditions) - self.fan_heat(conditions) # eq. 11.3 but not considering duct losses
+    return self.gross_total_cooling_capacity(conditions) - self.fan_heat(conditions)
 
   def net_sensible_cooling_capacity(self, conditions):
     return self.gross_sensible_cooling_capacity(conditions) - self.fan_heat(conditions)
@@ -539,7 +539,7 @@ class DXUnit:
     return self.net_sensible_cooling_capacity(conditions)/self.net_total_cooling_capacity(conditions)
 
   def net_cooling_power(self, conditions):
-    return self.gross_cooling_power(conditions) + self.fan_power(conditions) # eq. 11.15
+    return self.gross_cooling_power(conditions) + self.fan_power(conditions)
 
   def gross_cooling_cop(self, conditions):
     return self.gross_total_cooling_capacity(conditions)/self.gross_cooling_power(conditions)
@@ -597,6 +597,7 @@ class DXUnit:
     return convert(self.net_cooling_cop(conditions),'','Btu/Wh')
 
   def seer(self):
+    '''Based on AHRI 210/240 2017'''
     if self.number_of_speeds == 1:
       plf = 1.0 - 0.5*self.c_d_cooling # eq. 11.56
       seer = plf*self.net_cooling_cop(self.B_full_cond) # eq. 11.55 (using COP to keep things in SI units for now)
@@ -674,6 +675,7 @@ class DXUnit:
     return self.net_integrated_heating_capacity(conditions)/self.net_integrated_heating_power(conditions)
 
   def hspf(self, climate_region=4):
+    '''Based on AHRI 210/240 2017'''
     q_sum = 0.0
     e_sum = 0.0
     rh_sum = 0.0
