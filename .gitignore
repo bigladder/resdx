@@ -1,0 +1,6 @@
+*.egg-info/
+.doit.*
+.pytest_cache/
+.vscode/
+__pycache__/
+output/

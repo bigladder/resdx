@@ -1,138 +1,26 @@
 #%%
 import sys
 from enum import Enum
-
-import numpy as np
+import math
 from scipy import optimize
 
-import math
+from .psychrometrics import PsychState, STANDARD_CONDITIONS, psychrolib
+from .defrost import Defrost, DefrostControl, DefrostStrategy
+from .units import u, convert
+from .util import calc_biquad, calc_quad, find_nearest
+from .models import cutler_cooling_power, cutler_total_cooling_capacity, energyplus_sensible_cooling_capacity, \
+                    title24_shr, cutler_steady_state_heating_capacity, epri_integrated_heating_capacity, \
+                    cutler_steady_state_heating_power, epri_integrated_heating_power
 
-import pint # 0.15 or higher
-ureg = pint.UnitRegistry()
-
-import psychrolib
-psychrolib.SetUnitSystem(psychrolib.SI)
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-sns.set()
-
-## Move to a util file?
-def u(value,unit):
-  return ureg.Quantity(value, unit).to_base_units().magnitude
-
-def convert(value, from_units, to_units):
-  return ureg.Quantity(value, from_units).to(to_units).magnitude
-
-def calc_biquad(coeff, in_1, in_2):
-  return coeff[0] + coeff[1] * in_1 + coeff[2] * in_1 * in_1 + coeff[3] * in_2 + coeff[4] * in_2 * in_2 + coeff[5] * in_1 * in_2
-
-def calc_quad(coeff, in_1):
-  return coeff[0] + coeff[1] * in_1 + coeff[2] * in_1 * in_1
 
 def interpolate(f, cond_1, cond_2, x):
   return f(cond_1) + (f(cond_2) - f(cond_1))/(cond_2.outdoor.db - cond_1.outdoor.db)*(x - cond_1.outdoor.db)
 
-def find_nearest(array, value):
-  closest_diff = abs(array[0] - value)
-  closest_value = array[0]
-  for option in array:
-    diff = abs(option - value)
-    if diff < closest_diff:
-      closest_diff = diff
-      closest_value = option
-  return closest_value
+class CyclingMethod(Enum):
+  BETWEEN_LOW_FULL = 1
+  BETWEEN_OFF_FULL = 2
 
 #%%
-class PsychState:
-  def __init__(self,drybulb,pressure=u(1.0,"atm"),**kwargs):
-    self.db = drybulb
-    self.db_C = convert(self.db,"K","°C")
-    self.p = pressure
-    self.wb_set = False
-    self.rh_set = False
-    self.hr_set = False
-    self.dp_set = False
-    self.h_set = False
-    self.rho_set = False
-    if len(kwargs) > 1:
-      sys.exit(f'only 1 can be provided')
-    if "wetbulb" in kwargs:
-      self.set_wb(kwargs["wetbulb"])
-    elif "hum_rat" in kwargs:
-      self.set_hr(kwargs["hum_rat"])
-    elif "rel_hum" in kwargs:
-      self.set_rh(kwargs["rel_hum"])
-    elif "enthalpy" in kwargs:
-      self.set_h(kwargs["enthalpy"])
-    else:
-      sys.exit(f'Unknonw key word argument {kwargs}.')
-
-  def set_wb(self, wb):
-    self.wb = wb
-    self.wb_C = convert(self.wb,"K","°C")
-    self.wb_set = True
-    return self.wb
-
-  def set_rh(self, rh):
-    self.rh = rh
-    if not self.wb_set:
-      self.set_wb(convert(psychrolib.GetTWetBulbFromRelHum(self.db_C, self.rh, self.p),"°C","K"))
-    self.rh_set = True
-    return self.rh
-
-  def set_hr(self, hr):
-    self.hr = hr
-    if not self.wb_set:
-      self.set_wb(convert(psychrolib.GetTWetBulbFromHumRatio(self.db_C, self.hr, self.p),"°C","K"))
-    self.hr_set = True
-    return self.hr
-
-  def set_h(self, h):
-    self.h = h
-    if not self.hr_set:
-      self.set_hr(psychrolib.GetHumRatioFromEnthalpyAndTDryBulb(self.h, self.db_C))
-    self.h_set = True
-    return self.h
-
-  def get_wb(self):
-    if self.wb_set:
-      return self.wb
-    else:
-      sys.exit(f'Wetbulb not set')
-
-  def get_wb_C(self):
-    if self.wb_set:
-      return self.wb_C
-    else:
-      sys.exit(f'Wetbulb not set')
-
-  def set_rho(self, rho):
-    self.rho = rho
-    self.rho_set = True
-    return self.rho
-
-  def get_rho(self):
-    if self.rho_set:
-      return self.rho
-    else:
-      return self.set_rho(psychrolib.GetMoistAirDensity(self.db_C, self.get_hr(), self.p))
-
-  def get_hr(self):
-    if self.hr_set:
-      return self.hr
-    else:
-      return self.set_hr(psychrolib.GetHumRatioFromTWetBulb(self.db_C, self.get_wb_C(), self.p))
-
-  def get_h(self):
-    if self.h_set:
-        return self.h
-    else:
-      return self.set_h(psychrolib.GetMoistAirEnthalpy(self.db_C,self.get_hr()))
-
-
-STANDARD_CONDITIONS = PsychState(drybulb=u(70.0,"°F"),hum_rat=0.0)
-
 class OperatingConditions:
   def __init__(self, outdoor=STANDARD_CONDITIONS,
                      indoor=STANDARD_CONDITIONS,
@@ -190,179 +78,6 @@ class CoolingDistribution:
   def __init__(self):
     self.number_of_bins = len(self.fractional_hours)
 
-# Defrost characterisitcs
-class DefrostControl(Enum):
-  TIMED = 1,
-  DEMAND = 2
-
-class DefrostStrategy(Enum):
-  REVERSE_CYCLE = 1,
-  RESISTIVE = 2
-
-class CyclingMethod(Enum):
-  BETWEEN_LOW_FULL = 1
-  BETWEEN_OFF_FULL = 2
-
-class Defrost:
-
-  def __init__(self,time_fraction = lambda conditions : u(3.5,'min')/u(60.0,'min'),
-                    resistive_power = 0,
-                    control = DefrostControl.TIMED,
-                    strategy = DefrostStrategy.REVERSE_CYCLE,
-                    high_temperature=u(41,"°F"),  # Maximum temperature for defrost operation
-                    low_temperature=None,  # Minimum temperature for defrost operation
-                    period=u(90,'min'),  # Time between defrost terminations (for testing)
-                    max_time=u(720,"min")):  # Maximum time between defrosts allowed by controls
-
-    # Initialize member values
-    self.time_fraction = time_fraction
-    self.resistive_power = resistive_power
-    self.control = control
-    self.strategy = strategy
-    self.high_temperature = high_temperature
-    self.low_temperature = low_temperature
-    self.period = period
-    self.max_time = max_time
-
-    # Check inputs
-    if self.strategy == DefrostStrategy.RESISTIVE and self.resistive_power <= 0:
-      sys.exit(f'Defrost stratege=RESISTIVE, but resistive_power is not greater than zero.')
-
-  def in_defrost(self, conditions):
-    if self.low_temperature is not None:
-      if conditions.outdoor.db > self.low_temperature and conditions.outdoor.db < self.high_temperature:
-        return True
-    else:
-      if conditions.outdoor.db < self.high_temperature:
-        return True
-    return False
-
-## Model functions
-
-# NREL Model
-'''Based on Cutler et al, but also includes internal EnergyPlus calculations'''
-
-def cutler_cooling_power(conditions, power_scalar):
-  T_iwb = convert(conditions.indoor.get_wb(),"K","°F") # Cutler curves use °F
-  T_odb = convert(conditions.outdoor.db,"K","°F") # Cutler curves use °F
-  eir_FT = calc_biquad([-3.437356399, 0.136656369, -0.001049231, -0.0079378, 0.000185435, -0.0001441], T_iwb, T_odb)
-  eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.air_mass_flow_fraction)
-  cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
-  cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.air_mass_flow_fraction)
-  return eir_FF*cap_FF*eir_FT*cap_FT*power_scalar
-
-def cutler_total_cooling_capacity(conditions, capacity_scalar):
-  T_iwb = convert(conditions.indoor.get_wb(),"K","°F") # Cutler curves use °F
-  T_odb = convert(conditions.outdoor.db,"K","°F") # Cutler curves use °F
-  cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
-  cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.air_mass_flow_fraction)
-  return cap_FF*cap_FT*capacity_scalar
-
-def cutler_steady_state_heating_power(conditions, power_scalar):
-  T_idb = convert(conditions.indoor.db,"°K","°F") # Cutler curves use °F
-  T_odb = convert(conditions.outdoor.db,"K","°F") # Cutler curves use °F
-  eir_FT = calc_biquad([0.718398423,0.003498178, 0.000142202, -0.005724331, 0.00014085, -0.000215321], T_idb, T_odb)
-  eir_FF = calc_quad([2.185418751, -1.942827919, 0.757409168], conditions.air_mass_flow_fraction)
-  cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
-  cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.air_mass_flow_fraction)
-  return eir_FF*cap_FF*eir_FT*cap_FT*power_scalar
-
-def cutler_steady_state_heating_capacity(conditions, capacity_scalar):
-  T_idb = convert(conditions.indoor.db,"°K","°F") # Cutler curves use °F
-  T_odb = convert(conditions.outdoor.db,"K","°F") # Cutler curves use °F
-  cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
-  cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.air_mass_flow_fraction)
-  return cap_FF*cap_FT*capacity_scalar
-
-def epri_integrated_heating_capacity(conditions, capacity_scalar, defrost):
-  # EPRI algorithm as described in EnergyPlus documentation
-  if defrost.in_defrost(conditions):
-    t_defrost = defrost.time_fraction(conditions)
-    if defrost.control ==DefrostControl.TIMED:
-        heating_capacity_multiplier = 0.909 - 107.33*coil_diff_outdoor_air_humidity(conditions)
-    else:
-        heating_capacity_multiplier = 0.875*(1 - t_defrost)
-
-    if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
-        Q_defrost_indoor_u = 0.01*(7.222 - convert(conditions.outdoor.db,"°K","°C"))*(capacity_scalar/1.01667)
-    else:
-        Q_defrost_indoor_u = 0
-
-    Q_with_frost_indoor_u = cutler_steady_state_heating_capacity(conditions,capacity_scalar)*heating_capacity_multiplier
-    return Q_with_frost_indoor_u*(1 - t_defrost) - Q_defrost_indoor_u*t_defrost
-  else:
-    return cutler_steady_state_heating_capacity(conditions,capacity_scalar)
-
-def epri_integrated_heating_power(conditions, power_scalar, capacity_scalar, defrost):
-  # EPRI algorithm as described in EnergyPlus documentation
-  if defrost.in_defrost(conditions):
-    t_defrost = defrost.time_fraction(conditions)
-    if defrost.control == DefrostControl.TIMED:
-      input_power_multiplier = 0.9 - 36.45*coil_diff_outdoor_air_humidity(conditions)
-    else:
-      input_power_multiplier = 0.954*(1 - t_defrost)
-
-    if defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
-      T_iwb = convert(conditions.indoor.wb,"K","°C")
-      T_odb = conditions.outdoor.db_C
-      defEIRfT = calc_biquad([0.1528, 0, 0, 0, 0, 0], T_iwb, T_odb) # TODO: Check assumption from BEopt
-      P_defrost = defEIRfT*(capacity_scalar/1.01667)
-    else:
-      P_defrost = defrost.resistive_power
-
-    P_with_frost = cutler_steady_state_heating_power(conditions,power_scalar)*input_power_multiplier
-    return P_with_frost*(1 - t_defrost) + P_defrost*t_defrost
-  else:
-    return cutler_steady_state_heating_power(conditions,power_scalar)
-
-def epri_defrost_time_fraction(conditions):
-  # EPRI algorithm as described in EnergyPlus documentation
-  return 1/(1+(0.01446/coil_diff_outdoor_air_humidity(conditions)))
-
-def coil_diff_outdoor_air_humidity(conditions):
-  # EPRI algorithm as described in EnergyPlus documentation
-  T_coil_outdoor = 0.82 * convert(conditions.outdoor.db,"°K","°C") - 8.589  # In C
-  saturated_air_himidity_ratio = psychrolib.GetSatHumRatio(T_coil_outdoor,conditions.outdoor.p) # pressure in Pa already
-  humidity_diff = conditions.outdoor.get_hr() - saturated_air_himidity_ratio
-  return max(1.0e-6, humidity_diff)
-
-def energyplus_sensible_cooling_capacity(conditions,total_capacity,bypass_factor):
-  Q_t = total_capacity
-  h_i = conditions.indoor.get_h()
-  m_dot = conditions.air_mass_flow
-  h_ADP = h_i - Q_t/(m_dot*(1 - bypass_factor))
-  root_fn = lambda T_ADP : psychrolib.GetSatAirEnthalpy(T_ADP, conditions.indoor.p) - h_ADP
-  T_ADP = optimize.newton(root_fn, conditions.indoor.db_C)
-  w_ADP = psychrolib.GetSatHumRatio(T_ADP, conditions.indoor.p)
-  h_sensible = psychrolib.GetMoistAirEnthalpy(conditions.indoor.db_C,w_ADP)
-  return Q_t*(h_sensible - h_ADP)/(h_i - h_ADP)
-
-# FSEC Model
-
-# Title 24 Model
-
-def CA_regression(coeffs,T_ewb,T_odb,T_edb,V_std_per_rated_cap):
-  return coeffs[0]*T_edb + \
-    coeffs[1]*T_ewb + \
-    coeffs[2]*T_odb + \
-    coeffs[3]*V_std_per_rated_cap + \
-    coeffs[4]*T_edb*T_odb + \
-    coeffs[5]*T_edb*V_std_per_rated_cap + \
-    coeffs[6]*T_ewb*T_odb + \
-    coeffs[7]*T_ewb*V_std_per_rated_cap + \
-    coeffs[8]*T_odb*V_std_per_rated_cap + \
-    coeffs[9]*T_ewb*T_ewb + \
-    coeffs[10]/V_std_per_rated_cap + \
-    coeffs[11]
-
-def title24_shr(conditions):
-  T_iwb = convert(conditions.indoor.get_wb(),"K","°F") # Cutler curves use °F
-  T_odb = convert(conditions.outdoor.db,"K","°F") # Title 24 curves use °F
-  T_idb = convert(conditions.indoor.db,"K","°F") # Title 24 curves use °F
-  CFM_per_ton = convert(conditions.std_air_vol_flow_per_capacity,"m**3/W/s","cu_ft/min/ton_of_refrigeration")
-  coeffs = [0.0242020,-0.0592153,0.0012651,0.0016375,0,0,0,-0.0000165,0,0.0002021,0,1.5085285]
-  SHR = CA_regression(coeffs,T_iwb,T_odb,T_idb,CFM_per_ton)
-  return min(1.0, SHR)
 
 # Unified RESNET Model
 resnet_cooling_power = cutler_cooling_power
@@ -674,21 +389,21 @@ class DXUnit:
   def net_integrated_heating_cop(self, conditions):
     return self.net_integrated_heating_capacity(conditions)/self.net_integrated_heating_power(conditions)
 
-  def hspf(self, climate_region=4):
+  def hspf(self, region=4):
     '''Based on AHRI 210/240 2017'''
     q_sum = 0.0
     e_sum = 0.0
     rh_sum = 0.0
 
     c = 0.77 # eq. 11.110 (agreement factor)
-    t_od = self.regional_heating_distributions[climate_region].outdoor_design_temperature
+    t_od = self.regional_heating_distributions[region].outdoor_design_temperature
 
     dhr_min = self.net_integrated_heating_capacity(self.H1_full_cond)*(u(65,"°F")-t_od)/(u(60,"°R")) # eq. 11.111
     dhr_min = find_nearest(self.standard_design_heating_requirements, dhr_min)
 
-    for i in range(self.regional_heating_distributions[climate_region].number_of_bins):
-      t = self.regional_heating_distributions[climate_region].outdoor_drybulbs[i]
-      n = self.regional_heating_distributions[climate_region].fractional_hours[i]
+    for i in range(self.regional_heating_distributions[region].number_of_bins):
+      t = self.regional_heating_distributions[region].outdoor_drybulbs[i]
+      n = self.regional_heating_distributions[region].fractional_hours[i]
       bl = (u(65,"°F")-t)/(u(65,"°F")-t_od)*c*dhr_min # eq. 11.109
 
       t_ob = u(45,"°F") # eq. 11.119
@@ -793,56 +508,3 @@ class DXUnit:
     '''TODO: Write ASHRAE 205 file!!!'''
     return
 
-#%%
-# Move this stuff to a separate file
-
-# Single speed
-dx_unit_1_speed = DXUnit()
-
-dx_unit_1_speed.print_cooling_info()
-
-dx_unit_1_speed.print_heating_info()
-
-# Two speed
-dx_unit_2_speed = DXUnit(
-  gross_cooling_cop_rated=[3.0,3.5],
-  fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')]*2,
-  flow_rated_per_cap_cooling_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration"),u(300.0,"cu_ft/min/ton_of_refrigeration")],
-  net_total_cooling_capacity_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
-  fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')]*2,
-  gross_heating_cop_rated=[2.5, 3.0],
-  flow_rated_per_cap_heating_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration"),u(300.0,"cu_ft/min/ton_of_refrigeration")],
-  net_heating_capacity_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')]
-)
-
-dx_unit_2_speed.print_cooling_info()
-
-dx_unit_2_speed.print_heating_info()
-dx_unit_2_speed.print_heating_info(region=2)
-
-#%%
-# Plot integrated power and capacity
-T_out = np.arange(-23,75+1,1)
-conditions = [dx_unit_1_speed.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(T,"°F"),wetbulb=u(T-2.0,"°F"))) for T in T_out]
-Q_integrated = [dx_unit_1_speed.gross_integrated_heating_capacity(condition) for condition in conditions]
-P_integrated = [dx_unit_1_speed.gross_integrated_heating_power(condition) for condition in conditions]
-COP_integrated = [dx_unit_1_speed.gross_integrated_heating_cop(condition) for condition in conditions]
-
-fig, ax1 = plt.subplots()
-
-color = 'tab:red'
-ax1.set_xlabel('Temp (°F)')
-ax1.set_ylabel('Capacity/Power (W)', color=color)
-ax1.plot(T_out, Q_integrated, color=color)
-ax1.plot(T_out, P_integrated, color=color)
-ax1.tick_params(axis='y', labelcolor=color)
-
-ax2 = ax1.twinx()
-
-color = 'tab:blue'
-ax2.set_ylabel('COP', color=color)
-ax2.plot(T_out, COP_integrated, color=color)
-ax2.tick_params(axis='y', labelcolor=color)
-
-fig.tight_layout()
-plt.show()
