@@ -20,12 +20,12 @@ dx_unit_1_speed = DXUnit()
 # Two speed
 dx_unit_2_speed = DXUnit(
   gross_cooling_cop_rated=[3.0,3.5],
-  fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')]*2,
-  flow_rated_per_cap_cooling_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration"),u(300.0,"cu_ft/min/ton_of_refrigeration")],
+  fan_eff_cooling_rated=[u(0.365,'W/(cu_ft/min)')]*2,
+  flow_rated_per_cap_cooling_rated = [u(360.0,"(cu_ft/min)/ton_of_refrigeration"),u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
   net_total_cooling_capacity_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
-  fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')]*2,
+  fan_eff_heating_rated=[u(0.365,'W/(cu_ft/min)')]*2,
   gross_heating_cop_rated=[2.5, 3.0],
-  flow_rated_per_cap_heating_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration"),u(300.0,"cu_ft/min/ton_of_refrigeration")],
+  flow_rated_per_cap_heating_rated = [u(360.0,"(cu_ft/min)/ton_of_refrigeration"),u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
   net_heating_capacity_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')]
 )
 
@@ -33,19 +33,19 @@ dx_unit_2_speed = DXUnit(
 def test_1_speed_regression():
   dx_unit_1_speed.print_cooling_info()
   dx_unit_1_speed.print_heating_info()
-  assert dx_unit_1_speed.seer() == approx(11.33, 0.01)
-  assert dx_unit_1_speed.eer(dx_unit_1_speed.A_full_cond) == approx(10.13, 0.01)
-  assert dx_unit_1_speed.hspf() == approx(5.8, 0.01)
+  assert dx_unit_1_speed.seer() == approx(9.73, 0.01)
+  assert dx_unit_1_speed.eer(dx_unit_1_speed.A_full_cond) == approx(8.76, 0.01)
+  assert dx_unit_1_speed.hspf() == approx(5.56, 0.01)
 
 def test_2_speed_regression():
   dx_unit_2_speed.print_cooling_info()
 
   dx_unit_2_speed.print_heating_info()
   dx_unit_2_speed.print_heating_info(region=2)
-  assert dx_unit_2_speed.seer() == approx(13.34, 0.01)
-  assert dx_unit_2_speed.eer(dx_unit_2_speed.A_full_cond) == approx(10.13, 0.01)
-  assert dx_unit_2_speed.hspf() == approx(6.5, 0.01)
-  assert dx_unit_2_speed.hspf(region=2) == approx(8.17, 0.01)
+  assert dx_unit_2_speed.seer() == approx(11.53, 0.01)
+  assert dx_unit_2_speed.eer(dx_unit_2_speed.A_full_cond) == approx(8.76, 0.01)
+  assert dx_unit_2_speed.hspf() == approx(6.18, 0.01)
+  assert dx_unit_2_speed.hspf(region=2) == approx(7.78, 0.01)
 
 
 
