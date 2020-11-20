@@ -109,9 +109,9 @@ class DXUnit:
                     gross_cooling_power_fn=resnet_cooling_power,
                     shr_rated_fn=resnet_shr_rated,
                     c_d_cooling=0.2,
-                    fan_eff_cooling_rated=[u(0.365,'W/cu_ft/min')],
+                    fan_eff_cooling_rated=[u(0.365,'W/(cu_ft/min)')],
                     gross_cooling_cop_rated=[3.0],
-                    flow_rated_per_cap_cooling_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration")], # TODO: Check assumption (varies by climate?)
+                    flow_rated_per_cap_cooling_rated = [u(360.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption (varies by climate?)
                     net_total_cooling_capacity_rated=[u(3.0,'ton_of_refrigeration')],
                     gross_steady_state_heating_capacity_fn=resnet_steady_state_heating_capacity,
                     gross_integrated_heating_capacity_fn=resnet_integrated_heating_capacity,
@@ -119,9 +119,9 @@ class DXUnit:
                     gross_integrated_heating_power_fn=resnet_integrated_heating_power,
                     defrost=Defrost(),
                     c_d_heating=0.2,
-                    fan_eff_heating_rated=[u(0.365,'W/cu_ft/min')],
+                    fan_eff_heating_rated=[u(0.365,'W/(cu_ft/min)')],
                     gross_heating_cop_rated=[2.5],
-                    flow_rated_per_cap_heating_rated = [u(360.0,"cu_ft/min/ton_of_refrigeration")], # TODO: Check assumption
+                    flow_rated_per_cap_heating_rated = [u(360.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption
                     net_heating_capacity_rated=[u(3.0,'ton_of_refrigeration')],
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
                     heating_off_temperature = u(10.0,"°F"), # TODO: Check value taken from Scott's script single-stage
@@ -507,4 +507,3 @@ class DXUnit:
   def writeA205(self):
     '''TODO: Write ASHRAE 205 file!!!'''
     return
-
