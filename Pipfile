@@ -8,6 +8,8 @@ pytest = "*"
 pbr = "*"
 doit = "*"
 pylint = "*"
+macfsevents = {version="*", sys_platform="=='darwin'"}
+atomicwrites = {version="*", sys_platform="=='win32'"}
 
 [packages]
 resdx = {editable = true,path = "."}
