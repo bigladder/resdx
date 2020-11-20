@@ -23,7 +23,7 @@ jobs:
       - name: Install project
         run: pipenv install --dev
       - name: Test
-        run: pipenv run pytest -v
+        run: pipenv run doit
       - name: Upload output
         uses: actions/upload-artifact@v2
         with:
