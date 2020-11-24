@@ -8,6 +8,7 @@ pytest = "*"
 pbr = "*"
 doit = "*"
 pylint = "*"
+twine = "*"
 macfsevents = {version="*", sys_platform="=='darwin'"}
 atomicwrites = {version="*", sys_platform="=='win32'"}
 

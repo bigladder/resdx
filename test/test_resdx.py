@@ -47,8 +47,6 @@ def test_2_speed_regression():
   assert dx_unit_2_speed.hspf() == approx(6.18, 0.01)
   assert dx_unit_2_speed.hspf(region=2) == approx(7.78, 0.01)
 
-
-
 def test_plot():
   # Plot integrated power and capacity
   T_out = np.arange(-23,75+1,1)

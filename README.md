@@ -20,4 +20,4 @@ Requirements:
 
 Project setup: `pipenv install --dev`
 
-Testing: `pipenv run pytest -v`
+Testing: `pipenv run doit`
