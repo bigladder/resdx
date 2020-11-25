@@ -15,6 +15,7 @@ class PsychState:
     self.dp_set = False
     self.h_set = False
     self.rho_set = False
+    self.C_p = u(1.006,"kJ/kg/K")
     if len(kwargs) > 1:
       sys.exit(f'only 1 can be provided')
     if "wetbulb" in kwargs:

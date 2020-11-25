@@ -34,7 +34,7 @@ def test_1_speed_regression():
   dx_unit_1_speed.print_cooling_info()
   dx_unit_1_speed.print_heating_info()
   assert dx_unit_1_speed.seer() == approx(9.73, 0.01)
-  assert dx_unit_1_speed.eer(dx_unit_1_speed.A_full_cond) == approx(8.76, 0.01)
+  assert dx_unit_1_speed.eer() == approx(8.76, 0.01)
   assert dx_unit_1_speed.hspf() == approx(5.56, 0.01)
 
 def test_2_speed_regression():
@@ -43,7 +43,7 @@ def test_2_speed_regression():
   dx_unit_2_speed.print_heating_info()
   dx_unit_2_speed.print_heating_info(region=2)
   assert dx_unit_2_speed.seer() == approx(11.53, 0.01)
-  assert dx_unit_2_speed.eer(dx_unit_2_speed.A_full_cond) == approx(8.76, 0.01)
+  assert dx_unit_2_speed.eer() == approx(8.76, 0.01)
   assert dx_unit_2_speed.hspf() == approx(6.18, 0.01)
   assert dx_unit_2_speed.hspf(region=2) == approx(7.78, 0.01)
 

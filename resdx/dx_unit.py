@@ -222,62 +222,65 @@ class DXUnit:
       condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_heating_capacity_rated[compressor_speed])
     return condition
 
-  def fan_power(self, conditions):
-    if type(conditions) == CoolingConditions:
-      return self.fan_eff_cooling_rated[conditions.compressor_speed]*conditions.std_air_vol_flow
-    else: # if type(conditions) == HeatingConditions:
-      return self.fan_eff_heating_rated[conditions.compressor_speed]*conditions.std_air_vol_flow
-
-  def fan_heat(self, conditions):
-    return self.fan_power(conditions)
-
   ### For cooling ###
-  def gross_total_cooling_capacity(self, conditions):
+  def cooling_fan_power(self, conditions=None):
+    if conditions is None:
+      conditions = self.A_full_cond
+    return self.fan_eff_cooling_rated[conditions.compressor_speed]*conditions.std_air_vol_flow
+
+  def cooling_fan_heat(self, conditions):
+    return self.cooling_fan_power(conditions)
+
+  def gross_total_cooling_capacity(self, conditions=None):
+    if conditions is None:
+      conditions = self.A_full_cond
     return self.gross_total_cooling_capacity_fn(conditions,self.gross_total_cooling_capacity_rated[conditions.compressor_speed])
 
-  def gross_sensible_cooling_capacity(self, conditions):
+  def gross_sensible_cooling_capacity(self, conditions=None):
+    if conditions is None:
+      conditions = self.A_full_cond
     return self.gross_sensible_cooling_capacity_fn(conditions,self.gross_total_cooling_capacity(conditions),self.bypass_factor(conditions))
 
-  def gross_shr(self, conditions):
+  def gross_shr(self, conditions=None):
     return self.gross_sensible_cooling_capacity(conditions)/self.gross_total_cooling_capacity(conditions)
 
-  def gross_cooling_power(self, conditions):
+  def gross_cooling_power(self, conditions=None):
+    if conditions is None:
+      conditions = self.A_full_cond
     return self.gross_cooling_power_fn(conditions,self.gross_total_cooling_capacity_rated[conditions.compressor_speed]/self.gross_cooling_cop_rated[conditions.compressor_speed])
 
-  def net_total_cooling_capacity(self, conditions):
-    return self.gross_total_cooling_capacity(conditions) - self.fan_heat(conditions)
+  def net_total_cooling_capacity(self, conditions=None):
+    return self.gross_total_cooling_capacity(conditions) - self.cooling_fan_heat(conditions)
 
-  def net_sensible_cooling_capacity(self, conditions):
-    return self.gross_sensible_cooling_capacity(conditions) - self.fan_heat(conditions)
+  def net_sensible_cooling_capacity(self, conditions=None):
+    return self.gross_sensible_cooling_capacity(conditions) - self.cooling_fan_heat(conditions)
 
-  def net_shr(self, conditions):
+  def net_shr(self, conditions=None):
     return self.net_sensible_cooling_capacity(conditions)/self.net_total_cooling_capacity(conditions)
 
-  def net_cooling_power(self, conditions):
-    return self.gross_cooling_power(conditions) + self.fan_power(conditions)
+  def net_cooling_power(self, conditions=None):
+    return self.gross_cooling_power(conditions) + self.cooling_fan_power(conditions)
 
-  def gross_cooling_cop(self, conditions):
+  def gross_cooling_cop(self, conditions=None):
     return self.gross_total_cooling_capacity(conditions)/self.gross_cooling_power(conditions)
 
-  def net_cooling_cop(self, conditions):
+  def net_cooling_cop(self, conditions=None):
     return self.net_total_cooling_capacity(conditions)/self.net_cooling_power(conditions)
 
-  def get_outlet_state(self, conditions, gross_total_capacity=None, gross_sensible_capacity=None):
-    if gross_total_capacity is None:
-      gross_total_capacity = self.gross_total_cooling_capacity(conditions)
-
+  def gross_cooling_outlet_state(self, conditions=None, gross_sensible_capacity=None):
+    if conditions is None:
+      conditions = self.A_full_cond
     if gross_sensible_capacity is None:
       gross_sensible_capacity = self.gross_sensible_cooling_capacity(conditions)
 
     T_idb = conditions.indoor.db
     h_i = conditions.indoor.get_h()
     m_dot_rated = conditions.air_mass_flow
-    h_o = h_i - gross_total_capacity/m_dot_rated
-    C_p = u(1.006,"kJ/kg/K") # Specific heat of air
-    T_odb = T_idb - gross_sensible_capacity/(m_dot_rated*C_p)
+    h_o = h_i - self.gross_total_cooling_capacity(conditions)/m_dot_rated
+    T_odb = T_idb - gross_sensible_capacity/(m_dot_rated*conditions.indoor.C_p)
     return PsychState(T_odb,pressure=conditions.indoor.p,enthalpy=h_o)
 
-  def get_adp_state(self, inlet_state, outlet_state):
+  def calculate_adp_state(self, inlet_state, outlet_state):
     T_idb = inlet_state.db_C
     w_i = inlet_state.get_hr()
     T_odb = outlet_state.db_C
@@ -293,22 +296,24 @@ class DXUnit:
     else:
       conditions = self.A_low_cond
     Q_s_rated = self.shr_cooling_rated[conditions.compressor_speed]*self.gross_total_cooling_capacity(conditions)
-    outlet_state = self.get_outlet_state(conditions,gross_sensible_capacity=Q_s_rated)
-    ADP_state = self.get_adp_state(conditions.indoor,outlet_state)
+    outlet_state = self.gross_cooling_outlet_state(conditions,gross_sensible_capacity=Q_s_rated)
+    ADP_state = self.calculate_adp_state(conditions.indoor,outlet_state)
     h_i = conditions.indoor.get_h()
     h_o = outlet_state.get_h()
     h_ADP = ADP_state.get_h()
     self.bypass_factor_rated[conditions.compressor_speed] = (h_o - h_ADP)/(h_i - h_ADP)
     self.normalized_ntu[conditions.compressor_speed] = - conditions.air_mass_flow * math.log(self.bypass_factor_rated[conditions.compressor_speed]) # A0 = - m_dot * ln(BF)
 
-  def bypass_factor(self,conditions):
+  def bypass_factor(self,conditions=None):
+    if conditions is None:
+      conditions = self.A_full_cond
     return math.exp(-self.normalized_ntu[conditions.compressor_speed]/conditions.air_mass_flow)
 
-  def get_adp_state_from_conditions(self, conditions):
-    outlet_state = self.get_outlet_state(conditions)
-    return self.get_adp_state(conditions.indoor,outlet_state)
+  def adp_state(self, conditions=None):
+    outlet_state = self.gross_cooling_outlet_state(conditions)
+    return self.calculate_adp_state(conditions.indoor,outlet_state)
 
-  def eer(self, conditions):
+  def eer(self, conditions=None):
     return convert(self.net_cooling_cop(conditions),'','Btu/Wh')
 
   def seer(self):
@@ -353,41 +358,61 @@ class DXUnit:
     return convert(seer,'','Btu/Wh')
 
   ### For heating ###
-  def gross_steady_state_heating_capacity(self, conditions):
+  def heating_fan_power(self, conditions=None):
+    if conditions is None:
+      conditions = self.H1_full_cond
+    return self.fan_eff_heating_rated[conditions.compressor_speed]*conditions.std_air_vol_flow
+
+  def heating_fan_heat(self, conditions):
+    return self.heating_fan_power(conditions)
+
+  def gross_steady_state_heating_capacity(self, conditions=None):
+    if conditions is None:
+      conditions = self.H1_full_cond
     return self.gross_steady_state_heating_capacity_fn(conditions, self.gross_heating_capacity_rated[conditions.compressor_speed])
 
-  def gross_steady_state_heating_power(self, conditions):
+  def gross_steady_state_heating_power(self, conditions=None):
+    if conditions is None:
+      conditions = self.H1_full_cond
     return self.gross_steady_state_heating_power_fn(conditions, self.gross_heating_capacity_rated[conditions.compressor_speed]/self.gross_heating_cop_rated[conditions.compressor_speed])
 
-  def gross_integrated_heating_capacity(self, conditions):
+  def gross_integrated_heating_capacity(self, conditions=None):
+    if conditions is None:
+      conditions = self.H1_full_cond
     return self.gross_integrated_heating_capacity_fn(conditions, self.gross_heating_capacity_rated[conditions.compressor_speed], self.defrost)
 
-  def gross_integrated_heating_power(self, conditions):
+  def gross_integrated_heating_power(self, conditions=None):
+    if conditions is None:
+      conditions = self.H1_full_cond
     return self.gross_integrated_heating_power_fn(conditions, self.gross_heating_capacity_rated[conditions.compressor_speed]/self.gross_heating_cop_rated[conditions.compressor_speed], self.gross_heating_capacity_rated[conditions.compressor_speed], self.defrost)
 
-  def net_steady_state_heating_capacity(self, conditions):
-    return self.gross_steady_state_heating_capacity(conditions) + self.fan_heat(conditions) # eq. 11.31
+  def net_steady_state_heating_capacity(self, conditions=None):
+    return self.gross_steady_state_heating_capacity(conditions) + self.heating_fan_heat(conditions)
 
-  def net_steady_state_heating_power(self, conditions):
-    return self.gross_steady_state_heating_power(conditions) + self.fan_power(conditions) # eq. 11.41
+  def net_steady_state_heating_power(self, conditions=None):
+    return self.gross_steady_state_heating_power(conditions) + self.heating_fan_power(conditions)
 
-  def net_integrated_heating_capacity(self, conditions):
-    return self.gross_integrated_heating_capacity(conditions) + self.fan_heat(conditions) # eq. 11.31
+  def net_integrated_heating_capacity(self, conditions=None):
+    return self.gross_integrated_heating_capacity(conditions) + self.heating_fan_heat(conditions)
 
-  def net_integrated_heating_power(self, conditions):
-    return self.gross_integrated_heating_power(conditions) + self.fan_power(conditions) # eq. 11.41
+  def net_integrated_heating_power(self, conditions=None):
+    return self.gross_integrated_heating_power(conditions) + self.heating_fan_power(conditions)
 
-  def gross_steady_state_heating_cop(self, conditions):
+  def gross_steady_state_heating_cop(self, conditions=None):
     return self.gross_steady_state_heating_capacity(conditions)/self.gross_steady_state_heating_power(conditions)
 
-  def gross_integrated_heating_cop(self, conditions):
+  def gross_integrated_heating_cop(self, conditions=None):
     return self.gross_integrated_heating_capacity(conditions)/self.gross_integrated_heating_power(conditions)
 
-  def net_steady_state_heating_cop(self, conditions):
+  def net_steady_state_heating_cop(self, conditions=None):
     return self.net_steady_state_heating_capacity(conditions)/self.net_steady_state_heating_power(conditions)
 
-  def net_integrated_heating_cop(self, conditions):
+  def net_integrated_heating_cop(self, conditions=None):
     return self.net_integrated_heating_capacity(conditions)/self.net_integrated_heating_power(conditions)
+
+  def gross_heating_output_state(self, conditions=None):
+    T_odb = conditions.indoor.db + self.gross_steady_state_heating_capacity(conditions)/(conditions.air_mass_flow*conditions.indoor.C_p)
+    return PsychState(T_odb,pressure=conditions.indoor.p,hum_rat=conditions.indoor.get_hr())
 
   def hspf(self, region=4):
     '''Based on AHRI 210/240 2017'''
