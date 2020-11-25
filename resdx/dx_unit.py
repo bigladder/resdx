@@ -411,6 +411,8 @@ class DXUnit:
     return self.net_integrated_heating_capacity(conditions)/self.net_integrated_heating_power(conditions)
 
   def gross_heating_output_state(self, conditions=None):
+    if conditions is None:
+      conditions = self.H1_full_cond
     T_odb = conditions.indoor.db + self.gross_steady_state_heating_capacity(conditions)/(conditions.air_mass_flow*conditions.indoor.C_p)
     return PsychState(T_odb,pressure=conditions.indoor.p,hum_rat=conditions.indoor.get_hr())
 
