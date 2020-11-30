@@ -36,6 +36,7 @@ def test_1_speed_regression():
   assert dx_unit_1_speed.seer() == approx(9.73, 0.01)
   assert dx_unit_1_speed.eer() == approx(8.76, 0.01)
   assert dx_unit_1_speed.hspf() == approx(5.56, 0.01)
+  assert dx_unit_1_speed.net_total_cooling_capacity() == approx(dx_unit_1_speed.net_total_cooling_capacity_rated[0],0.01)
 
 def test_2_speed_regression():
   dx_unit_2_speed.print_cooling_info()
