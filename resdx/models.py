@@ -168,9 +168,11 @@ def title24_gross_cooling_power(conditions, system):
     seer = u(system.kwargs["input_seer"],'Btu/Wh')
     if shr < 1:
       seer_coeffs = [0,-0.0202256,0.0236703,-0.0006638,0,0,-0.0001841,0.0000214,-0.00000812,0.0002971,-27.95672,0.209951063]
+      cap_coeffs = [0,0.009645900,0.002536900,0.000171500,0,0,-0.000095900,0.000008180,-0.000007550,0.000105700,-53.542300000,0.381567150]
     else: # shr == 1
       seer_coeffs = [0.0046103,0,0.0125598,-0.000512,-0.0000357,0.0000105,0,0,0,0,0,-0.316172311]
-    f_cond_seer = CA_regression(seer_coeffs,T_iwb,T_odb,T_idb,CFM_per_ton)
+      cap_coeffs = [0.009483100,0,-0.000600600,-0.000148900,-0.000032600,0.000011900,0,0,-0.000005050,0,-52.561740000,0.430751600]
+    f_cond_seer = CA_regression(cap_coeffs,T_iwb,T_odb,T_idb,CFM_per_ton)/CA_regression(seer_coeffs,T_iwb,T_odb,T_idb,CFM_per_ton)
     seer_nf = f_cond_seer*(1.09*cap95+q_fan)/(1.09*cap95/seer - q_fan) # unitless
   else:
     seer_nf = 0.0
