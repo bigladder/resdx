@@ -100,6 +100,7 @@ class DXUnit:
                     c_d_cooling=0.2,
                     fan_eff_cooling_rated=[u(0.365,'W/(cu_ft/min)')],
                     gross_cooling_cop_rated=[3.0],
+                    net_cooling_cop_rated=None,
                     flow_rated_per_cap_cooling_rated = [u(360.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption (varies by climate?)
                     net_total_cooling_capacity_rated=[u(3.0,'ton_of_refrigeration')],
                     gross_steady_state_heating_capacity_fn=resnet_gross_steady_state_heating_capacity,
@@ -110,6 +111,7 @@ class DXUnit:
                     c_d_heating=0.2,
                     fan_eff_heating_rated=[u(0.365,'W/(cu_ft/min)')],
                     gross_heating_cop_rated=[2.5],
+                    net_heating_cop_rated=None,
                     flow_rated_per_cap_heating_rated = [u(360.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption
                     net_heating_capacity_rated=[u(3.0,'ton_of_refrigeration')],
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
@@ -125,6 +127,7 @@ class DXUnit:
     self.c_d_cooling = c_d_cooling
     self.fan_eff_cooling_rated = fan_eff_cooling_rated
     self.gross_cooling_cop_rated = gross_cooling_cop_rated
+    self.net_cooling_cop_rated = net_cooling_cop_rated
     self.net_total_cooling_capacity_rated = net_total_cooling_capacity_rated
     self.flow_rated_per_cap_cooling_rated = flow_rated_per_cap_cooling_rated
     self.gross_steady_state_heating_capacity_fn = gross_steady_state_heating_capacity_fn
@@ -136,6 +139,7 @@ class DXUnit:
     self.cycling_method = cycling_method
     self.fan_eff_heating_rated = fan_eff_heating_rated
     self.gross_heating_cop_rated = gross_heating_cop_rated
+    self.net_heating_cop_rated = net_heating_cop_rated
     self.flow_rated_per_cap_heating_rated = flow_rated_per_cap_heating_rated
     self.net_heating_capacity_rated = net_heating_capacity_rated
     self.heating_off_temperature = heating_off_temperature
@@ -150,6 +154,39 @@ class DXUnit:
     self.gross_heating_capacity_rated = [self.net_heating_capacity_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_speeds)]
     self.bypass_factor_rated = [None]*self.number_of_speeds
     self.normalized_ntu = [None]*self.number_of_speeds
+
+    # Exclusive checks
+    if self.net_cooling_cop_rated is None:
+      if self.gross_cooling_cop_rated is None:
+        sys.exit(f'Must define either \'net_cooling_cop_rated\' or \'gross_cooling_cop_rated\'.')
+      else:
+        self.gross_cooling_power_rated = [self.gross_total_cooling_capacity_rated[i]/self.gross_cooling_cop_rated[i] for i in range(self.number_of_speeds)]
+        self.net_cooling_power_rated = [self.gross_cooling_power_rated[i] + self.cooling_fan_power_rated[i] for i in range(self.number_of_speeds)]
+        self.net_cooling_cop_rated = [self.net_total_cooling_capacity_rated[i]/self.net_cooling_power_rated[i] for i in range(self.number_of_speeds)]
+
+    if self.gross_cooling_cop_rated is None:
+      if self.net_cooling_cop_rated is None:
+        sys.exit(f'Must define either \'net_cooling_cop_rated\' or \'gross_cooling_cop_rated\'.')
+      else:
+        self.net_cooling_power_rated = [self.net_total_cooling_capacity_rated[i]/self.net_cooling_cop_rated[i] for i in range(self.number_of_speeds)]
+        self.gross_cooling_power_rated = [self.net_cooling_power_rated[i] - self.cooling_fan_power_rated[i] for i in range(self.number_of_speeds)]
+        self.gross_cooling_cop_rated = [self.gross_total_cooling_capacity_rated[i]/self.gross_cooling_power_rated[i] for i in range(self.number_of_speeds)]
+
+    if self.net_heating_cop_rated is None:
+      if self.gross_heating_cop_rated is None:
+        sys.exit(f'Must define either \'net_heating_cop_rated\' or \'gross_heating_cop_rated\'.')
+      else:
+        self.gross_heating_power_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_cop_rated[i] for i in range(self.number_of_speeds)]
+        self.net_heating_power_rated = [self.gross_heating_power_rated[i] + self.heating_fan_power_rated[i] for i in range(self.number_of_speeds)]
+        self.net_heating_cop_rated = [self.net_heating_capacity_rated[i]/self.net_heating_power_rated[i] for i in range(self.number_of_speeds)]
+
+    if self.gross_heating_cop_rated is None:
+      if self.net_heating_cop_rated is None:
+        sys.exit(f'Must define either \'net_heating_cop_rated\' or \'gross_heating_cop_rated\'.')
+      else:
+        self.net_heating_power_rated = [self.net_heating_capacity_rated[i]/self.net_heating_cop_rated[i] for i in range(self.number_of_speeds)]
+        self.gross_heating_power_rated = [self.net_heating_power_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_speeds)]
+        self.gross_heating_cop_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_power_rated[i] for i in range(self.number_of_speeds)]
 
     ## Set rating conditions
     self.A_full_cond = self.make_condition(CoolingConditions)

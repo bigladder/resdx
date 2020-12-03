@@ -177,10 +177,7 @@ def title24_gross_cooling_power(conditions, system):
   else:
     seer_nf = 0.0
   if T_odb > 82.0:
-    if "input_eer" in system.kwargs:
-      eer = u(system.kwargs["input_eer"],'Btu/Wh')
-    else:
-      eer = u(title24_eer_rated(system.kwargs["input_seer"]),'Btu/Wh')
+    eer = system.net_cooling_cop_rated[conditions.compressor_speed]
     if shr < 1:
       eer_coeffs = [0,-0.020225600,0.023670300,-0.000663800,0,0,-0.000184100,0.000021400,-0.000008120,0.000297100,-27.956720000,0.015003100]
     else: # shr == 1
