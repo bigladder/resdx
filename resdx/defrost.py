@@ -5,10 +5,12 @@ from .units import u, convert
 
 # Defrost characterisitcs
 class DefrostControl(Enum):
+  NONE = 0,
   TIMED = 1,
   DEMAND = 2
 
 class DefrostStrategy(Enum):
+  NONE = 0,
   REVERSE_CYCLE = 1,
   RESISTIVE = 2
 
@@ -38,6 +40,8 @@ class Defrost:
       sys.exit(f'Defrost stratege=RESISTIVE, but resistive_power is not greater than zero.')
 
   def in_defrost(self, conditions):
+    if self.strategy == DefrostStrategy.NONE:
+      return False
     if self.low_temperature is not None:
       if conditions.outdoor.db > self.low_temperature and conditions.outdoor.db < self.high_temperature:
         return True

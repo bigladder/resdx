@@ -1,3 +1,4 @@
+from enum import Enum
 from scipy import optimize
 
 from .util import calc_biquad, calc_quad
@@ -106,7 +107,7 @@ def energyplus_gross_sensible_cooling_capacity(conditions, system):
   h_sensible = psychrolib.GetMoistAirEnthalpy(conditions.indoor.db_C,w_ADP)
   return Q_t*(h_sensible - h_ADP)/(h_i - h_ADP)
 
-# FSEC Model
+# FSEC Model (TODO)
 
 # Title 24 Model
 
@@ -140,6 +141,17 @@ def title24_eer_rated(seer):
     return 11.3 + 0.57 * (seer - 13.0)
   else:
     return 13.0
+
+class MotorType(Enum):
+  PSC = 1,
+  BPM = 2
+
+def title24_fan_efficacy_rated(flow_per_capacity, motor_type=MotorType.PSC):
+  if motor_type == MotorType.PSC:
+    power_per_capacity = u(500,'(Btu/h)/ton_of_refrigeration')
+  else:
+    power_per_capacity = u(283,'(Btu/h)/ton_of_refrigeration')
+  return power_per_capacity/flow_per_capacity
 
 def title24_gross_total_cooling_capacity(conditions, system):
   shr = title24_shr(conditions)
@@ -199,6 +211,189 @@ def title24_gross_cooling_power(conditions, system):
     f_eff = 1.0
   return system.gross_total_cooling_capacity(conditions)/(eer_t*f_eff)
 
+def title24_cap17_ratio_rated(hspf):
+  if hspf < 7.5:
+    return 0.1113 * hspf - 0.22269
+  elif hspf < 9.5567:
+    return 0.017 * hspf + 0.4804
+  elif hspf < 10.408:
+    return 0.0982 * hspf - 0.2956
+  else:
+    return 0.0232 * hspf + 0.485
+
+def title24_get_cap17(conditions, system):
+  if "cap17" not in system.model_data:
+    system.model_data["cap17"] = [None]*system.number_of_speeds
+
+  if system.model_data["cap17"][conditions.compressor_speed] is not None:
+    return system.model_data["cap17"][conditions.compressor_speed]
+  else:
+    if "cap17" in system.kwargs:
+      system.model_data["cap17"][conditions.compressor_speed] = system.kwargs["cap17"][conditions.compressor_speed]
+    else:
+      cap47 = system.net_heating_capacity_rated[conditions.compressor_speed]
+      system.model_data["cap17"][conditions.compressor_speed] = title24_cap17_ratio_rated(system.kwargs["input_hspf"])*cap47
+    return system.model_data["cap17"][conditions.compressor_speed]
+
+def title24_get_cap35(conditions, system):
+  if "cap35" not in system.model_data:
+    system.model_data["cap35"] = [None]*system.number_of_speeds
+
+  if system.model_data["cap35"][conditions.compressor_speed] is not None:
+    return system.model_data["cap35"][conditions.compressor_speed]
+  else:
+    if "cap35" in system.kwargs:
+      system.model_data["cap35"][conditions.compressor_speed] = system.kwargs["cap35"][conditions.compressor_speed]
+    else:
+      cap47 = system.net_heating_capacity_rated[conditions.compressor_speed]
+      cap17 = title24_get_cap17(conditions, system)
+      cap35 = cap17 + 0.6*(cap47 - cap17)
+      if system.defrost.strategy != DefrostStrategy.NONE:
+        cap35 *= 0.9
+      system.model_data["cap35"][conditions.compressor_speed] = cap35
+    return system.model_data["cap35"][conditions.compressor_speed]
+
+def title24_gross_steady_state_heating_capacity(conditions, system):
+  T_odb = convert(conditions.outdoor.db,"K","°F") # Title 24 curves use °F
+  cap47 = system.net_heating_capacity_rated[conditions.compressor_speed]
+  cap17 = title24_get_cap17(conditions, system)
+  slope = (cap47 - cap17)/(47.0 - 17.0)
+  return cap17 + slope*(T_odb - 17.0) - system.heating_fan_power_rated[conditions.compressor_speed]
+
+def title24_gross_integrated_heating_capacity(conditions, system):
+  T_odb = convert(conditions.outdoor.db,"K","°F") # Title 24 curves use °F
+  cap47 = system.net_heating_capacity_rated[conditions.compressor_speed]
+  cap17 = title24_get_cap17(conditions, system)
+  cap35 = title24_get_cap35(conditions, system)
+  if system.defrost.in_defrost(conditions) and (T_odb > 17.0 and T_odb < 45.0):
+    slope = (cap35 - cap17)/(35.0 - 17.0)
+  else:
+    slope = (cap47 - cap17)/(47.0 - 17.0)
+  return cap17 + slope*(T_odb - 17.0) - system.heating_fan_power_rated[conditions.compressor_speed]
+
+def title24_net_heating_cop_rated(hspf):
+  return 0.3225*hspf + 0.9099
+
+def title24_check_hspf(conditions, system, inp17):
+  # Calculate region 4 HSPF
+  cap47 = system.net_heating_capacity_rated[conditions.compressor_speed]
+  cop47 = system.net_heating_cop_rated[conditions.compressor_speed]
+  inp47 = cap47/cop47
+  cap35 = title24_get_cap35(conditions, system)
+  cap17 = title24_get_cap17(conditions, system)
+
+  if "cop35" in system.kwargs:
+    cop35 = system.kwargs["cop35"][conditions.compressor_speed]
+    system.model_data["cop35"][conditions.compressor_speed] = cop35
+    inp35 = cap35/cop35
+  else:
+    inp35 = inp17 + 0.6*(inp47 - inp17)
+    if system.defrost.strategy != DefrostStrategy.NONE:
+      inp35 *= 0.985
+    cop35 = cap35/inp35
+    system.model_data["cop35"][conditions.compressor_speed] = cop35
+
+  out_tot = 0
+  inp_tot = 0
+
+  T_bins = [62.0, 57.0, 52.0, 47.0, 42.0, 37.0, 32.0, 27.0, 22.0, 17.0, 12.0, 7.0, 2.0, -3.0, -8.0]
+  frac_hours = [0.132, 0.111, 0.103, 0.093, 0.100, 0.109, 0.126, 0.087, 0.055, 0.036, 0.026, 0.013, 0.006, 0.002, 0.001]
+
+  T_design = 5.0
+  T_edb = 65.0
+  C = 0.77  # AHRI "correction factor"
+  T_off = 0.0  # low temp cut-out "off" temp (F)
+  T_on = 5.0  # low temp cut-out "on" temp (F)
+  dHRmin = cap47
+
+  for i, T_odb in enumerate(T_bins):
+    bL = ((T_edb - T_odb) / (T_edb - T_design)) * C * dHRmin
+
+    if (T_odb > 17.0 and T_odb < 45.0):
+      cap_slope = (cap35 - cap17)/(35.0 - 17.0)
+      inp_slope = (inp35 - inp17)/(35.0 - 17.0)
+    else:
+      cap_slope = (cap47 - cap17)/(47.0 - 17.0)
+      inp_slope = (inp47 - inp17)/(47.0 - 17.0)
+    cap = cap17 + cap_slope*(T_odb - 17.0)
+    inp = inp17 + inp_slope*(T_odb - 17.0)
+
+    x_t = min(bL / cap, 1.0)
+    PLF = 1.0 - (system.c_d_heating * (1.0 - x_t))
+    if T_odb <= T_off or cap/(inp*3.412) >= 1.0:
+      sigma_t = 0.0
+    elif T_off < T_odb and T_odb <= T_on and cap/(inp*3.412) >= 1.0:
+      sigma_t = 0.5
+    else:
+      sigma_t = 1.0
+
+    inp_tot += x_t*inp*sigma_t / PLF * frac_hours[i] + (bL - (x_t*cap*sigma_t))/3.412*frac_hours[i]
+    out_tot += bL*frac_hours[i]
+
+  return out_tot / inp_tot * 3.412
+
+def title24_cop47_rated(hspf):
+  return 0.3225*hspf + 0.9099
+
+def title24_calculate_cops(conditions, system):
+  if "cop35" not in system.model_data:
+    system.model_data["cop35"] = [None]*system.number_of_speeds
+
+  if "cop17" not in system.model_data:
+    system.model_data["cop17"] = [None]*system.number_of_speeds
+
+  hspf = system.kwargs["input_hspf"]
+  root_fn = lambda inp17 : title24_check_hspf(conditions, system, inp17) - hspf
+  inp17_guess = 0.2186*hspf + 0.6734
+  inp17 = optimize.newton(root_fn, inp17_guess)
+  cap17 = title24_get_cap17(conditions, system)
+  system.model_data["cop17"][conditions.compressor_speed] = cap17/inp17
+
+def title24_get_cop35(conditions, system):
+  if "cop35" not in system.model_data:
+    title24_calculate_cops(conditions, system)
+
+  return system.model_data["cop35"][conditions.compressor_speed]
+
+def title24_get_cop17(conditions, system):
+  if "cop17" not in system.model_data:
+    title24_calculate_cops(conditions, system)
+
+  return system.model_data["cop17"][conditions.compressor_speed]
+
+def title24_gross_steady_state_heating_power(conditions, system):
+  T_odb = convert(conditions.outdoor.db,"K","°F") # Title 24 curves use °F
+  cap47 = system.net_heating_capacity_rated[conditions.compressor_speed]
+  cap17 = title24_get_cap17(conditions, system)
+
+  cop47 = system.net_heating_cop_rated[conditions.compressor_speed]
+  cop17 = title24_get_cop17(conditions, system)
+
+  inp47 = cap47/cop47
+  inp17 = cap17/cop17
+
+  slope = (inp47 - inp17)/(47.0 - 17.0)
+  return inp17 + slope*(T_odb - 17.0) - system.heating_fan_power_rated[conditions.compressor_speed]
+
+def title24_gross_integrated_heating_power(conditions, system):
+  T_odb = convert(conditions.outdoor.db,"K","°F") # Title 24 curves use °F
+  cap47 = system.net_heating_capacity_rated[conditions.compressor_speed]
+  cap35 = title24_get_cap35(conditions, system)
+  cap17 = title24_get_cap17(conditions, system)
+
+  cop47 = system.net_heating_cop_rated[conditions.compressor_speed]
+  cop35 = title24_get_cop35(conditions, system)
+  cop17 = title24_get_cop17(conditions, system)
+
+  inp47 = cap47/cop47
+  inp35 = cap35/cop35
+  inp17 = cap17/cop17
+
+  if system.defrost.in_defrost(conditions) and (T_odb > 17.0 and T_odb < 45.0):
+    slope = (inp35 - inp17)/(35.0 - 17.0)
+  else:
+    slope = (inp47 - inp17)/(47.0 - 17.0)
+  return inp17 + slope*(T_odb - 17.0) - system.heating_fan_power_rated[conditions.compressor_speed]
 
 # Unified RESNET Model
 resnet_gross_cooling_power = cutler_gross_cooling_power
@@ -209,4 +404,3 @@ resnet_gross_steady_state_heating_capacity = cutler_gross_steady_state_heating_c
 resnet_gross_integrated_heating_capacity = epri_gross_integrated_heating_capacity
 resnet_gross_steady_state_heating_power = cutler_gross_steady_state_heating_power
 resnet_gross_integrated_heating_power = epri_gross_integrated_heating_power
-

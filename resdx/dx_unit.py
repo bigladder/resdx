@@ -117,7 +117,7 @@ class DXUnit:
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
                     heating_off_temperature = u(10.0,"°F"), # TODO: Check value taken from Scott's script single-stage
                     heating_on_temperature = u(14.0,"°F"), # TODO: Check value taken from Scott's script single-stage
-                    **kwargs):
+                    **kwargs):  # Additional inputs used for specific models
 
     # Initialize direct values
     self.gross_total_cooling_capacity_fn = gross_total_cooling_capacity_fn
@@ -145,6 +145,7 @@ class DXUnit:
     self.heating_off_temperature = heating_off_temperature
     self.heating_on_temperature = heating_on_temperature
     self.kwargs = kwargs
+    self.model_data = {}  # Additional data set for a specific model
 
     # Initialize calculated values
     self.number_of_speeds = len(self.gross_cooling_cop_rated)
