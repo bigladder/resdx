@@ -212,6 +212,9 @@ def title24_gross_cooling_power(conditions, system):
   return system.gross_total_cooling_capacity(conditions)/(eer_t*f_eff)
 
 def title24_cap17_ratio_rated(hspf):
+  '''
+  Return the ratio of net integrated heating capacity for 47 F / 17 F.
+  '''
   if hspf < 7.5:
     return 0.1113 * hspf - 0.22269
   elif hspf < 9.5567:
@@ -222,15 +225,23 @@ def title24_cap17_ratio_rated(hspf):
     return 0.0232 * hspf + 0.485
 
 def title24_get_cap17(conditions, system):
+  '''
+  Return the net integrated heating capacity at 17 F.
+  '''
+  # If not already in the model data, initialize the model data
   if "cap17" not in system.model_data:
     system.model_data["cap17"] = [None]*system.number_of_speeds
 
   if system.model_data["cap17"][conditions.compressor_speed] is not None:
+    # If it's already in the model data, return the stored value
     return system.model_data["cap17"][conditions.compressor_speed]
   else:
+    # If not already in the model data then...
     if "cap17" in system.kwargs:
+      # Read from model kwargs (if provided)
       system.model_data["cap17"][conditions.compressor_speed] = system.kwargs["cap17"][conditions.compressor_speed]
     else:
+      # or use the Title 24 default calculation
       cap47 = system.net_heating_capacity_rated[conditions.compressor_speed]
       system.model_data["cap17"][conditions.compressor_speed] = title24_cap17_ratio_rated(system.kwargs["input_hspf"])*cap47
     return system.model_data["cap17"][conditions.compressor_speed]
@@ -334,6 +345,9 @@ def title24_check_hspf(conditions, system, inp17):
 
 def title24_cop47_rated(hspf):
   return 0.3225*hspf + 0.9099
+
+def title24_c_d_heating(hspf):
+  return max(min(.25 - 0.2*(hspf-6.8)/(10.0-6.8),0.25),0.05)
 
 def title24_calculate_cops(conditions, system):
   if "cop35" not in system.model_data:

@@ -10,7 +10,8 @@ t24_unit = resdx.DXUnit(gross_total_cooling_capacity_fn=resdx.title24_gross_tota
                         gross_sensible_cooling_capacity_fn=resdx.title24_gross_sensible_cooling_capacity,
                         gross_cooling_power_fn=resdx.title24_gross_cooling_power,
                         net_cooling_cop_rated=[resdx.u(resdx.title24_eer_rated(seer),'Btu/Wh')],
-                        fan_eff_cooling_rated=[resdx.u(0.365,'W/(cu_ft/min)')],
+                        fan_eff_cooling_rated=[resdx.u(0.58,'W/(cu_ft/min)')],
+                        flow_rated_per_cap_cooling_rated=[resdx.u(350.0,"(cu_ft/min)/ton_of_refrigeration")],
                         c_d_cooling=0.0,
                         input_seer=seer,
                         net_heating_cop_rated=[resdx.title24_cop47_rated(hspf)],
@@ -18,11 +19,16 @@ t24_unit = resdx.DXUnit(gross_total_cooling_capacity_fn=resdx.title24_gross_tota
                         gross_steady_state_heating_power_fn=resdx.title24_gross_steady_state_heating_power,
                         gross_integrated_heating_capacity_fn=resdx.title24_gross_integrated_heating_capacity,
                         gross_integrated_heating_power_fn=resdx.title24_gross_integrated_heating_power,
-                        input_hspf=hspf
+                        flow_rated_per_cap_heating_rated=[resdx.u(350.0,"(cu_ft/min)/ton_of_refrigeration")],
+                        fan_eff_heating_rated=[resdx.u(0.58,'W/(cu_ft/min)')],
+                        c_d_heating=resdx.title24_c_d_heating(hspf),
+                        input_hspf=hspf,
+                        defrost=resdx.Defrost(high_temperature=resdx.u(45.0,"°F"), low_temperature=resdx.u(17.0,"°F")),
+                        special_new_variable=9999
 )
 
-t24_unit.seer()
-t24_unit.hspf()
+t24_unit.print_cooling_info()
+t24_unit.print_heating_info()
 # %%
 import matplotlib.pyplot as plt
 import seaborn as sns

@@ -12,3 +12,13 @@ def task_test():
       'pytest -v test'],
     'clean': True
   }
+
+def task_examples():
+  '''Run examples'''
+  return {
+    'targets': ['output/title24-heat-pump.py'],
+    'actions': [
+      (create_folder, [OUTPUT_PATH]),
+      'python examples/model-comparison.py'],
+    'clean': True
+  }
