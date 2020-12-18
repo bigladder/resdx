@@ -110,7 +110,7 @@ class DXUnit:
                     shr_rated_fn=resnet_shr_rated,
                     c_d_cooling=0.1,
                     fan_eff_cooling_rated=[u(0.25,'W/(cu_ft/min)')],
-                    gross_cooling_cop_rated=[4.04],
+                    gross_cooling_cop_rated=[3.72],
                     flow_rated_per_cap_cooling_rated = [u(375.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption (varies by climate?)
                     net_total_cooling_capacity_rated=[u(3.0,'ton_of_refrigeration')],
                     gross_steady_state_heating_capacity_fn=resnet_steady_state_heating_capacity,
@@ -118,9 +118,9 @@ class DXUnit:
                     gross_steady_state_heating_power_fn=resnet_steady_state_heating_power,
                     gross_integrated_heating_power_fn=resnet_integrated_heating_power,
                     defrost=Defrost(),
-                    c_d_heating=0.1,
+                    c_d_heating=0.143,
                     fan_eff_heating_rated=[u(0.25,'W/(cu_ft/min)')],
-                    gross_heating_cop_rated=[4.22],
+                    gross_heating_cop_rated=[3.88],
                     flow_rated_per_cap_heating_rated = [u(375.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption
                     net_heating_capacity_rated=[u(3.0,'ton_of_refrigeration')],
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
