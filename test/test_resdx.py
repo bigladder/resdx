@@ -8,6 +8,7 @@ import numpy as np
 
 from pytest import approx
 
+
 DXUnit = resdx.DXUnit
 u = resdx.units.u
 PsychState = resdx.psychrometrics.PsychState
@@ -19,12 +20,12 @@ dx_unit_1_speed = DXUnit()
 
 # Two speed
 dx_unit_2_speed = DXUnit(
-  gross_cooling_cop_rated=[3.0,3.5],
+  gross_cooling_cop_rated=[4.7,5.3],
   fan_eff_cooling_rated=[u(0.365,'W/(cu_ft/min)')]*2,
   flow_rated_per_cap_cooling_rated = [u(360.0,"(cu_ft/min)/ton_of_refrigeration"),u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
   net_total_cooling_capacity_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')],
   fan_eff_heating_rated=[u(0.365,'W/(cu_ft/min)')]*2,
-  gross_heating_cop_rated=[2.5, 3.0],
+  gross_heating_cop_rated=[4.5, 5.0],
   flow_rated_per_cap_heating_rated = [u(360.0,"(cu_ft/min)/ton_of_refrigeration"),u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
   net_heating_capacity_rated=[u(3.0,'ton_of_refrigeration'),u(1.5,'ton_of_refrigeration')]
 )
@@ -42,10 +43,10 @@ def test_2_speed_regression():
 
   dx_unit_2_speed.print_heating_info()
   dx_unit_2_speed.print_heating_info(region=2)
-  assert dx_unit_2_speed.seer() == approx(11.76, 0.01)
-  assert dx_unit_2_speed.eer(dx_unit_2_speed.A_full_cond) == approx(8.76, 0.01)
-  assert dx_unit_2_speed.hspf() == approx(6.22, 0.01)
-  assert dx_unit_2_speed.hspf(region=2) == approx(7.94, 0.01)
+  assert dx_unit_2_speed.seer() == approx(17, 0.01)
+  assert dx_unit_2_speed.eer(dx_unit_2_speed.A_full_cond) == approx(13, 0.01)
+  assert dx_unit_2_speed.hspf() == approx(8.86, 0.01)
+  assert dx_unit_2_speed.hspf(region=2) == approx(12.55, 0.01)
 
 def test_plot():
   # Plot integrated power and capacity
