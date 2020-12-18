@@ -285,13 +285,14 @@ def title24_gross_integrated_heating_capacity(conditions, system):
 def title24_net_heating_cop_rated(hspf):
   return 0.3225*hspf + 0.9099
 
-def title24_check_hspf(conditions, system, inp17):
+def title24_check_hspf(conditions, system, cop17):
   # Calculate region 4 HSPF
   cap47 = system.net_heating_capacity_rated[conditions.compressor_speed]
   cop47 = system.net_heating_cop_rated[conditions.compressor_speed]
   inp47 = cap47/cop47
   cap35 = title24_get_cap35(conditions, system)
   cap17 = title24_get_cap17(conditions, system)
+  inp17 = cap17/cop17
 
   if "cop35" in system.kwargs:
     cop35 = system.kwargs["cop35"][conditions.compressor_speed]
@@ -329,19 +330,19 @@ def title24_check_hspf(conditions, system, inp17):
     cap = cap17 + cap_slope*(T_odb - 17.0)
     inp = inp17 + inp_slope*(T_odb - 17.0)
 
-    x_t = min(bL / cap, 1.0)
+    x_t = min(bL/cap, 1.0)
     PLF = 1.0 - (system.c_d_heating * (1.0 - x_t))
-    if T_odb <= T_off or cap/(inp*3.412) >= 1.0:
+    if T_odb <= T_off or cap/inp < 1.0:
       sigma_t = 0.0
-    elif T_off < T_odb and T_odb <= T_on and cap/(inp*3.412) >= 1.0:
+    elif T_odb <= T_on:
       sigma_t = 0.5
     else:
       sigma_t = 1.0
 
-    inp_tot += x_t*inp*sigma_t / PLF * frac_hours[i] + (bL - (x_t*cap*sigma_t))/3.412*frac_hours[i]
+    inp_tot += x_t*inp*sigma_t/PLF*frac_hours[i] + (bL - (x_t*cap*sigma_t))*frac_hours[i]
     out_tot += bL*frac_hours[i]
 
-  return out_tot / inp_tot * 3.412
+  return convert(out_tot/inp_tot,"","Btu/Wh")
 
 def title24_cop47_rated(hspf):
   return 0.3225*hspf + 0.9099
@@ -357,11 +358,9 @@ def title24_calculate_cops(conditions, system):
     system.model_data["cop17"] = [None]*system.number_of_speeds
 
   hspf = system.kwargs["input_hspf"]
-  root_fn = lambda inp17 : title24_check_hspf(conditions, system, inp17) - hspf
-  inp17_guess = 0.2186*hspf + 0.6734
-  inp17 = optimize.newton(root_fn, inp17_guess)
-  cap17 = title24_get_cap17(conditions, system)
-  system.model_data["cop17"][conditions.compressor_speed] = cap17/inp17
+  root_fn = lambda cop17 : title24_check_hspf(conditions, system, cop17) - hspf
+  cop17_guess = 3.0 #0.2186*hspf + 0.6734
+  system.model_data["cop17"][conditions.compressor_speed] = optimize.newton(root_fn, cop17_guess)
 
 def title24_get_cop35(conditions, system):
   if "cop35" not in system.model_data:
