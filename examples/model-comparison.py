@@ -23,8 +23,8 @@ t24_unit = resdx.DXUnit(gross_total_cooling_capacity_fn=resdx.title24_gross_tota
                         fan_eff_heating_rated=[resdx.u(0.58,'W/(cu_ft/min)')],
                         c_d_heating=resdx.title24_c_d_heating(hspf),
                         input_hspf=hspf,
-                        defrost=resdx.Defrost(high_temperature=resdx.u(45.0,"°F"), low_temperature=resdx.u(17.0,"°F")),
-                        special_new_variable=9999
+                        #cap17=[resdx.u(2.0,'ton_of_refrigeration')],
+                        defrost=resdx.Defrost(high_temperature=resdx.u(45.0,"°F"), low_temperature=resdx.u(17.0,"°F"))
 )
 
 t24_unit.print_cooling_info()
@@ -51,6 +51,7 @@ ax1.set_ylabel('Capacity/Power (W)', color=color)
 ax1.plot(T_out, Q_integrated, color=color)
 ax1.plot(T_out, P_integrated, color=color)
 ax1.tick_params(axis='y', labelcolor=color)
+ax1.set_ylim([0,15000])
 
 ax2 = ax1.twinx()
 
@@ -58,6 +59,7 @@ color = 'tab:blue'
 ax2.set_ylabel('COP', color=color)
 ax2.plot(T_out, COP_integrated, color=color)
 ax2.tick_params(axis='y', labelcolor=color)
+ax2.set_ylim([0,5.5])
 
 fig.tight_layout()
 plt.savefig('output/title24-heat-pump.png')

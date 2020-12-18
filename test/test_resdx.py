@@ -64,6 +64,7 @@ def test_plot():
   ax1.plot(T_out, Q_integrated, color=color)
   ax1.plot(T_out, P_integrated, color=color)
   ax1.tick_params(axis='y', labelcolor=color)
+  ax1.set_ylim([0,15000])
 
   ax2 = ax1.twinx()
 
@@ -71,6 +72,7 @@ def test_plot():
   ax2.set_ylabel('COP', color=color)
   ax2.plot(T_out, COP_integrated, color=color)
   ax2.tick_params(axis='y', labelcolor=color)
+  ax2.set_ylim([0,5.5])
 
   fig.tight_layout()
   plt.savefig('output/heat-pump.png')
