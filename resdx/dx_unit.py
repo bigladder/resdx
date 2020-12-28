@@ -28,9 +28,9 @@ class OperatingConditions:
     self.compressor_speed = compressor_speed # compressor speed index (0 = full speed, 1 = next lowest, ...)
     self.rated_air_flow_set = False
 
-  def set_rated_air_flow(self, air_vol_flow_per_rated_cap, net_capacity_rated):
-    self.net_capacity_rated = net_capacity_rated
-    self.std_air_vol_flow_rated = air_vol_flow_per_rated_cap*net_capacity_rated
+  def set_rated_air_flow(self, air_vol_flow_per_rated_cap, net_total_cooling_capacity_rated):
+    self.net_total_cooling_capacity_rated = net_total_cooling_capacity_rated
+    self.std_air_vol_flow_rated = air_vol_flow_per_rated_cap*net_total_cooling_capacity_rated
     self.air_vol_flow_rated = self.std_air_vol_flow_rated*STANDARD_CONDITIONS.get_rho()/self.indoor.get_rho()
     self.air_mass_flow_rated = self.air_vol_flow_rated*self.indoor.get_rho()
     self.rated_air_flow_set = True
@@ -42,7 +42,7 @@ class OperatingConditions:
     if self.rated_air_flow_set:
       self.std_air_vol_flow = self.air_mass_flow/STANDARD_CONDITIONS.get_rho()
       self.air_mass_flow_fraction = self.air_mass_flow/self.air_mass_flow_rated
-      self.std_air_vol_flow_per_capacity = self.std_air_vol_flow/self.net_capacity_rated
+      self.std_air_vol_flow_per_capacity = self.std_air_vol_flow/self.net_total_cooling_capacity_rated
 
 class CoolingConditions(OperatingConditions):
   def __init__(self,outdoor=PsychState(drybulb=fr_u(95.0,"°F"),wetbulb=fr_u(75.0,"°F")),
@@ -96,13 +96,13 @@ class DXUnit:
                     gross_cooling_cop_rated=[3.72],
                     net_cooling_cop_rated=None,
                     fan_efficacy_cooling_rated=[fr_u(0.25,'W/(cu_ft/min)')],
-                    flow_rated_per_cap_cooling_rated = [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")],
+                    flow_rated_per_cap_cooling_rated = [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")], # Per net total cooling capacity
                     c_d_cooling=0.1,
                     net_heating_capacity_rated=[fr_u(3.0,'ton_of_refrigeration')],
                     gross_heating_cop_rated=[3.82],
                     net_heating_cop_rated=None,
                     fan_efficacy_heating_rated=[fr_u(0.25,'W/(cu_ft/min)')],
-                    flow_rated_per_cap_heating_rated = [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption
+                    flow_rated_per_cap_heating_rated = [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")], # Per net total cooling capacity, TODO: Check assumption
                     c_d_heating=0.142,
                     heating_off_temperature = fr_u(10.0,"°F"), # TODO: Check value taken from Scott's script for single-stage
                     heating_on_temperature = fr_u(14.0,"°F"), # TODO: Check value taken from Scott's script for single-stage
@@ -136,7 +136,7 @@ class DXUnit:
     # Initialize calculated values
     self.number_of_speeds = len(self.gross_cooling_cop_rated)
     self.cooling_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_cooling_rated[i]*self.flow_rated_per_cap_cooling_rated[i] for i in range(self.number_of_speeds)]
-    self.heating_fan_power_rated = [self.net_heating_capacity_rated[i]*self.fan_efficacy_heating_rated[i]*self.flow_rated_per_cap_heating_rated[i] for i in range(self.number_of_speeds)]
+    self.heating_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_heating_rated[i]*self.flow_rated_per_cap_heating_rated[i] for i in range(self.number_of_speeds)]
     self.gross_total_cooling_capacity_rated = [self.net_total_cooling_capacity_rated[i] + self.cooling_fan_power_rated[i] for i in range(self.number_of_speeds)]
     self.gross_heating_capacity_rated = [self.net_heating_capacity_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_speeds)]
     self.bypass_factor_rated = [None]*self.number_of_speeds
@@ -236,7 +236,7 @@ class DXUnit:
     if condition_type == CoolingConditions:
       condition.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed])
     else: # if condition_type == HeatingConditions:
-      condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_heating_capacity_rated[compressor_speed])
+      condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed])
     return condition
 
   ### For cooling ###
@@ -546,7 +546,7 @@ class DXUnit:
     print(f"HSPF (region {region}): {self.hspf(region)}")
     for speed in range(self.number_of_speeds):
       conditions = HeatingConditions(compressor_speed=speed)
-      conditions.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[speed], self.net_heating_capacity_rated[speed])
+      conditions.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[speed], self.net_total_cooling_capacity_rated[speed])
       print(f"Net heating power for stage {speed + 1} : {self.net_integrated_heating_power(conditions)}")
       print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")
 
