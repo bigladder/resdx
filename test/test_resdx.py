@@ -25,7 +25,7 @@ dx_unit_2_speed = DXUnit(
   flow_rated_per_cap_cooling_rated = [fr_u(360.0,"(cu_ft/min)/ton_of_refrigeration"),fr_u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
   net_total_cooling_capacity_rated=[fr_u(3.0,'ton_of_refrigeration'),fr_u(1.5,'ton_of_refrigeration')],
   fan_eff_heating_rated=[fr_u(0.365,'W/(cu_ft/min)')]*2,
-  gross_heating_cop_rated=[4.5, 5.0],
+  gross_heating_cop_rated=[4.2, 6.2],
   flow_rated_per_cap_heating_rated = [fr_u(360.0,"(cu_ft/min)/ton_of_refrigeration"),fr_u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
   net_heating_capacity_rated=[fr_u(3.0,'ton_of_refrigeration'),fr_u(1.5,'ton_of_refrigeration')]
 )
@@ -37,6 +37,7 @@ def test_1_speed_regression():
   assert dx_unit_1_speed.seer() == approx(13.0, 0.01)
   assert dx_unit_1_speed.eer() == approx(11.19, 0.01)
   assert dx_unit_1_speed.hspf() == approx(7.7, 0.01)
+  assert dx_unit_1_speed.net_total_cooling_capacity() == approx(dx_unit_1_speed.net_total_cooling_capacity_rated[0],0.01)
 
 def test_2_speed_regression():
   dx_unit_2_speed.print_cooling_info()
@@ -45,8 +46,8 @@ def test_2_speed_regression():
   dx_unit_2_speed.print_heating_info(region=2)
   assert dx_unit_2_speed.seer() == approx(17, 0.01)
   assert dx_unit_2_speed.eer() == approx(13, 0.01)
-  assert dx_unit_2_speed.hspf() == approx(8.86, 0.01)
-  assert dx_unit_2_speed.hspf(region=2) == approx(12.55, 0.01)
+  assert dx_unit_2_speed.hspf() == approx(9.3, 0.01)
+  assert dx_unit_2_speed.hspf(region=2) == approx(13.6, 0.01)
 
 def test_plot():
   # Plot integrated power and capacity
@@ -64,6 +65,7 @@ def test_plot():
   ax1.plot(T_out, Q_integrated, color=color)
   ax1.plot(T_out, P_integrated, color=color)
   ax1.tick_params(axis='y', labelcolor=color)
+  ax1.set_ylim([0,15000])
 
   ax2 = ax1.twinx()
 
@@ -71,6 +73,7 @@ def test_plot():
   ax2.set_ylabel('COP', color=color)
   ax2.plot(T_out, COP_integrated, color=color)
   ax2.tick_params(axis='y', labelcolor=color)
+  ax2.set_ylim([0,5.5])
 
   fig.tight_layout()
   plt.savefig('output/heat-pump.png')

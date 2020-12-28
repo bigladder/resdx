@@ -16,9 +16,12 @@ def task_test():
 def task_examples():
   '''Run examples'''
   return {
-    'targets': ['output/Gross(fannotincluded)COP(atAconditions)_vs_SEER.png','output/Gross(fannotincluded)COP(atH1conditions)_vs_HSPF'],
+    'targets': ['output/title24-heat-pump.py',
+                'output/cooling-cop-v-seer.png',
+                'output/heating-cop-v-hspf.png'],
     'actions': [
       (create_folder, [OUTPUT_PATH]),
+      'python examples/model-comparison.py',
       'python examples/inverse-calculations.py'],
     'clean': True
   }
