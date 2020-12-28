@@ -6,7 +6,7 @@ from scipy import optimize
 
 from .psychrometrics import PsychState, STANDARD_CONDITIONS, psychrolib
 from .defrost import Defrost, DefrostControl, DefrostStrategy
-from .units import u, convert
+from .units import fr_u, to_u
 from .util import calc_biquad, calc_quad, find_nearest
 from .models import cutler_cooling_power, cutler_total_cooling_capacity, energyplus_sensible_cooling_capacity, \
                     title24_shr, cutler_steady_state_heating_capacity, epri_integrated_heating_capacity, \
@@ -47,22 +47,22 @@ class OperatingConditions:
       self.std_air_vol_flow_per_capacity = self.std_air_vol_flow/self.capacity_rated
 
 class CoolingConditions(OperatingConditions):
-  def __init__(self,outdoor=PsychState(drybulb=u(95.0,"°F"),wetbulb=u(75.0,"°F")),
-                    indoor=PsychState(drybulb=u(80.0,"°F"),wetbulb=u(67.0,"°F")),
+  def __init__(self,outdoor=PsychState(drybulb=fr_u(95.0,"°F"),wetbulb=fr_u(75.0,"°F")),
+                    indoor=PsychState(drybulb=fr_u(80.0,"°F"),wetbulb=fr_u(67.0,"°F")),
                     compressor_speed=0):
     super().__init__(outdoor, indoor, compressor_speed)
 
 class HeatingConditions(OperatingConditions):
-  def __init__(self,outdoor=PsychState(drybulb=u(47.0,"°F"),wetbulb=u(43.0,"°F")),
-                    indoor=PsychState(drybulb=u(70.0,"°F"),wetbulb=u(60.0,"°F")),
+  def __init__(self,outdoor=PsychState(drybulb=fr_u(47.0,"°F"),wetbulb=fr_u(43.0,"°F")),
+                    indoor=PsychState(drybulb=fr_u(70.0,"°F"),wetbulb=fr_u(60.0,"°F")),
                     compressor_speed=0):
     super().__init__(outdoor, indoor, compressor_speed)
 
 # AHRI 210/240 2017 distributions
 class HeatingDistribution:
-  outdoor_drybulbs = [u(62.0 - delta*5.0,"°F") for delta in range(18)] # 62.0 to -23 F by 5 F increments
+  outdoor_drybulbs = [fr_u(62.0 - delta*5.0,"°F") for delta in range(18)] # 62.0 to -23 F by 5 F increments
   def __init__(self,
-    outdoor_design_temperature=u(5.0,"°F"),
+    outdoor_design_temperature=fr_u(5.0,"°F"),
     fractional_hours=[0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0,0,0]
   ):
     self.outdoor_design_temperature = outdoor_design_temperature
@@ -72,7 +72,7 @@ class HeatingDistribution:
       sys.exit(f'Heating distributions must be provided in 18 bins.')
 
 class CoolingDistribution:
-  outdoor_drybulbs = [u(67.0 + delta*5.0,"°F") for delta in range(8)] # 67.0 to 102 F by 5 F increments
+  outdoor_drybulbs = [fr_u(67.0 + delta*5.0,"°F") for delta in range(8)] # 67.0 to 102 F by 5 F increments
   fractional_hours = [0.214,0.231,0.216,0.161,0.104,0.052,0.018,0.004]
 
   def __init__(self):
@@ -92,40 +92,40 @@ resnet_integrated_heating_power = epri_integrated_heating_power
 class DXUnit:
 
   regional_heating_distributions = {
-    1: HeatingDistribution(u(37.0,"°F"), [0.291,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
-    2: HeatingDistribution(u(27.0,"°F"), [0.215,0.189,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
-    3: HeatingDistribution(u(17.0,"°F"), [0.153,0.142,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000]),
-    4: HeatingDistribution(u(5.0,"°F"),  [0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000]),
-    5: HeatingDistribution(u(-10.0,"°F"),[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]),
-    6: HeatingDistribution(u(30.0,"°F"), [0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000])
+    1: HeatingDistribution(fr_u(37.0,"°F"), [0.291,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
+    2: HeatingDistribution(fr_u(27.0,"°F"), [0.215,0.189,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
+    3: HeatingDistribution(fr_u(17.0,"°F"), [0.153,0.142,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000]),
+    4: HeatingDistribution(fr_u(5.0,"°F"),  [0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000]),
+    5: HeatingDistribution(fr_u(-10.0,"°F"),[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]),
+    6: HeatingDistribution(fr_u(30.0,"°F"), [0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000])
     }
 
   cooling_distribution = CoolingDistribution()
 
-  standard_design_heating_requirements = [(u(5000,"Btu/hr")+i*u(5000,"Btu/hr")) for i in range(0,8)] + [(u(50000,"Btu/hr")+i*u(10000,"Btu/hr")) for i in range(0,9)]
+  standard_design_heating_requirements = [(fr_u(5000,"Btu/hr")+i*fr_u(5000,"Btu/hr")) for i in range(0,8)] + [(fr_u(50000,"Btu/hr")+i*fr_u(10000,"Btu/hr")) for i in range(0,9)]
 
   def __init__(self,gross_total_cooling_capacity_fn=cutler_total_cooling_capacity,
                     gross_sensible_cooling_capacity_fn=resnet_sensible_cooling_capacity,
                     gross_cooling_power_fn=resnet_cooling_power,
                     shr_rated_fn=resnet_shr_rated,
                     c_d_cooling=0.2,
-                    fan_eff_cooling_rated=[u(0.365,'W/(cu_ft/min)')],
+                    fan_eff_cooling_rated=[fr_u(0.365,'W/(cu_ft/min)')],
                     gross_cooling_cop_rated=[3.0],
-                    flow_rated_per_cap_cooling_rated = [u(360.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption (varies by climate?)
-                    net_total_cooling_capacity_rated=[u(3.0,'ton_of_refrigeration')],
+                    flow_rated_per_cap_cooling_rated = [fr_u(360.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption (varies by climate?)
+                    net_total_cooling_capacity_rated=[fr_u(3.0,'ton_of_refrigeration')],
                     gross_steady_state_heating_capacity_fn=resnet_steady_state_heating_capacity,
                     gross_integrated_heating_capacity_fn=resnet_integrated_heating_capacity,
                     gross_steady_state_heating_power_fn=resnet_steady_state_heating_power,
                     gross_integrated_heating_power_fn=resnet_integrated_heating_power,
                     defrost=Defrost(),
                     c_d_heating=0.2,
-                    fan_eff_heating_rated=[u(0.365,'W/(cu_ft/min)')],
+                    fan_eff_heating_rated=[fr_u(0.365,'W/(cu_ft/min)')],
                     gross_heating_cop_rated=[2.5],
-                    flow_rated_per_cap_heating_rated = [u(360.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption
-                    net_heating_capacity_rated=[u(3.0,'ton_of_refrigeration')],
+                    flow_rated_per_cap_heating_rated = [fr_u(360.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption
+                    net_heating_capacity_rated=[fr_u(3.0,'ton_of_refrigeration')],
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
-                    heating_off_temperature = u(10.0,"°F"), # TODO: Check value taken from Scott's script single-stage
-                    heating_on_temperature = u(14.0,"°F")): # TODO: Check value taken from Scott's script single-stage
+                    heating_off_temperature = fr_u(10.0,"°F"), # TODO: Check value taken from Scott's script single-stage
+                    heating_on_temperature = fr_u(14.0,"°F")): # TODO: Check value taken from Scott's script single-stage
 
     # Initialize direct values
     self.gross_total_cooling_capacity_fn = gross_total_cooling_capacity_fn
@@ -160,24 +160,24 @@ class DXUnit:
 
     ## Set rating conditions
     self.A_full_cond = self.make_condition(CoolingConditions)
-    self.B_full_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=u(82.0,"°F"),wetbulb=u(65.0,"°F")))
+    self.B_full_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(82.0,"°F"),wetbulb=fr_u(65.0,"°F")))
 
     self.H1_full_cond = self.make_condition(HeatingConditions)
-    self.H2_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(35.0,"°F"),wetbulb=u(33.0,"°F")))
-    self.H3_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(17.0,"°F"),wetbulb=u(15.0,"°F")))
+    self.H2_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(35.0,"°F"),wetbulb=fr_u(33.0,"°F")))
+    self.H3_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(17.0,"°F"),wetbulb=fr_u(15.0,"°F")))
 
     self.shr_cooling_rated = [self.shr_rated_fn(self.A_full_cond)]
     self.calculate_bypass_factor_rated(0)
 
     if self.number_of_speeds > 1:
       self.A_low_cond = self.make_condition(CoolingConditions,compressor_speed=1) # Not used in AHRI ratings, only used for 'rated' SHR calculations at low speeds
-      self.B_low_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=u(82.0,"°F"),wetbulb=u(65.0,"°F")),compressor_speed=1)
-      self.F_low_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=u(67.0,"°F"),wetbulb=u(53.5,"°F")),compressor_speed=1)
+      self.B_low_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(82.0,"°F"),wetbulb=fr_u(65.0,"°F")),compressor_speed=1)
+      self.F_low_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(67.0,"°F"),wetbulb=fr_u(53.5,"°F")),compressor_speed=1)
 
-      self.H0_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(62.0,"°F"),wetbulb=u(56.5,"°F")),compressor_speed=1)
+      self.H0_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(62.0,"°F"),wetbulb=fr_u(56.5,"°F")),compressor_speed=1)
       self.H1_low_cond = self.make_condition(HeatingConditions,compressor_speed=1)
-      self.H2_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(35.0,"°F"),wetbulb=u(33.0,"°F")),compressor_speed=1)
-      self.H3_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=u(17.0,"°F"),wetbulb=u(15.0,"°F")),compressor_speed=1)
+      self.H2_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(35.0,"°F"),wetbulb=fr_u(33.0,"°F")),compressor_speed=1)
+      self.H3_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(17.0,"°F"),wetbulb=fr_u(15.0,"°F")),compressor_speed=1)
 
       self.shr_cooling_rated += [self.shr_rated_fn(self.A_low_cond)]
       self.calculate_bypass_factor_rated(1)
@@ -288,7 +288,7 @@ class DXUnit:
     root_fn = lambda T_ADP : psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, inlet_state.p) - (w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP))
     T_ADP = optimize.newton(root_fn, T_idb)
     w_ADP = w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP)
-    return PsychState(convert(T_ADP,"°C","K"),pressure=inlet_state.p,hum_rat=w_ADP)
+    return PsychState(fr_u(T_ADP,"°C"),pressure=inlet_state.p,hum_rat=w_ADP)
 
   def calculate_bypass_factor_rated(self, speed): # for rated flow rate
     if speed == 0:
@@ -314,7 +314,7 @@ class DXUnit:
     return self.calculate_adp_state(conditions.indoor,outlet_state)
 
   def eer(self, conditions=None):
-    return convert(self.net_cooling_cop(conditions),'','Btu/Wh')
+    return to_u(self.net_cooling_cop(conditions),'Btu/Wh')
 
   def seer(self):
     '''Based on AHRI 210/240 2017'''
@@ -328,7 +328,7 @@ class DXUnit:
       for i in range(self.cooling_distribution.number_of_bins):
         t = self.cooling_distribution.outdoor_drybulbs[i]
         n = self.cooling_distribution.fractional_hours[i]
-        bl = (t - u(65.0,"°F"))/(u(95,"°F") - u(65.0,"°F"))*self.net_total_cooling_capacity(self.A_full_cond)/sizing_factor # eq. 11.60
+        bl = (t - fr_u(65.0,"°F"))/(fr_u(95,"°F") - fr_u(65.0,"°F"))*self.net_total_cooling_capacity(self.A_full_cond)/sizing_factor # eq. 11.60
         q_low = interpolate(self.net_total_cooling_capacity, self.F_low_cond, self.B_low_cond, t) # eq. 11.62
         p_low = interpolate(self.net_cooling_power, self.F_low_cond, self.B_low_cond, t) # eq. 11.63
         q_full = interpolate(self.net_total_cooling_capacity, self.B_full_cond, self.A_full_cond, t) # eq. 11.64
@@ -355,7 +355,7 @@ class DXUnit:
         e_sum += e
 
       seer = q_sum/e_sum # e.q. 11.59
-    return convert(seer,'','Btu/Wh')
+    return to_u(seer,'Btu/Wh')
 
   ### For heating ###
   def heating_fan_power(self, conditions=None):
@@ -425,19 +425,19 @@ class DXUnit:
     c = 0.77 # eq. 11.110 (agreement factor)
     t_od = self.regional_heating_distributions[region].outdoor_design_temperature
 
-    dhr_min = self.net_integrated_heating_capacity(self.H1_full_cond)*(u(65,"°F")-t_od)/(u(60,"°R")) # eq. 11.111
+    dhr_min = self.net_integrated_heating_capacity(self.H1_full_cond)*(fr_u(65,"°F")-t_od)/(fr_u(60,"°R")) # eq. 11.111
     dhr_min = find_nearest(self.standard_design_heating_requirements, dhr_min)
 
     for i in range(self.regional_heating_distributions[region].number_of_bins):
       t = self.regional_heating_distributions[region].outdoor_drybulbs[i]
       n = self.regional_heating_distributions[region].fractional_hours[i]
-      bl = (u(65,"°F")-t)/(u(65,"°F")-t_od)*c*dhr_min # eq. 11.109
+      bl = (fr_u(65,"°F")-t)/(fr_u(65,"°F")-t_od)*c*dhr_min # eq. 11.109
 
-      t_ob = u(45,"°F") # eq. 11.119
-      if t >= t_ob or t <= u(17,"°F"):
+      t_ob = fr_u(45,"°F") # eq. 11.119
+      if t >= t_ob or t <= fr_u(17,"°F"):
         q_full = interpolate(self.net_integrated_heating_capacity, self.H3_full_cond, self.H1_full_cond, t) # eq. 11.117
         p_full = interpolate(self.net_integrated_heating_power, self.H3_full_cond, self.H1_full_cond, t) # eq. 11.117
-      else: # elif t > u(17,"°F") and t < t_ob
+      else: # elif t > fr_u(17,"°F") and t < t_ob
         q_full = interpolate(self.net_integrated_heating_capacity, self.H3_full_cond, self.H2_full_cond, t) # eq. 11.118
         p_full = interpolate(self.net_integrated_heating_power, self.H3_full_cond, self.H2_full_cond, t) # eq. 11.117
       cop_full = q_full/p_full
@@ -459,11 +459,11 @@ class DXUnit:
         e = p_full*hlf_full*delta_full*n/plf_full # eq. 11.156 (not shown for single stage)
         rh = (bl - q_full*hlf_full*delta_full)*n # eq. 11.126
       else: # elif self.number_of_speeds == 2:
-        t_ob = u(40,"°F") # eq. 11.134
+        t_ob = fr_u(40,"°F") # eq. 11.134
         if t >= t_ob:
           q_low = interpolate(self.net_integrated_heating_capacity, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.135
           p_low = interpolate(self.net_integrated_heating_power, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.138
-        elif t <= u(17.0,"°F"):
+        elif t <= fr_u(17.0,"°F"):
           q_low = interpolate(self.net_integrated_heating_capacity, self.H1_low_cond, self.H3_low_cond, t) # eq. 11.137
           p_low = interpolate(self.net_integrated_heating_power, self.H1_low_cond, self.H3_low_cond, t) # eq. 11.140
         else:
@@ -502,16 +502,16 @@ class DXUnit:
       e_sum += e
       rh_sum += rh
 
-    t_test = max(self.defrost.period, u(90,"min"))
-    t_max  = min(self.defrost.max_time, u(720.0,'min'))
+    t_test = max(self.defrost.period, fr_u(90,"min"))
+    t_max  = min(self.defrost.max_time, fr_u(720.0,'min'))
 
     if self.defrost.control == DefrostControl.DEMAND:
-      f_def = 1 + 0.03 * (1 - (t_test-u(90.0,'min'))/(t_max-u(90.0,'min'))) # eq. 11.129
+      f_def = 1 + 0.03 * (1 - (t_test-fr_u(90.0,'min'))/(t_max-fr_u(90.0,'min'))) # eq. 11.129
     else:
       f_def = 1 # eq. 11.130
 
     hspf = q_sum/(e_sum + rh_sum) * f_def # eq. 11.133
-    return convert(hspf,'','Btu/Wh')
+    return to_u(hspf,'Btu/Wh')
 
   def print_cooling_info(self):
     print(f"SEER: {self.seer()}")
