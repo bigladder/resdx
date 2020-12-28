@@ -1,15 +1,36 @@
-from .nrel import cutler_gross_cooling_power, cutler_gross_total_cooling_capacity, \
-                  energyplus_gross_sensible_cooling_capacity, cutler_gross_steady_state_heating_capacity, \
-                  epri_gross_integrated_heating_capacity, cutler_gross_steady_state_heating_power, \
-                  epri_gross_integrated_heating_power
+from .base_model import DXModel
+from .nrel import NRELDXModel
+from .title24 import Title24DXModel
 
-from .title24 import title24_shr
+class RESNETModel(DXModel):
+  @staticmethod
+  def gross_cooling_power(conditions, system):
+    return NRELDXModel.gross_cooling_power(conditions, system)
 
-resnet_gross_cooling_power = cutler_gross_cooling_power
-resnet_gross_total_cooling_capacity = cutler_gross_total_cooling_capacity
-resnet_gross_sensible_cooling_capacity = energyplus_gross_sensible_cooling_capacity
-resnet_shr_rated = title24_shr
-resnet_gross_steady_state_heating_capacity = cutler_gross_steady_state_heating_capacity
-resnet_gross_integrated_heating_capacity = epri_gross_integrated_heating_capacity
-resnet_gross_steady_state_heating_power = cutler_gross_steady_state_heating_power
-resnet_gross_integrated_heating_power = epri_gross_integrated_heating_power
+  @staticmethod
+  def gross_total_cooling_capacity(conditions, system):
+    return NRELDXModel.gross_total_cooling_capacity(conditions, system)
+
+  @staticmethod
+  def gross_sensible_cooling_capacity(conditions, system):
+    return NRELDXModel.gross_sensible_cooling_capacity(conditions, system)
+
+  @staticmethod
+  def gross_shr(conditions):
+    return Title24DXModel.gross_shr(conditions)
+
+  @staticmethod
+  def gross_steady_state_heating_capacity(conditions, system):
+    return NRELDXModel.gross_steady_state_heating_capacity(conditions, system)
+
+  @staticmethod
+  def gross_integrated_heating_capacity(conditions, system):
+    return NRELDXModel.gross_integrated_heating_capacity(conditions, system)
+
+  @staticmethod
+  def gross_steady_state_heating_power(conditions, system):
+    return NRELDXModel.gross_steady_state_heating_power(conditions, system)
+
+  @staticmethod
+  def gross_integrated_heating_power(conditions, system):
+    return NRELDXModel.gross_integrated_heating_power(conditions, system)

@@ -8,9 +8,7 @@ from .psychrometrics import PsychState, STANDARD_CONDITIONS, psychrolib
 from .defrost import Defrost, DefrostControl, DefrostStrategy
 from .units import fr_u, to_u
 from .util import calc_biquad, calc_quad, find_nearest
-from .models import resnet_gross_cooling_power, resnet_gross_total_cooling_capacity, resnet_gross_sensible_cooling_capacity, \
-                    resnet_shr_rated, resnet_gross_steady_state_heating_capacity, resnet_gross_integrated_heating_capacity, \
-                    resnet_gross_steady_state_heating_power, resnet_gross_integrated_heating_power
+from .models import RESNETModel
 
 
 def interpolate(f, cond_1, cond_2, x):
@@ -93,20 +91,13 @@ class DXUnit:
 
   standard_design_heating_requirements = [(fr_u(5000,"Btu/hr")+i*fr_u(5000,"Btu/hr")) for i in range(0,8)] + [(fr_u(50000,"Btu/hr")+i*fr_u(10000,"Btu/hr")) for i in range(0,9)]
 
-  def __init__(self,gross_total_cooling_capacity_fn=resnet_gross_total_cooling_capacity,
-                    gross_sensible_cooling_capacity_fn=resnet_gross_sensible_cooling_capacity,
-                    gross_cooling_power_fn=resnet_gross_cooling_power,
-                    shr_rated_fn=resnet_shr_rated,
+  def __init__(self,model=RESNETModel(),
                     c_d_cooling=0.1,
                     fan_eff_cooling_rated=[fr_u(0.25,'W/(cu_ft/min)')],
                     gross_cooling_cop_rated=[3.72],
                     net_cooling_cop_rated=None,
                     flow_rated_per_cap_cooling_rated = [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")], # TODO: Check assumption (varies by climate?)
                     net_total_cooling_capacity_rated=[fr_u(3.0,'ton_of_refrigeration')],
-                    gross_steady_state_heating_capacity_fn=resnet_gross_steady_state_heating_capacity,
-                    gross_integrated_heating_capacity_fn=resnet_gross_integrated_heating_capacity,
-                    gross_steady_state_heating_power_fn=resnet_gross_steady_state_heating_power,
-                    gross_integrated_heating_power_fn=resnet_gross_integrated_heating_power,
                     defrost=Defrost(),
                     c_d_heating=0.142,
                     fan_eff_heating_rated=[fr_u(0.25,'W/(cu_ft/min)')],
@@ -120,20 +111,13 @@ class DXUnit:
                     **kwargs):  # Additional inputs used for specific models
 
     # Initialize direct values
-    self.gross_total_cooling_capacity_fn = gross_total_cooling_capacity_fn
-    self.gross_sensible_cooling_capacity_fn = gross_sensible_cooling_capacity_fn
-    self.gross_cooling_power_fn = gross_cooling_power_fn
-    self.shr_rated_fn = shr_rated_fn
+    self.model = model
     self.c_d_cooling = c_d_cooling
     self.fan_eff_cooling_rated = fan_eff_cooling_rated
     self.gross_cooling_cop_rated = gross_cooling_cop_rated
     self.net_cooling_cop_rated = net_cooling_cop_rated
     self.net_total_cooling_capacity_rated = net_total_cooling_capacity_rated
     self.flow_rated_per_cap_cooling_rated = flow_rated_per_cap_cooling_rated
-    self.gross_steady_state_heating_capacity_fn = gross_steady_state_heating_capacity_fn
-    self.gross_integrated_heating_capacity_fn = gross_integrated_heating_capacity_fn
-    self.gross_steady_state_heating_power_fn = gross_steady_state_heating_power_fn
-    self.gross_integrated_heating_power_fn = gross_integrated_heating_power_fn
     self.defrost = defrost
     self.c_d_heating = c_d_heating
     self.cycling_method = cycling_method
@@ -197,7 +181,7 @@ class DXUnit:
     self.H2_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(35.0,"°F"),wetbulb=fr_u(33.0,"°F")))
     self.H3_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(17.0,"°F"),wetbulb=fr_u(15.0,"°F")))
 
-    self.shr_cooling_rated = [self.shr_rated_fn(self.A_full_cond)]
+    self.shr_cooling_rated = [self.model.gross_shr(self.A_full_cond)]
     self.calculate_bypass_factor_rated(0)
 
     if self.number_of_speeds > 1:
@@ -210,7 +194,7 @@ class DXUnit:
       self.H2_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(35.0,"°F"),wetbulb=fr_u(33.0,"°F")),compressor_speed=1)
       self.H3_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(17.0,"°F"),wetbulb=fr_u(15.0,"°F")),compressor_speed=1)
 
-      self.shr_cooling_rated += [self.shr_rated_fn(self.A_low_cond)]
+      self.shr_cooling_rated += [self.model.gross_shr(self.A_low_cond)]
       self.calculate_bypass_factor_rated(1)
 
     ## Check for errors
@@ -265,12 +249,12 @@ class DXUnit:
   def gross_total_cooling_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.gross_total_cooling_capacity_fn(conditions, self)
+    return self.model.gross_total_cooling_capacity(conditions, self)
 
   def gross_sensible_cooling_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.gross_sensible_cooling_capacity_fn(conditions, self)
+    return self.model.gross_sensible_cooling_capacity(conditions, self)
 
   def gross_shr(self, conditions=None):
     return self.gross_sensible_cooling_capacity(conditions)/self.gross_total_cooling_capacity(conditions)
@@ -278,7 +262,7 @@ class DXUnit:
   def gross_cooling_power(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.gross_cooling_power_fn(conditions,self)
+    return self.model.gross_cooling_power(conditions,self)
 
   def net_total_cooling_capacity(self, conditions=None):
     return self.gross_total_cooling_capacity(conditions) - self.cooling_fan_heat(conditions)
@@ -400,22 +384,22 @@ class DXUnit:
   def gross_steady_state_heating_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.gross_steady_state_heating_capacity_fn(conditions, self)
+    return self.model.gross_steady_state_heating_capacity(conditions, self)
 
   def gross_steady_state_heating_power(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.gross_steady_state_heating_power_fn(conditions, self)
+    return self.model.gross_steady_state_heating_power(conditions, self)
 
   def gross_integrated_heating_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.gross_integrated_heating_capacity_fn(conditions, self)
+    return self.model.gross_integrated_heating_capacity(conditions, self)
 
   def gross_integrated_heating_power(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.gross_integrated_heating_power_fn(conditions, self)
+    return self.model.gross_integrated_heating_power(conditions, self)
 
   def net_steady_state_heating_capacity(self, conditions=None):
     return self.gross_steady_state_heating_capacity(conditions) + self.heating_fan_heat(conditions)
