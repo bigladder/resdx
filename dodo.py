@@ -6,7 +6,7 @@ OUTPUT_PATH = "output"
 def task_test():
   '''Performs tests'''
   return {
-    'targets': ['output/heat-pump.py'],
+    'targets': ['output/heat-pump.png'],
     'actions': [
       (create_folder, [OUTPUT_PATH]),
       'pytest -v test'],
@@ -16,9 +16,12 @@ def task_test():
 def task_examples():
   '''Run examples'''
   return {
-    'targets': ['output/title24-heat-pump.py'],
+    'targets': ['output/title24-heat-pump.py',
+                'output/Gross(fannotincluded)COP(atAconditions)_vs_SEER.png',
+                'output/Gross(fannotincluded)COP(atH1conditions)_vs_HSPF'],
     'actions': [
       (create_folder, [OUTPUT_PATH]),
-      'python examples/model-comparison.py'],
+      'python examples/model-comparison.py',
+      'python examples/inverse-calculations.py'],
     'clean': True
   }

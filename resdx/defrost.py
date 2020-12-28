@@ -1,7 +1,7 @@
 from enum import Enum
 import sys
 
-from .units import u, convert
+from .units import fr_u
 
 # Defrost characterisitcs
 class DefrostControl(Enum):
@@ -16,14 +16,14 @@ class DefrostStrategy(Enum):
 
 class Defrost:
 
-  def __init__(self,time_fraction = lambda conditions : u(3.5,'min')/u(60.0,'min'),
+  def __init__(self,time_fraction = lambda conditions : fr_u(3.5,'min')/fr_u(60.0,'min'),
                     resistive_power = 0,
                     control = DefrostControl.TIMED,
                     strategy = DefrostStrategy.REVERSE_CYCLE,
-                    high_temperature=u(41,"°F"),  # Maximum temperature for defrost operation
+                    high_temperature=fr_u(41,"°F"),  # Maximum temperature for defrost operation
                     low_temperature=None,  # Minimum temperature for defrost operation
-                    period=u(90,'min'),  # Time between defrost terminations (for testing)
-                    max_time=u(720,"min")):  # Maximum time between defrosts allowed by controls
+                    period=fr_u(90,'min'),  # Time between defrost terminations (for testing)
+                    max_time=fr_u(720,"min")):  # Maximum time between defrosts allowed by controls
 
     # Initialize member values
     self.time_fraction = time_fraction
