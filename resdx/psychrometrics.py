@@ -1,13 +1,13 @@
-from .units import u, convert
+from .units import fr_u, to_u
 
 import sys
 import psychrolib
 psychrolib.SetUnitSystem(psychrolib.SI)
 
 class PsychState:
-  def __init__(self,drybulb,pressure=u(1.0,"atm"),**kwargs):
+  def __init__(self,drybulb,pressure=fr_u(1.0,"atm"),**kwargs):
     self.db = drybulb
-    self.db_C = convert(self.db,"K","°C")
+    self.db_C = to_u(self.db,"°C")
     self.p = pressure
     self.wb_set = False
     self.rh_set = False
@@ -15,6 +15,7 @@ class PsychState:
     self.dp_set = False
     self.h_set = False
     self.rho_set = False
+    self.C_p = fr_u(1.006,"kJ/kg/K")
     if len(kwargs) > 1:
       sys.exit(f'only 1 can be provided')
     if "wetbulb" in kwargs:
@@ -30,21 +31,21 @@ class PsychState:
 
   def set_wb(self, wb):
     self.wb = wb
-    self.wb_C = convert(self.wb,"K","°C")
+    self.wb_C = to_u(self.wb,"°C")
     self.wb_set = True
     return self.wb
 
   def set_rh(self, rh):
     self.rh = rh
     if not self.wb_set:
-      self.set_wb(convert(psychrolib.GetTWetBulbFromRelHum(self.db_C, self.rh, self.p),"°C","K"))
+      self.set_wb(fr_u(psychrolib.GetTWetBulbFromRelHum(self.db_C, self.rh, self.p),"°C"))
     self.rh_set = True
     return self.rh
 
   def set_hr(self, hr):
     self.hr = hr
     if not self.wb_set:
-      self.set_wb(convert(psychrolib.GetTWetBulbFromHumRatio(self.db_C, self.hr, self.p),"°C","K"))
+      self.set_wb(fr_u(psychrolib.GetTWetBulbFromHumRatio(self.db_C, self.hr, self.p),"°C"))
     self.hr_set = True
     return self.hr
 
@@ -91,5 +92,5 @@ class PsychState:
       return self.set_h(psychrolib.GetMoistAirEnthalpy(self.db_C,self.get_hr()))
 
 
-STANDARD_CONDITIONS = PsychState(drybulb=u(70.0,"°F"),hum_rat=0.0)
+STANDARD_CONDITIONS = PsychState(drybulb=fr_u(70.0,"°F"),hum_rat=0.0)
 

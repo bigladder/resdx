@@ -15,15 +15,15 @@ def plot(x, y, xlabel, ylabel,figure_name):
     plt.ylabel(ylabel)
     plt.savefig(f'output/{figure_name}.png')
 
-# Cooling 
+# Cooling
 
 def fan_efficacy(seer):
     if seer <= 14:
-        return resdx.u(0.25,'W/(cu_ft/min)')
+        return resdx.fr_u(0.25,'W/(cu_ft/min)')
     elif seer >= 16:
-        return resdx.u(0.18,'W/(cu_ft/min)')
+        return resdx.fr_u(0.18,'W/(cu_ft/min)')
     else:
-        return resdx.u(0.25,'W/(cu_ft/min)') + (resdx.u(0.18,'W/(cu_ft/min)') - resdx. u(0.25,'W/(cu_ft/min)'))/2.0 * (seer - 14.0) 
+        return resdx.fr_u(0.25,'W/(cu_ft/min)') + (resdx.fr_u(0.18,'W/(cu_ft/min)') - resdx. fr_u(0.25,'W/(cu_ft/min)'))/2.0 * (seer - 14.0)
 
 
 def c_d(seer):
