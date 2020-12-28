@@ -2,8 +2,9 @@ from scipy import optimize
 
 from ..units import fr_u, to_u
 from ..util import calc_biquad, calc_quad
-from ..psychrometrics import psychrolib
+from ..psychrometrics import psychrolib, PsychState
 from ..defrost import DefrostControl, DefrostStrategy
+from ..conditions import CoolingConditions
 
 from .base_model import DXModel
 
@@ -72,6 +73,18 @@ class NRELDXModel(DXModel):
       return system.gross_steady_state_heating_capacity(conditions)
 
   @staticmethod
+  def get_cooling_cop60(conditions, system):
+    if "cooling_cop60" not in system.model_data:
+      system.model_data["cooling_cop60"] = [None]*system.number_of_speeds
+
+    if system.model_data["cooling_cop60"][conditions.compressor_speed] is not None:
+      return system.model_data["cooling_cop60"][conditions.compressor_speed]
+    else:
+      condition = system.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(60.0,"°F"),wetbulb=fr_u(48.0,"°F")),compressor_speed=conditions.compressor_speed)
+      system.model_data["cooling_cop60"][conditions.compressor_speed] = system.gross_cooling_cop(condition)
+      return system.model_data["cooling_cop60"][conditions.compressor_speed]
+
+  @staticmethod
   def gross_integrated_heating_power(conditions, system):
     '''EPRI algorithm as described in EnergyPlus documentation'''
     if system.defrost.in_defrost(conditions):
@@ -82,9 +95,10 @@ class NRELDXModel(DXModel):
         input_power_multiplier = 0.954*(1 - t_defrost)
 
       if system.defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
-        T_iwb = to_u(conditions.indoor.wb,"°C")
-        T_odb = conditions.outdoor.db_C
-        defEIRfT = calc_biquad([0.1528, 0, 0, 0, 0, 0], T_iwb, T_odb) # TODO: Check assumption from BEopt
+        #T_iwb = to_u(conditions.indoor.wb,"°C")
+        #T_odb = conditions.outdoor.db_C
+        # defEIRfT = calc_biquad([0.1528, 0, 0, 0, 0, 0], T_iwb, T_odb) # Assumption from BEopt 0.1528 = 1/gross_cop_cooling(60F)
+        defEIRfT = 1/NRELDXModel.get_cooling_cop60(conditions, system)
         P_defrost = defEIRfT*(system.gross_heating_capacity_rated[conditions.compressor_speed]/1.01667)
       else:
         P_defrost = system.defrost.resistive_power
