@@ -2,7 +2,7 @@ from .base_model import DXModel
 from .nrel import NRELDXModel
 from .title24 import Title24DXModel
 
-class RESNETModel(DXModel):
+class RESNETDXModel(DXModel):
   @staticmethod
   def gross_cooling_power(conditions, system):
     return NRELDXModel.gross_cooling_power(conditions, system)
