@@ -8,6 +8,7 @@ import numpy as np
 
 from pytest import approx
 
+
 DXUnit = resdx.DXUnit
 fr_u = resdx.units.fr_u
 PsychState = resdx.psychrometrics.PsychState
@@ -19,12 +20,12 @@ dx_unit_1_speed = DXUnit()
 
 # Two speed
 dx_unit_2_speed = DXUnit(
-  gross_cooling_cop_rated=[3.0,3.5],
+  gross_cooling_cop_rated=[4.7,5.3],
   fan_eff_cooling_rated=[fr_u(0.365,'W/(cu_ft/min)')]*2,
   flow_rated_per_cap_cooling_rated = [fr_u(360.0,"(cu_ft/min)/ton_of_refrigeration"),fr_u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
   net_total_cooling_capacity_rated=[fr_u(3.0,'ton_of_refrigeration'),fr_u(1.5,'ton_of_refrigeration')],
   fan_eff_heating_rated=[fr_u(0.365,'W/(cu_ft/min)')]*2,
-  gross_heating_cop_rated=[2.5, 3.0],
+  gross_heating_cop_rated=[4.5, 5.0],
   flow_rated_per_cap_heating_rated = [fr_u(360.0,"(cu_ft/min)/ton_of_refrigeration"),fr_u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
   net_heating_capacity_rated=[fr_u(3.0,'ton_of_refrigeration'),fr_u(1.5,'ton_of_refrigeration')]
 )
@@ -33,19 +34,19 @@ dx_unit_2_speed = DXUnit(
 def test_1_speed_regression():
   dx_unit_1_speed.print_cooling_info()
   dx_unit_1_speed.print_heating_info()
-  assert dx_unit_1_speed.seer() == approx(9.73, 0.01)
-  assert dx_unit_1_speed.eer() == approx(8.76, 0.01)
-  assert dx_unit_1_speed.hspf() == approx(5.56, 0.01)
+  assert dx_unit_1_speed.seer() == approx(13.0, 0.01)
+  assert dx_unit_1_speed.eer() == approx(11.19, 0.01)
+  assert dx_unit_1_speed.hspf() == approx(7.7, 0.01)
 
 def test_2_speed_regression():
   dx_unit_2_speed.print_cooling_info()
 
   dx_unit_2_speed.print_heating_info()
   dx_unit_2_speed.print_heating_info(region=2)
-  assert dx_unit_2_speed.seer() == approx(11.53, 0.01)
-  assert dx_unit_2_speed.eer() == approx(8.76, 0.01)
-  assert dx_unit_2_speed.hspf() == approx(6.18, 0.01)
-  assert dx_unit_2_speed.hspf(region=2) == approx(7.78, 0.01)
+  assert dx_unit_2_speed.seer() == approx(17, 0.01)
+  assert dx_unit_2_speed.eer() == approx(13, 0.01)
+  assert dx_unit_2_speed.hspf() == approx(8.86, 0.01)
+  assert dx_unit_2_speed.hspf(region=2) == approx(12.55, 0.01)
 
 def test_plot():
   # Plot integrated power and capacity
