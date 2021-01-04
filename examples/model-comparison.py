@@ -6,22 +6,16 @@ hspf = 7.7
 # cooling factor:
 # heating factor:
 
-t24_unit = resdx.DXUnit(gross_total_cooling_capacity_fn=resdx.title24_gross_total_cooling_capacity,
-                        gross_sensible_cooling_capacity_fn=resdx.title24_gross_sensible_cooling_capacity,
-                        gross_cooling_power_fn=resdx.title24_gross_cooling_power,
-                        net_cooling_cop_rated=[resdx.fr_u(resdx.title24_eer_rated(seer),'Btu/Wh')],
-                        fan_eff_cooling_rated=[resdx.fr_u(0.58,'W/(cu_ft/min)')],
+t24_unit = resdx.DXUnit(model=resdx.models.Title24DXModel(),
+                        net_cooling_cop_rated=[resdx.fr_u(resdx.models.Title24DXModel.eer_rated(seer),'Btu/Wh')],
+                        fan_efficacy_cooling_rated=[resdx.fr_u(0.58,'W/(cu_ft/min)')],
                         flow_rated_per_cap_cooling_rated=[resdx.fr_u(350.0,"(cu_ft/min)/ton_of_refrigeration")],
                         c_d_cooling=0.0,
                         input_seer=seer,
-                        net_heating_cop_rated=[resdx.title24_cop47_rated(hspf)],
-                        gross_steady_state_heating_capacity_fn=resdx.title24_gross_steady_state_heating_capacity,
-                        gross_steady_state_heating_power_fn=resdx.title24_gross_steady_state_heating_power,
-                        gross_integrated_heating_capacity_fn=resdx.title24_gross_integrated_heating_capacity,
-                        gross_integrated_heating_power_fn=resdx.title24_gross_integrated_heating_power,
+                        net_heating_cop_rated=[resdx.models.Title24DXModel.cop47_rated(hspf)],
                         flow_rated_per_cap_heating_rated=[resdx.fr_u(350.0,"(cu_ft/min)/ton_of_refrigeration")],
-                        fan_eff_heating_rated=[resdx.fr_u(0.58,'W/(cu_ft/min)')],
-                        c_d_heating=resdx.title24_c_d_heating(hspf),
+                        fan_efficacy_heating_rated=[resdx.fr_u(0.58,'W/(cu_ft/min)')],
+                        c_d_heating=resdx.models.Title24DXModel.c_d_heating(hspf),
                         input_hspf=hspf,
                         #cap17=[resdx.fr_u(2.0,'ton_of_refrigeration')],
                         defrost=resdx.Defrost(high_temperature=resdx.fr_u(45.0,"°F"), low_temperature=resdx.fr_u(17.0,"°F"))

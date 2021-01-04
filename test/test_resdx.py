@@ -21,10 +21,10 @@ dx_unit_1_speed = DXUnit()
 # Two speed
 dx_unit_2_speed = DXUnit(
   gross_cooling_cop_rated=[4.7,5.3],
-  fan_eff_cooling_rated=[fr_u(0.365,'W/(cu_ft/min)')]*2,
+  fan_efficacy_cooling_rated=[fr_u(0.365,'W/(cu_ft/min)')]*2,
   flow_rated_per_cap_cooling_rated = [fr_u(360.0,"(cu_ft/min)/ton_of_refrigeration"),fr_u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
   net_total_cooling_capacity_rated=[fr_u(3.0,'ton_of_refrigeration'),fr_u(1.5,'ton_of_refrigeration')],
-  fan_eff_heating_rated=[fr_u(0.365,'W/(cu_ft/min)')]*2,
+  fan_efficacy_heating_rated=[fr_u(0.365,'W/(cu_ft/min)')]*2,
   gross_heating_cop_rated=[4.2, 6.2],
   flow_rated_per_cap_heating_rated = [fr_u(360.0,"(cu_ft/min)/ton_of_refrigeration"),fr_u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
   net_heating_capacity_rated=[fr_u(3.0,'ton_of_refrigeration'),fr_u(1.5,'ton_of_refrigeration')]
