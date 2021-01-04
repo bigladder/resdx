@@ -429,6 +429,18 @@ class DXUnit:
   def net_integrated_heating_cop(self, conditions=None):
     return self.net_integrated_heating_capacity(conditions)/self.net_integrated_heating_power(conditions)
 
+  def gross_heating_capacity_ratio(self, conditions=None):
+    return self.gross_integrated_heating_capacity(conditions)/self.gross_steady_state_heating_capacity(conditions)
+
+  def net_heating_capacity_ratio(self, conditions=None):
+    return self.net_integrated_heating_capacity(conditions)/self.net_steady_state_heating_capacity(conditions)
+
+  def gross_heating_power_ratio(self, conditions=None):
+    return self.gross_integrated_heating_power(conditions)/self.gross_steady_state_heating_power(conditions)
+
+  def net_heating_power_ratio(self, conditions=None):
+    return self.net_integrated_heating_power(conditions)/self.net_steady_state_heating_power(conditions)
+
   def gross_heating_output_state(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
