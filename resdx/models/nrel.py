@@ -80,7 +80,10 @@ class NRELDXModel(DXModel):
     if system.model_data["cooling_cop60"][conditions.compressor_speed] is not None:
       return system.model_data["cooling_cop60"][conditions.compressor_speed]
     else:
-      condition = system.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(60.0,"°F"),wetbulb=fr_u(48.0,"°F")),compressor_speed=conditions.compressor_speed)
+      condition = system.make_condition(CoolingConditions,
+                                        outdoor=PsychState(drybulb=fr_u(60.0,"°F"),wetbulb=fr_u(48.0,"°F")),  # 60 F at ~40% RH
+                                        indoor=PsychState(drybulb=fr_u(70.0,"°F"),wetbulb=fr_u(60.0,"°F")),  # Use H1 indoor conditions (since we're still heating)
+                                        compressor_speed=conditions.compressor_speed)
       system.model_data["cooling_cop60"][conditions.compressor_speed] = system.gross_cooling_cop(condition)
       return system.model_data["cooling_cop60"][conditions.compressor_speed]
 
@@ -98,7 +101,7 @@ class NRELDXModel(DXModel):
         #T_iwb = to_u(conditions.indoor.wb,"°C")
         #T_odb = conditions.outdoor.db_C
         # defEIRfT = calc_biquad([0.1528, 0, 0, 0, 0, 0], T_iwb, T_odb) # Assumption from BEopt 0.1528 = 1/gross_cop_cooling(60F)
-        defEIRfT = 1/NRELDXModel.get_cooling_cop60(conditions, system)
+        defEIRfT = 1/NRELDXModel.get_cooling_cop60(conditions, system)  # Assume defrost EIR is constant (maybe it could/should change with indoor conditions?)
         P_defrost = defEIRfT*(system.gross_heating_capacity_rated[conditions.compressor_speed]/1.01667)
       else:
         P_defrost = system.defrost.resistive_power
