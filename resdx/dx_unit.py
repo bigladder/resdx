@@ -198,7 +198,7 @@ class DXUnit:
     if condition_type == CoolingConditions:
       condition.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed])
     else: # if condition_type == HeatingConditions:
-      condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed])
+      condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_heating_capacity_rated[compressor_speed])
     return condition
 
   ### For cooling ###
