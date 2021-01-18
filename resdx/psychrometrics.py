@@ -5,6 +5,7 @@ import psychrolib
 psychrolib.SetUnitSystem(psychrolib.SI)
 
 class PsychState:
+  ### This class gives access to db, pressure, the additional variable given as inputs and wb. Use get function to get other variables.
   def __init__(self,drybulb,pressure=fr_u(1.0,"atm"),**kwargs):
     self.db = drybulb
     self.db_C = to_u(self.db,"°C")
@@ -12,8 +13,8 @@ class PsychState:
     self.wb_set = False
     self.rh_set = False
     self.hr_set = False
-    self.dp_set = False
     self.h_set = False
+    self.dewp_set = False
     self.rho_set = False
     self.C_p = fr_u(1.006,"kJ/kg/K")
     if len(kwargs) > 1:
@@ -26,6 +27,8 @@ class PsychState:
       self.set_rh(kwargs["rel_hum"])
     elif "enthalpy" in kwargs:
       self.set_h(kwargs["enthalpy"])
+    elif "dewp" in kwargs:
+      self.set_dewp(kwargs["dewp"])
     else:
       sys.exit(f'Unknonw key word argument {kwargs}.')
 
@@ -34,6 +37,14 @@ class PsychState:
     self.wb_C = to_u(self.wb,"°C")
     self.wb_set = True
     return self.wb
+
+  def set_dewp(self, dewp):
+    self.dewp = dewp
+    self.dewp_C = to_u(self.dewp,"°C")
+    if not self.wb_set:
+      self.set_wb(fr_u(psychrolib.GetTWetBulbFromTDewPoint(self.db_C, self.dewp_C, self.p) ,"°C"))
+    self.dewp_set = True
+    return self.dewp
 
   def set_rh(self, rh):
     self.rh = rh
@@ -68,6 +79,16 @@ class PsychState:
     else:
       sys.exit(f'Wetbulb not set')
 
+  def get_dewp(self):
+    if not self.dewp_set:
+      self.set_dewp(psychrolib.GetTDewPointFromTWetBulb(self.db_C,self.get_wb_C(),self.p))
+    return self.dewp
+
+  def get_dewp_C(self):
+    if not self.dewp_set:
+      self.set_dewp(to_u(psychrolib.GetTDewPointFromTWetBulb(self.db_C,self.get_wb_C(),self.p),"°C"))
+    return self.dewp_C
+
   def set_rho(self, rho):
     self.rho = rho
     self.rho_set = True
@@ -84,6 +105,12 @@ class PsychState:
       return self.hr
     else:
       return self.set_hr(psychrolib.GetHumRatioFromTWetBulb(self.db_C, self.get_wb_C(), self.p))
+
+  def get_rh(self):
+    if self.rh_set:
+        return self.rh
+    else:
+      return self.set_rh(psychrolib.GetRelHumFromTWetBulb(self.db_C,self.get_wb_C(),self.p))
 
   def get_h(self):
     if self.h_set:
