@@ -188,7 +188,7 @@ class DXUnit:
     if not all(earlier >= later for earlier, later in zip(array, array[1:])):
       sys.exit(f'Arrays must be in order of decreasing capacity. Array items are {array}.')
 
-  def make_condition(self, condition_type, compressor_speed=0, indoor=None, outdoor=None):
+  def make_condition(self, condition_type, compressor_speed=0, indoor=None, outdoor=None, air_vol_flow=None):
     if indoor is None:
       indoor = condition_type().indoor
     if outdoor is None:
@@ -196,9 +196,9 @@ class DXUnit:
 
     condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed)
     if condition_type == CoolingConditions:
-      condition.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed])
+      condition.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed], air_vol_flow)
     else: # if condition_type == HeatingConditions:
-      condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_heating_capacity_rated[compressor_speed])
+      condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_heating_capacity_rated[compressor_speed], air_vol_flow)
     return condition
 
   ### For cooling ###
