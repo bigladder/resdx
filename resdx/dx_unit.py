@@ -268,6 +268,9 @@ class DXUnit:
     root_fn = lambda T_ADP : psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, inlet_state.p) - (w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP))
     T_ADP = optimize.newton(root_fn, T_idb)
     w_ADP = w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP)
+    # Output an error if ADP calculation method is not applicable:
+    if (T_odb < T_ADP or w_o <  w_ADP):
+      sys.exit(f'Indoor unit outlet conditions do not seem right. This is likely due to the shr value')
     return PsychState(fr_u(T_ADP,"°C"),pressure=inlet_state.p,hum_rat=w_ADP)
 
   def calculate_bypass_factor_rated(self, speed): # for rated flow rate
