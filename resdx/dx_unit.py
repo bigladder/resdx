@@ -270,7 +270,7 @@ class DXUnit:
     w_ADP = w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP)
     # Output an error if ADP calculation method is not applicable:
     if (T_odb < T_ADP or w_o <  w_ADP):
-      sys.exit(f'Indoor unit outlet conditions do not seem right. This is likely due to the shr value')
+      sys.exit(f'Invalid Apparatus Dew Point (ADP). The rated Sensible Heat Ratio (SHR) might not be valid.')
     return PsychState(fr_u(T_ADP,"°C"),pressure=inlet_state.p,hum_rat=w_ADP)
 
   def calculate_bypass_factor_rated(self, speed): # for rated flow rate
