@@ -1,7 +1,14 @@
 import sys
 from enum import Enum
 import math
+import numpy as np
 from scipy import optimize
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+import seaborn as sns
+sns.set()
 
 from .psychrometrics import PsychState, psychrolib
 from .conditions import HeatingConditions, CoolingConditions
@@ -9,7 +16,6 @@ from .defrost import Defrost, DefrostControl, DefrostStrategy
 from .units import fr_u, to_u
 from .util import calc_biquad, calc_quad, find_nearest
 from .models import RESNETDXModel
-
 
 def interpolate(f, cond_1, cond_2, x):
   return f(cond_1) + (f(cond_2) - f(cond_1))/(cond_2.outdoor.db - cond_1.outdoor.db)*(x - cond_1.outdoor.db)
@@ -195,10 +201,19 @@ class DXUnit:
       outdoor = condition_type().outdoor
 
     condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed)
-    if condition_type == CoolingConditions:
-      condition.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed],air_vol_flow_per_rated_cap, air_vol_flow)
-    else: # if condition_type == HeatingConditions:
-      condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_heating_capacity_rated[compressor_speed],air_vol_flow_per_rated_cap, air_vol_flow)
+
+    if (air_vol_flow_per_rated_cap is not None) and (air_vol_flow is not None):
+      sys.exit(f'Only the air volumetric flow or the air volumetric flow per rated capacity should be provided, not both.')
+    elif air_vol_flow_per_rated_cap is not None:
+      if condition_type == CoolingConditions:
+        condition.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed], air_vol_flow_per_rated_cap*self.net_total_cooling_capacity_rated[compressor_speed])
+      else: # if condition_type == HeatingConditions:
+        condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_heating_capacity_rated[compressor_speed], air_vol_flow_per_rated_cap*self.net_heating_capacity_rated[compressor_speed])
+    else:
+      if condition_type == CoolingConditions:
+        condition.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed], air_vol_flow)
+      else: # if condition_type == HeatingConditions:
+        condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_heating_capacity_rated[compressor_speed], air_vol_flow)
     return condition
 
   ### For cooling ###
@@ -527,3 +542,157 @@ class DXUnit:
   def writeA205(self):
     '''TODO: Write ASHRAE 205 file!!!'''
     return
+
+  #%% Plotting function class
+
+  def make_plot(self,ConditionsArray,FunctionsArray,FunctionsArray_2nd_axis = None):
+      # create color shades of Red 1st functions (first independent variable)
+      norm = mpl.colors.Normalize(vmin=0, vmax=len(ConditionsArray.independent_dimensions[1].values))
+      cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.Reds) # greens # maybe define cmap_green and cmap_red outside dxunit class as constants or enum?
+      # create figure and set primary variable label for the x-axis
+      fig, ax1 = plt.subplots()
+      ax1.set_xlabel(f"{ConditionsArray.independent_dimensions[0].name} [{ConditionsArray.independent_dimensions[0].units}]")
+
+      ax1.set_xlim(xmin=min(ConditionsArray.independent_dimensions[0].values),
+                   xmax=max(ConditionsArray.independent_dimensions[0].values))
+      self.plotting(fig,ax1,ConditionsArray,FunctionsArray,cmap)
+      handles, labels = self.add_legend(ConditionsArray, FunctionsArray, FunctionsArray_2nd_axis)
+      ax1.legend(handles = handles,
+                 labels = labels,
+                 bbox_to_anchor=(0,1.02,1,0.2),
+                 loc="lower left",
+                 mode="expand",
+                 borderaxespad=0,
+                 ncol=3,
+                 fancybox=True,
+                 shadow=True)
+
+      ax1.tick_params(axis='y', colors='red')
+      ax1.set_ylabel(f"{FunctionsArray.functions_unique_name} [{FunctionsArray.functions_unique_unit}]", c = 'red')
+
+      if FunctionsArray_2nd_axis is not None:
+          # create color shades of Green 2nd functions (first independent variable)
+          cmap = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.Greens) # Reds
+
+          ax2 = ax1.twinx()
+
+          self.plotting(fig,ax2,ConditionsArray,FunctionsArray_2nd_axis,cmap)
+          ax2.tick_params(axis='y', colors='green')
+          ax2.set_ylabel(f"{FunctionsArray_2nd_axis.functions_unique_name} [{FunctionsArray_2nd_axis.functions_unique_unit}]", c = 'green')
+
+      fig.tight_layout()
+      # plt.savefig('output/generic-plotting.png')
+      return
+
+  def add_legend(self, conditions_array, functions_array, FunctionsArray_2nd_axis = None):
+      norm = mpl.colors.Normalize(vmin=0, vmax=len(conditions_array.independent_dimensions[1].values))
+      cmap_grey = mpl.cm.ScalarMappable(norm=norm, cmap=mpl.cm.Greys) # maybe define cmap_green and cmap_red, line styles, markers.. outside dxunit class as constants or enum?
+      linestyles = ["solid","dashed","dotted","dashdot"] # for functions on same y-axis
+      linestyles = linestyles[:len(functions_array.labels)]
+      colors = [0,1,2,3]
+      colors = colors[:len(conditions_array.independent_dimensions[1].values)]
+      markers = ["o","s","*","+","x","v","^"]
+      markers = markers[:len(conditions_array.independent_dimensions[2].values)]
+      dx = 0
+      #define handles
+      handles_2nd_independent_dimension = [plt.scatter(dx,dx,color=cmap_grey.to_rgba(1+col),s=20,marker='p',linewidths=1) for col in colors]
+      handles_3rd_independent_dimension = [plt.scatter(dx,dx,color='black',s=20,marker=mark,linewidths=1) for mark in markers]
+
+      handles_functions = [Line2D([dx,dx],[dx,dx],color='red',linestyle=line) for line in linestyles]
+
+      if FunctionsArray_2nd_axis is not None:
+        linestyles2 = linestyles[:len(FunctionsArray_2nd_axis.labels)]
+        handles_functions2 = [Line2D([dx,dx],[dx,dx],color='green',linestyle=line) for line in linestyles2]
+        handles_functions.extend(handles_functions2)
+
+      handles_3rd_independent_dimension.extend(handles_functions)
+      handles_2nd_independent_dimension.extend(handles_3rd_independent_dimension)
+
+      # Define labels
+      labels_2nd_independent_dimension = [f"{conditions_array.independent_dimensions[1].name}={v} [{conditions_array.independent_dimensions[1].units}]" for v in conditions_array.independent_dimensions[1].values]
+      labels_3rd_independent_dimension = [f"{conditions_array.independent_dimensions[2].name}={v} [{conditions_array.independent_dimensions[2].units}]" for v in conditions_array.independent_dimensions[2].values]
+
+      functions_labels = functions_array.labels
+      if FunctionsArray_2nd_axis is not None:
+        functions_labels.extend(FunctionsArray_2nd_axis.labels)
+
+      labels_3rd_independent_dimension.extend(functions_labels)
+      labels_2nd_independent_dimension.extend(labels_3rd_independent_dimension)
+      return handles_2nd_independent_dimension, labels_2nd_independent_dimension
+
+  def plotting(self,fig,ax,ConditionsArray,FunctionsArray,cmap):
+      linestyles = ["solid","dashed","dotted","dashdot"] # for functions on same y-axis
+
+      length_2nd_dim = len(ConditionsArray.independent_dimensions[1].values)
+      try:
+         length_3rd_dim = len(ConditionsArray.independent_dimensions[2].values)
+      except:
+          length_3rd_dim = None
+
+      markers_n_colors = self.colors_and_markers_combinations(length_2nd_dim,length_3rd_dim) # all combinations of: (color,marker)
+      combin_values = self.independent_values_combinations(ConditionsArray.independent_dimensions[1].values,ConditionsArray.independent_dimensions[2].values) # all combinations of 2nd and 3rd dimension values: (2nd dimension value, 3rd dimension value)
+
+      markers_n_colors_count = 0
+      for cond_l in ConditionsArray.conditions_matrix:
+          linestyle_count = 0
+          for fun in FunctionsArray.functions:
+              x = ConditionsArray.independent_dimensions[0].values #(maybe you should check they are in order?)
+              y = [to_u(fun(cond),FunctionsArray.functions_unique_unit) for cond in cond_l]
+
+              ax.plot(x, y, color=cmap.to_rgba(1+markers_n_colors[markers_n_colors_count][0]),
+                            marker=markers_n_colors[markers_n_colors_count][1],
+                            linestyle=linestyles[linestyle_count])#, label=label)
+
+              linestyle_count = linestyle_count + 1
+          markers_n_colors_count = markers_n_colors_count + 1
+      return
+#%% generate markers and colors or secondary variables data combinations
+
+  def colors_and_markers_combinations(self,length_2nd_dim,length_3rd_dim):
+      # colors = ["green","red","blue","orange"]
+      colors = [0,1,2,3] # for independant_values_1 used as 2nd dimension
+      markers = ["o","s","*","+","x","v","^"] # for independant_values_2 used as 3rd dimension
+      second_dimension_color = colors[0:length_2nd_dim]
+      third_dimension_marker = markers[0:length_3rd_dim]
+      if length_3rd_dim == None:
+        return second_dimension_color
+      else:
+        combinations = []
+        for color in second_dimension_color:
+            temp_combinations = list(zip([color]*len(third_dimension_marker),third_dimension_marker))
+            combinations = combinations + temp_combinations
+        return combinations
+
+  def independent_values_combinations(self,independant_values_2nd_dimention,independant_values_3rd_dimention = None):
+    ### Returns a list of all combinations [a,b,c] + [x,y] => [(a,x),(a,y),(b,x),(b,y),(c,x),(c,y)]
+      if independant_values_3rd_dimention == None:
+        return independant_values_2nd_dimention
+      else:
+        combinations = []
+        for value in independant_values_2nd_dimention:
+          temp_combinations = list(zip([value]*len(independant_values_3rd_dimention),independant_values_3rd_dimention))
+          combinations = combinations + temp_combinations
+        return combinations
+
+  #%% Conditions class
+
+class IndependentDimension:
+
+  def __init__(self, values, name, units):
+    self.values = values
+    self.name = name
+    self.units = units
+
+class ConditionsArray:
+  def __init__(self, independent_dimensions, conditions_matrix):
+    self.independent_dimensions = independent_dimensions
+    self.conditions_matrix = conditions_matrix
+
+#%% Functions class
+class FunctionsArray:
+
+    def __init__(self,functions,labels,functions_unique_name,functions_unique_unit):
+        self.functions = functions
+        self.labels = labels
+        self.functions_unique_name = functions_unique_name
+        self.functions_unique_unit = functions_unique_unit
