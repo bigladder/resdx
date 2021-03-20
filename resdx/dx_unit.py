@@ -365,16 +365,6 @@ class DXUnit:
       conditions = self.H1_full_cond
     return self.model.gross_integrated_heating_capacity(conditions, self)
 
-  def gross_heating_capacity_with_frost(self, conditions=None):
-    if conditions is None:
-      conditions = self.H1_full_cond
-    return self.model.gross_heating_capacity_with_frost(conditions, self)
-
-  def gross_heating_capacity_defrost_indoor(self, conditions=None):
-    if conditions is None:
-      conditions = self.H1_full_cond
-    return self.model.gross_heating_capacity_defrost_indoor(conditions, self)
-
   def gross_integrated_heating_power(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
