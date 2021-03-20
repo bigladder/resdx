@@ -51,8 +51,8 @@ def test_2_speed_regression():
 
 def test_plot():
   # Plot integrated power and capacity
-  T_out = np.arange(-23,75+1,1)
-  conditions = [dx_unit_1_speed.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(T,"°F"),wetbulb=fr_u(T-2.0,"°F"))) for T in T_out]
+  T_out = np.arange(35,75+1,1)
+  conditions = [dx_unit_1_speed.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(T,"°F"),hum_rat=0.003)) for T in T_out]
   Q_integrated = [dx_unit_1_speed.gross_integrated_heating_capacity(condition) for condition in conditions]
   P_integrated = [dx_unit_1_speed.gross_integrated_heating_power(condition) for condition in conditions]
   COP_integrated = [dx_unit_1_speed.gross_integrated_heating_cop(condition) for condition in conditions]
@@ -76,4 +76,6 @@ def test_plot():
   ax2.set_ylim([0,5.5])
 
   fig.tight_layout()
+
   plt.savefig('output/heat-pump.png')
+# %%
