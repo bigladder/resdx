@@ -20,7 +20,7 @@ class Defrost:
                     resistive_power = 0,
                     control = DefrostControl.TIMED,
                     strategy = DefrostStrategy.REVERSE_CYCLE,
-                    high_temperature=fr_u(41,"°F"),  # Maximum temperature for defrost operation
+                    high_temperature=fr_u(47,"°F"),  # Maximum temperature for defrost operation according Hugh I. Henderson et al: Savings Calculations for Residential Air Source Heat Pumps (NYSERDA and NYS Department of Public Service)
                     low_temperature=None,  # Minimum temperature for defrost operation
                     period=fr_u(90,'min'),  # Time between defrost terminations (for testing)
                     max_time=fr_u(720,"min")):  # Maximum time between defrosts allowed by controls
@@ -37,7 +37,7 @@ class Defrost:
 
     # Check inputs
     if self.strategy == DefrostStrategy.RESISTIVE and self.resistive_power <= 0:
-      sys.exit(f'Defrost stratege=RESISTIVE, but resistive_power is not greater than zero.')
+      sys.exit(f'Defrost strategy=RESISTIVE, but resistive_power is not greater than zero.')
 
   def in_defrost(self, conditions):
     if self.strategy == DefrostStrategy.NONE:
