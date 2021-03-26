@@ -14,7 +14,7 @@ Development setup
 
 Requirements:
 
-1. Python 3.9+
+1. Python 3.6+
 2. [Poetry](https://python-poetry.org/)
 
 Project setup: `poetry install`
