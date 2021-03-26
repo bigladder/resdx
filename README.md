@@ -15,9 +15,8 @@ Development setup
 Requirements:
 
 1. Python 3.6+
-2. pip
-3. pipenv (`pip install pipenv`)
+2. [Poetry](https://python-poetry.org/)
 
-Project setup: `pipenv install --dev`
+Project setup: `poetry install`
 
-Testing: `pipenv run doit`
+Testing: `poetry run doit`
