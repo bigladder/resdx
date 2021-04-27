@@ -8,7 +8,7 @@ from ..conditions import CoolingConditions
 
 from .base_model import DXModel
 
-class CNTModel(DXModel): # CNT for constant
+class ConstantDXModel(DXModel):
 
   '''This model considers the HP performance independant from weather conditions'''
 
@@ -38,7 +38,7 @@ class CNTModel(DXModel): # CNT for constant
     if system.defrost.in_defrost(conditions):
       t_defrost = system.defrost.time_fraction(conditions)
       if system.defrost.control ==DefrostControl.TIMED:
-          heating_capacity_multiplier = 0.909 - 107.33*CNTModel.coil_diff_outdoor_air_humidity(conditions)
+          heating_capacity_multiplier = 0.909 - 107.33*ConstantDXModel.coil_diff_outdoor_air_humidity(conditions)
       else:
           heating_capacity_multiplier = 0.875*(1 - t_defrost)
 
@@ -58,7 +58,7 @@ class CNTModel(DXModel): # CNT for constant
     if system.defrost.in_defrost(conditions):
       t_defrost = system.defrost.time_fraction(conditions)
       if system.defrost.control ==DefrostControl.TIMED:
-          heating_capacity_multiplier = 0.909 - 107.33*CNTModel.coil_diff_outdoor_air_humidity(conditions)
+          heating_capacity_multiplier = 0.909 - 107.33*ConstantDXModel.coil_diff_outdoor_air_humidity(conditions)
       else:
           heating_capacity_multiplier = 0.875*(1 - t_defrost)
 
@@ -102,7 +102,7 @@ class CNTModel(DXModel): # CNT for constant
     if system.defrost.in_defrost(conditions):
       t_defrost = system.defrost.time_fraction(conditions)
       if system.defrost.control == DefrostControl.TIMED:
-        input_power_multiplier = 0.9 - 36.45*CNTModel.coil_diff_outdoor_air_humidity(conditions)
+        input_power_multiplier = 0.9 - 36.45*ConstantDXModel.coil_diff_outdoor_air_humidity(conditions)
       else:
         input_power_multiplier = 0.954*(1 - t_defrost)
 
@@ -110,7 +110,7 @@ class CNTModel(DXModel): # CNT for constant
         #T_iwb = to_u(conditions.indoor.wb,"°C")
         #T_odb = conditions.outdoor.db_C
         # defEIRfT = calc_biquad([0.1528, 0, 0, 0, 0, 0], T_iwb, T_odb) # Assumption from BEopt 0.1528 = 1/gross_cop_cooling(60F)
-        defEIRfT = 0.16 #1/CNTModel.get_cooling_cop60(conditions, system)  # Assume defrost EIR is constant (maybe it could/should change with indoor conditions?)
+        defEIRfT = 0.16 #1/ConstantDXModel.get_cooling_cop60(conditions, system)  # Assume defrost EIR is constant (maybe it could/should change with indoor conditions?)
         P_defrost = defEIRfT*(system.gross_heating_capacity_rated[conditions.compressor_speed]/1.01667)
       else:
         P_defrost = system.defrost.resistive_power
@@ -123,7 +123,7 @@ class CNTModel(DXModel): # CNT for constant
   @staticmethod
   def epri_defrost_time_fraction(conditions):
     '''EPRI algorithm as described in EnergyPlus documentation'''
-    return 1/(1+(0.01446/CNTModel.coil_diff_outdoor_air_humidity(conditions)))
+    return 1/(1+(0.01446/ConstantDXModel.coil_diff_outdoor_air_humidity(conditions)))
 
   @staticmethod
   def coil_diff_outdoor_air_humidity(conditions):
