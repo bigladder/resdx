@@ -4,10 +4,11 @@ from .units import fr_u
 class OperatingConditions:
   def __init__(self, outdoor=STANDARD_CONDITIONS,
                      indoor=STANDARD_CONDITIONS,
-                     compressor_speed=0):
+                     compressor_speed=0,refrigerant_charge_deviation=0):
     self.outdoor = outdoor
     self.indoor = indoor
     self.compressor_speed = compressor_speed # compressor speed index (0 = full speed, 1 = next lowest, ...)
+    self.refrigerant_charge_deviation = refrigerant_charge_deviation # for grading calculations
     self.rated_air_flow_set = False
 
   def set_rated_air_flow(self, air_vol_flow_per_rated_cap, net_total_cooling_capacity_rated):
@@ -29,11 +30,11 @@ class OperatingConditions:
 class CoolingConditions(OperatingConditions):
   def __init__(self,outdoor=PsychState(drybulb=fr_u(95.0,"°F"),wetbulb=fr_u(75.0,"°F")),
                     indoor=PsychState(drybulb=fr_u(80.0,"°F"),wetbulb=fr_u(67.0,"°F")),
-                    compressor_speed=0):
-    super().__init__(outdoor, indoor, compressor_speed)
+                    compressor_speed=0,refrigerant_charge_deviation=0):
+    super().__init__(outdoor, indoor, compressor_speed,refrigerant_charge_deviation)
 
 class HeatingConditions(OperatingConditions):
   def __init__(self,outdoor=PsychState(drybulb=fr_u(47.0,"°F"),wetbulb=fr_u(43.0,"°F")),
                     indoor=PsychState(drybulb=fr_u(70.0,"°F"),wetbulb=fr_u(60.0,"°F")),
-                    compressor_speed=0):
-    super().__init__(outdoor, indoor, compressor_speed)
+                    compressor_speed=0,refrigerant_charge_deviation=0):
+    super().__init__(outdoor, indoor, compressor_speed,refrigerant_charge_deviation)
