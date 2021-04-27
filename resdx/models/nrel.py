@@ -137,3 +137,8 @@ class NRELDXModel(DXModel):
     h_sensible = psychrolib.GetMoistAirEnthalpy(conditions.indoor.db_C,w_ADP)
     return Q_t*(h_sensible - h_ADP)/(h_i - h_ADP)
 
+   # delete later just to test grading
+  @staticmethod
+  def gross_shr(conditions):
+    return 0.7
+
