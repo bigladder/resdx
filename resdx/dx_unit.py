@@ -14,6 +14,9 @@ from .models import RESNETDXModel
 def interpolate(f, cond_1, cond_2, x):
   return f(cond_1) + (f(cond_2) - f(cond_1))/(cond_2.outdoor.db - cond_1.outdoor.db)*(x - cond_1.outdoor.db)
 
+def calc_linear(coeff, in_1, in_2, in_3):
+  return coeff[0] + coeff[1]*in_1 + coeff[2]*in_2 + coeff[3]*in_3
+
 class CyclingMethod(Enum):
   BETWEEN_LOW_FULL = 1
   BETWEEN_OFF_FULL = 2
@@ -57,7 +60,7 @@ class DXUnit:
                     net_total_cooling_capacity_rated=[fr_u(3.0,'ton_of_refrigeration')],
                     gross_cooling_cop_rated=[3.72],
                     net_cooling_cop_rated=None,
-                    fan_efficacy_cooling_rated=[fr_u(0.25,'W/(cu_ft/min)')],
+                    fan_efficacy_cooling_rated=[fr_u(0.25,'W/(cu_ft/min)')], # Should we use a y=unique name for both heating and cooling?
                     flow_rated_per_cap_cooling_rated = [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")], # Per net total cooling capacity
                     c_d_cooling=0.1,
                     net_heating_capacity_rated=[fr_u(3.0,'ton_of_refrigeration')],
@@ -188,13 +191,13 @@ class DXUnit:
     if not all(earlier >= later for earlier, later in zip(array, array[1:])):
       sys.exit(f'Arrays must be in order of decreasing capacity. Array items are {array}.')
 
-  def make_condition(self, condition_type, compressor_speed=0, indoor=None, outdoor=None):
+  def make_condition(self, condition_type, compressor_speed=0, refrigerant_charge_deviation=0, indoor=None, outdoor=None):
     if indoor is None:
       indoor = condition_type().indoor
     if outdoor is None:
       outdoor = condition_type().outdoor
 
-    condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed)
+    condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed,refrigerant_charge_deviation=refrigerant_charge_deviation)
     if condition_type == CoolingConditions:
       condition.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed])
     else: # if condition_type == HeatingConditions:
@@ -505,6 +508,147 @@ class DXUnit:
 
     hspf = q_sum/(e_sum + rh_sum) * f_def # eq. 11.133
     return to_u(hspf,'Btu/Wh')
+
+  #####################
+  ### Grading Model ###
+  #####################
+  def grading_capacity(self, mode, conditions = None): # mode  = heating | cooling
+    if mode == 'heating':
+      if conditions is None:
+        conditions = self.H1_full_cond
+      T_idb = to_u(conditions.indoor.db,"°F") # Cutler curves use °F
+      T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
+      cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb) # From Cutler for now
+      cap_fault = self.cap_chg_heating(conditions) * self.cap_af_heating(conditions) / self.cap_af_chg_heating(conditions)
+      capacity_adjusted = self.gross_heating_capacity_rated[0] * cap_FT * cap_fault
+    else: # cooling
+      if conditions is None:
+        conditions = self.A_full_cond
+      T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Cutler curves use °F
+      T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
+      cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb) # From Cutler for now
+      cap_fault = self.cap_chg_cooling(conditions) * self.cap_af_cooling(conditions) / self.cap_af_chg_cooling(conditions)
+      capacity_adjusted = self.gross_total_cooling_capacity_rated[0] * cap_FT * cap_fault
+    return capacity_adjusted
+
+  def cap_chg_heating(self, conditions):
+    T_odb = to_u(conditions.outdoor.db,"°C") # I'm assuming the curves here use °c
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      return calc_linear([1,0,0,calc_linear([-0.002950, 0, 0.000738, -0.00641],0,T_odb,f_chg)],0,0,f_chg)
+    else:
+      return calc_linear([1,0,0,calc_linear([-0.0339, 0, 0.0203, -2.62],0,T_odb,f_chg)],0,0,f_chg)
+
+  def cap_af_chg_heating(self,conditions):
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      cf_af_chg = 1/calc_linear([1,0,0,calc_linear([-0.002950, 0, 0.000738, -0.00641],0,8.33,f_chg)],0,0,f_chg)
+    else:
+      cf_af_chg = 1.0/calc_linear([1,0,0,calc_linear([-0.0339, 0, 0.0203, -2.62],0,8.33,f_chg)],0,0,f_chg)
+    return calc_quad([0.694, 0.474, -0.168],cf_af_chg)
+
+
+  def cap_af_heating(self,conditions):
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      f_af_comb = (conditions.air_mass_flow_fraction)/calc_linear([1,0,0,calc_linear([-0.002950, 0, 0.000738, -0.00641],0,8.33,f_chg)],0,0,f_chg)
+    else:
+      f_af_comb = (conditions.air_mass_flow_fraction)/calc_linear([1,0,0,calc_linear([-0.0339, 0, 0.0203, -2.62],0,8.33,f_chg)],0,0,f_chg)
+    return calc_quad([0.694, 0.474, -0.168],f_af_comb)
+
+  def cap_chg_cooling(self, conditions):
+    T_idb = to_u(conditions.indoor.db,"°C") # I'm assuming the curves here use °c
+    T_odb = to_u(conditions.outdoor.db,"°C") # I'm assuming the curves here use °c
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      return calc_linear([1,0,0,calc_linear([-0.163, 0.0114, -0.00021, -0.14],T_idb,T_odb,f_chg)],0,0,f_chg)
+    else:
+      return calc_linear([1,0,0,calc_linear([-0.946, 0.0493, -0.00118, -1.15],T_idb,T_odb,f_chg)],0,0,f_chg)
+
+  def cap_af_chg_cooling(self,conditions):
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      cf_af_chg = 1.0/calc_linear([1,0,0,calc_linear([-0.163, 0.0114, -0.00021, -0.14],26.67,35.0,f_chg)],0,0,f_chg)
+    else:
+      cf_af_chg = 1.0/calc_linear([1,0,0,calc_linear([-0.946, 0.0493, -0.00118, -1.15],26.67,35.0,f_chg)],0,0,f_chg)
+    return calc_quad([0.719, 0.418, -0.137],cf_af_chg)
+
+  def cap_af_cooling(self,conditions):
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      f_af_comb = (conditions.air_mass_flow_fraction)/calc_linear([1,0,0,calc_linear([-0.163, 0.0114, -0.00021, -0.14],26.67,35.0,f_chg)],0,0,f_chg)
+    else:
+      f_af_comb = (conditions.air_mass_flow_fraction)/calc_linear([1,0,0,calc_linear([-0.946, 0.0493, -0.00118, -1.15],26.67,35.0,f_chg)],0,0,f_chg)
+    return calc_quad([0.719, 0.418, -0.137],f_af_comb)
+
+  def grading_cop(self, mode, conditions = None): # mode  = heating | cooling
+    if mode == 'heating':
+      if conditions is None:
+        conditions = self.H1_full_cond
+      T_idb = to_u(conditions.indoor.db,"°F") # Cutler curves use °F
+      T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
+      eir_FT = calc_biquad([0.718398423,0.003498178, 0.000142202, -0.005724331, 0.00014085, -0.000215321], T_idb, T_odb)
+      cop_fault = self.cop_chg_heating(conditions) * self.cop_af_heating(conditions) / self.cop_af_chg_heating(conditions)
+      cop_adjusted = self.gross_heating_cop_rated[0] * (1/eir_FT) * cop_fault
+    else: # cooling
+      if conditions is None:
+        conditions = self.A_full_cond
+      T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Cutler curves use °F
+      T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
+      eir_FT = calc_biquad([-3.437356399, 0.136656369, -0.001049231, -0.0079378, 0.000185435, -0.0001441], T_iwb, T_odb)
+      cop_fault = self.cop_chg_cooling(conditions) * self.cop_af_cooling(conditions) / self.cop_af_chg_cooling(conditions)
+      cop_adjusted = self.gross_cooling_cop_rated[0] * (1/eir_FT) * cop_fault
+    return cop_adjusted
+
+  def cop_chg_heating(self, conditions):
+    T_odb = to_u(conditions.outdoor.db,"°C") # I'm assuming the curves here use °c
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      return self.cap_chg_heating(conditions) / calc_linear([1,0,0,calc_linear([-0.0594, 0, 0.0159, 1.89],0,T_odb,f_chg)],0,0,f_chg)
+    else:
+      return self.cap_chg_heating(conditions) / calc_linear([1,0,0,calc_linear([0.0616, 0, 0.00446, -0.26],0,T_odb,f_chg)],0,0,f_chg)
+
+  def cop_af_chg_heating(self, conditions):
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      cf_af_chg = 1.0/calc_linear([1,0,0,calc_linear([-0.002950, 0, 0.000738, -0.00641],0,8.33,f_chg)],0,0,f_chg)
+    else:
+      cf_af_chg = 1.0/calc_linear([1,0,0,calc_linear([-0.0339, 0, 0.0203, -2.62],0,8.33,f_chg)],0,0,f_chg)
+    return 1.0/calc_quad([2.19, -1.94, 0.757],cf_af_chg)
+
+
+  def cop_af_heating(self, conditions):
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      f_af_comb = (conditions.air_mass_flow_fraction)/calc_linear([1,0,0,calc_linear([-0.002950, 0, 0.000738, -0.00641],0,8.33,f_chg)],0,0,f_chg)
+    else:
+      f_af_comb = (conditions.air_mass_flow_fraction)/calc_linear([1,0,0,calc_linear([-0.0339, 0, 0.0203, -2.62],0,8.33,f_chg)],0,0,f_chg)
+    return 1.0 / calc_quad([2.19, -1.94, 0.757],f_af_comb)
+
+  def cop_chg_cooling(self, conditions):
+    T_idb = to_u(conditions.indoor.db,"°C") # I'm assuming the curves here use °c
+    T_odb = to_u(conditions.outdoor.db,"°C") # I'm assuming the curves here use °c
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      return self.cap_chg_cooling(conditions)/calc_linear([1,0,0,calc_linear([0.219, -0.00501, 0.000989, 0.284],T_idb,T_odb,f_chg)],0,0,f_chg)
+    else:
+      return self.cap_chg_cooling(conditions)/calc_linear([1,0,0,calc_linear([-0.313, 0.0115, 0.00266, -0.116],T_idb,T_odb,f_chg)],0,0,f_chg)
+
+  def cop_af_chg_cooling(self, conditions):
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      cf_af_chg = 1.0/calc_linear([1,0,0,calc_linear([-0.163, 0.0114, -0.00021, -0.14],26.67,35.0,f_chg)],0,0,f_chg)
+    else:
+      cf_af_chg = 1.0/calc_linear([1,0,0,calc_linear([-0.946, 0.0493, -0.00118, -1.15],26.67,35.0,f_chg)],0,0,f_chg)
+    return 1.0/calc_quad([1.143487507, -0.13943972, -0.004047787],cf_af_chg)
+
+  def cop_af_cooling(self, conditions):
+    f_chg = conditions.refrigerant_charge_deviation
+    if f_chg >= 0.0: # Overcharge fault?
+      f_af_comb = (conditions.air_mass_flow_fraction)/calc_linear([1,0,0,calc_linear([-0.163, 0.0114, -0.00021, -0.14],26.67,35.0,f_chg)],0,0,f_chg)
+    else:
+      f_af_comb = (conditions.air_mass_flow_fraction)/calc_linear([1,0,0,calc_linear([-0.946, 0.0493, -0.00118, -1.15],26.67,35.0,f_chg)],0,0,f_chg)
+    return 1.0/calc_quad([0.718664047, 0.41797409, -0.136638137],f_af_comb)
 
   def print_cooling_info(self):
     print(f"SEER: {self.seer()}")
