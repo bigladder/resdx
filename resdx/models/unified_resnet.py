@@ -1,7 +1,7 @@
 from .base_model import DXModel
 from .nrel import NRELDXModel
 from .title24 import Title24DXModel
-from .defrost_model import HendersonDefrostModel
+from .henderson_defrost_model import HendersonDefrostModel
 
 class RESNETDXModel(DXModel):
   @staticmethod

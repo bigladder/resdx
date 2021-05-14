@@ -31,7 +31,7 @@ sns.set()
 import numpy as np
 
 # Plot integrated power and capacity
-T_out = np.arange(-23,75+1,1)
+T_out = np.arange(-23,76,1)
 conditions = [t24_unit.make_condition(resdx.HeatingConditions,outdoor=resdx.PsychState(drybulb=resdx.fr_u(T,"°F"),rel_hum=0.4)) for T in T_out]
 Q_integrated = [t24_unit.gross_integrated_heating_capacity(condition) for condition in conditions]
 P_integrated = [t24_unit.gross_integrated_heating_power(condition) for condition in conditions]
