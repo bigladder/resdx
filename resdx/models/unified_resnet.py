@@ -1,6 +1,7 @@
 from .base_model import DXModel
 from .nrel import NRELDXModel
 from .title24 import Title24DXModel
+from .henderson_defrost_model import HendersonDefrostModel
 
 class RESNETDXModel(DXModel):
   @staticmethod
@@ -25,7 +26,7 @@ class RESNETDXModel(DXModel):
 
   @staticmethod
   def gross_integrated_heating_capacity(conditions, system):
-    return NRELDXModel.gross_integrated_heating_capacity(conditions, system)
+    return HendersonDefrostModel.gross_integrated_heating_capacity(conditions, system)
 
   @staticmethod
   def gross_steady_state_heating_power(conditions, system):
@@ -33,4 +34,4 @@ class RESNETDXModel(DXModel):
 
   @staticmethod
   def gross_integrated_heating_power(conditions, system):
-    return NRELDXModel.gross_integrated_heating_power(conditions, system)
+    return HendersonDefrostModel.gross_integrated_heating_power(conditions, system)

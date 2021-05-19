@@ -22,6 +22,7 @@ def task_examples():
     'actions': [
       (create_folder, [OUTPUT_PATH]),
       'python examples/model-comparison.py',
+      'python examples/model-verification.py',
       'python examples/inverse-calculations.py'],
     'clean': True
   }
