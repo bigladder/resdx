@@ -27,7 +27,7 @@ class PsychState:
     elif "enthalpy" in kwargs:
       self.set_h(kwargs["enthalpy"])
     else:
-      sys.exit(f'Unknonw key word argument {kwargs}.')
+      sys.exit(f'Unknown or missing key word argument {kwargs}.')
 
   def set_wb(self, wb):
     self.wb = wb

@@ -96,9 +96,13 @@ class DXUnit:
     self.model_data = {}
 
     # Initialize calculated values
-    self.number_of_speeds = len(self.gross_cooling_cop_rated)
+    if self.net_cooling_cop_rated is None:
+      self.number_of_speeds = len(self.gross_cooling_cop_rated)
+    else:
+      self.number_of_speeds = len(self.net_cooling_cop_rated)
+
     self.cooling_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_cooling_rated[i]*self.flow_rated_per_cap_cooling_rated[i] for i in range(self.number_of_speeds)]
-    self.heating_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_heating_rated[i]*self.flow_rated_per_cap_heating_rated[i] for i in range(self.number_of_speeds)]
+    self.heating_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_heating_rated[i]*self.flow_rated_per_cap_heating_rated[i] for i in range(self.number_of_speeds)] # note: heating fan flow is intentionally based on cooling capacity
     self.gross_total_cooling_capacity_rated = [self.net_total_cooling_capacity_rated[i] + self.cooling_fan_power_rated[i] for i in range(self.number_of_speeds)]
     self.gross_heating_capacity_rated = [self.net_heating_capacity_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_speeds)]
     self.bypass_factor_rated = [None]*self.number_of_speeds
