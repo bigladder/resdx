@@ -18,6 +18,11 @@ class CyclingMethod(Enum):
   BETWEEN_LOW_FULL = 1
   BETWEEN_OFF_FULL = 2
 
+class StagingType(Enum):
+  SINGLE_STAGE = 1
+  TWO_STAGE = 2
+  VARIABLE_SPEED = 3
+
 # AHRI 210/240 2017 distributions
 class HeatingDistribution:
   outdoor_drybulbs = [fr_u(62.0 - delta*5.0,"°F") for delta in range(18)] # 62.0 to -23 F by 5 F increments
@@ -70,6 +75,7 @@ class DXUnit:
                     heating_on_temperature = fr_u(14.0,"°F"), # TODO: Check value taken from Scott's script for single-stage
                     defrost=Defrost(),
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
+                    staging_type=None, # Allow default based on inputs
                     **kwargs):  # Additional inputs used for specific models
 
     # Initialize direct values
@@ -97,49 +103,54 @@ class DXUnit:
 
     # Initialize calculated values
     if self.net_cooling_cop_rated is None:
-      self.number_of_speeds = len(self.gross_cooling_cop_rated)
+      self.number_of_input_stages = len(self.gross_cooling_cop_rated)
     else:
-      self.number_of_speeds = len(self.net_cooling_cop_rated)
+      self.number_of_input_stages = len(self.net_cooling_cop_rated)
 
-    self.cooling_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_cooling_rated[i]*self.flow_rated_per_cap_cooling_rated[i] for i in range(self.number_of_speeds)]
-    self.heating_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_heating_rated[i]*self.flow_rated_per_cap_heating_rated[i] for i in range(self.number_of_speeds)] # note: heating fan flow is intentionally based on cooling capacity
-    self.gross_total_cooling_capacity_rated = [self.net_total_cooling_capacity_rated[i] + self.cooling_fan_power_rated[i] for i in range(self.number_of_speeds)]
-    self.gross_heating_capacity_rated = [self.net_heating_capacity_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_speeds)]
-    self.bypass_factor_rated = [None]*self.number_of_speeds
-    self.normalized_ntu = [None]*self.number_of_speeds
+    if staging_type == None:
+      self.staging_type = StagingType(min(self.number_of_input_stages,3))
+    else:
+      self.staging_type = staging_type
+
+    self.cooling_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_cooling_rated[i]*self.flow_rated_per_cap_cooling_rated[i] for i in range(self.number_of_input_stages)]
+    self.heating_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_heating_rated[i]*self.flow_rated_per_cap_heating_rated[i] for i in range(self.number_of_input_stages)] # note: heating fan flow is intentionally based on cooling capacity
+    self.gross_total_cooling_capacity_rated = [self.net_total_cooling_capacity_rated[i] + self.cooling_fan_power_rated[i] for i in range(self.number_of_input_stages)]
+    self.gross_heating_capacity_rated = [self.net_heating_capacity_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_input_stages)]
+    self.bypass_factor_rated = [None]*self.number_of_input_stages
+    self.normalized_ntu = [None]*self.number_of_input_stages
 
     # Exclusive checks
     if self.net_cooling_cop_rated is None:
       if self.gross_cooling_cop_rated is None:
         sys.exit(f'Must define either \'net_cooling_cop_rated\' or \'gross_cooling_cop_rated\'.')
       else:
-        self.gross_cooling_power_rated = [self.gross_total_cooling_capacity_rated[i]/self.gross_cooling_cop_rated[i] for i in range(self.number_of_speeds)]
-        self.net_cooling_power_rated = [self.gross_cooling_power_rated[i] + self.cooling_fan_power_rated[i] for i in range(self.number_of_speeds)]
-        self.net_cooling_cop_rated = [self.net_total_cooling_capacity_rated[i]/self.net_cooling_power_rated[i] for i in range(self.number_of_speeds)]
+        self.gross_cooling_power_rated = [self.gross_total_cooling_capacity_rated[i]/self.gross_cooling_cop_rated[i] for i in range(self.number_of_input_stages)]
+        self.net_cooling_power_rated = [self.gross_cooling_power_rated[i] + self.cooling_fan_power_rated[i] for i in range(self.number_of_input_stages)]
+        self.net_cooling_cop_rated = [self.net_total_cooling_capacity_rated[i]/self.net_cooling_power_rated[i] for i in range(self.number_of_input_stages)]
 
     if self.gross_cooling_cop_rated is None:
       if self.net_cooling_cop_rated is None:
         sys.exit(f'Must define either \'net_cooling_cop_rated\' or \'gross_cooling_cop_rated\'.')
       else:
-        self.net_cooling_power_rated = [self.net_total_cooling_capacity_rated[i]/self.net_cooling_cop_rated[i] for i in range(self.number_of_speeds)]
-        self.gross_cooling_power_rated = [self.net_cooling_power_rated[i] - self.cooling_fan_power_rated[i] for i in range(self.number_of_speeds)]
-        self.gross_cooling_cop_rated = [self.gross_total_cooling_capacity_rated[i]/self.gross_cooling_power_rated[i] for i in range(self.number_of_speeds)]
+        self.net_cooling_power_rated = [self.net_total_cooling_capacity_rated[i]/self.net_cooling_cop_rated[i] for i in range(self.number_of_input_stages)]
+        self.gross_cooling_power_rated = [self.net_cooling_power_rated[i] - self.cooling_fan_power_rated[i] for i in range(self.number_of_input_stages)]
+        self.gross_cooling_cop_rated = [self.gross_total_cooling_capacity_rated[i]/self.gross_cooling_power_rated[i] for i in range(self.number_of_input_stages)]
 
     if self.net_heating_cop_rated is None:
       if self.gross_heating_cop_rated is None:
         sys.exit(f'Must define either \'net_heating_cop_rated\' or \'gross_heating_cop_rated\'.')
       else:
-        self.gross_heating_power_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_cop_rated[i] for i in range(self.number_of_speeds)]
-        self.net_heating_power_rated = [self.gross_heating_power_rated[i] + self.heating_fan_power_rated[i] for i in range(self.number_of_speeds)]
-        self.net_heating_cop_rated = [self.net_heating_capacity_rated[i]/self.net_heating_power_rated[i] for i in range(self.number_of_speeds)]
+        self.gross_heating_power_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_cop_rated[i] for i in range(self.number_of_input_stages)]
+        self.net_heating_power_rated = [self.gross_heating_power_rated[i] + self.heating_fan_power_rated[i] for i in range(self.number_of_input_stages)]
+        self.net_heating_cop_rated = [self.net_heating_capacity_rated[i]/self.net_heating_power_rated[i] for i in range(self.number_of_input_stages)]
 
     if self.gross_heating_cop_rated is None:
       if self.net_heating_cop_rated is None:
         sys.exit(f'Must define either \'net_heating_cop_rated\' or \'gross_heating_cop_rated\'.')
       else:
-        self.net_heating_power_rated = [self.net_heating_capacity_rated[i]/self.net_heating_cop_rated[i] for i in range(self.number_of_speeds)]
-        self.gross_heating_power_rated = [self.net_heating_power_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_speeds)]
-        self.gross_heating_cop_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_power_rated[i] for i in range(self.number_of_speeds)]
+        self.net_heating_power_rated = [self.net_heating_capacity_rated[i]/self.net_heating_cop_rated[i] for i in range(self.number_of_input_stages)]
+        self.gross_heating_power_rated = [self.net_heating_power_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_input_stages)]
+        self.gross_heating_cop_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_power_rated[i] for i in range(self.number_of_input_stages)]
 
     ## Set rating conditions
     self.A_full_cond = self.make_condition(CoolingConditions)
@@ -152,7 +163,7 @@ class DXUnit:
     self.gross_shr_cooling_rated = [self.model.gross_shr(self.A_full_cond)]
     self.calculate_bypass_factor_rated(0)
 
-    if self.number_of_speeds > 1:
+    if self.staging_type != StagingType.SINGLE_STAGE:
       self.A_low_cond = self.make_condition(CoolingConditions,compressor_speed=1) # Not used in AHRI ratings, only used for 'rated' SHR calculations at low speeds
       self.B_low_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(82.0,"°F"),wetbulb=fr_u(65.0,"°F")),compressor_speed=1)
       self.F_low_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(67.0,"°F"),wetbulb=fr_u(53.5,"°F")),compressor_speed=1)
@@ -175,8 +186,8 @@ class DXUnit:
     self.check_array_order(self.net_heating_capacity_rated)
 
   def check_array_length(self, array):
-    if (len(array) != self.number_of_speeds):
-      sys.exit(f'Unexpected array length ({len(array)}). Number of speeds is {self.number_of_speeds}. Array items are {array}.')
+    if (len(array) != self.number_of_input_stages):
+      sys.exit(f'Unexpected array length ({len(array)}). Number of speeds is {self.number_of_input_stages}. Array items are {array}.')
 
   def check_array_lengths(self):
     self.check_array_length(self.fan_efficacy_cooling_rated)
@@ -305,10 +316,10 @@ class DXUnit:
 
   def seer(self):
     '''Based on AHRI 210/240 2017'''
-    if self.number_of_speeds == 1:
+    if self.staging_type == StagingType.SINGLE_STAGE:
       plf = 1.0 - 0.5*self.c_d_cooling # eq. 11.56
       seer = plf*self.net_cooling_cop(self.B_full_cond) # eq. 11.55 (using COP to keep things in SI units for now)
-    else:  #elif self.number_of_speeds == 2:
+    elif self.staging_type == StagingType.TWO_STAGE:
       sizing_factor = 1.1 # eq. 11.61
       q_sum = 0.0
       e_sum = 0.0
@@ -454,7 +465,7 @@ class DXUnit:
       else:
         hlf_full = 1.0 # eq. 11.116
 
-      if self.number_of_speeds == 1:
+      if self.staging_type == StagingType.SINGLE_STAGE:
         plf_full = 1.0 - self.c_d_heating*(1.0 - hlf_full) # eq. 11.125
         e = p_full*hlf_full*delta_full*n/plf_full # eq. 11.156 (not shown for single stage)
         rh = (bl - q_full*hlf_full*delta_full)*n # eq. 11.126
@@ -515,7 +526,7 @@ class DXUnit:
 
   def print_cooling_info(self):
     print(f"SEER: {self.seer()}")
-    for speed in range(self.number_of_speeds):
+    for speed in range(self.number_of_input_stages):
       conditions = CoolingConditions(compressor_speed=speed)
       conditions.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[speed], self.net_total_cooling_capacity_rated[speed])
       print(f"Net cooling power for stage {speed + 1} : {self.net_cooling_power(conditions)}")
@@ -525,7 +536,7 @@ class DXUnit:
 
   def print_heating_info(self, region=4):
     print(f"HSPF (region {region}): {self.hspf(region)}")
-    for speed in range(self.number_of_speeds):
+    for speed in range(self.number_of_input_stages):
       conditions = HeatingConditions(compressor_speed=speed)
       conditions.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[speed], self.net_total_cooling_capacity_rated[speed])
       print(f"Net heating power for stage {speed + 1} : {self.net_integrated_heating_power(conditions)}")
