@@ -75,7 +75,7 @@ class NRELDXModel(DXModel):
   @staticmethod
   def get_cooling_cop60(conditions, system):
     if "cooling_cop60" not in system.model_data:
-      system.model_data["cooling_cop60"] = [None]*system.number_of_speeds
+      system.model_data["cooling_cop60"] = [None]*system.number_of_input_stages
 
     if system.model_data["cooling_cop60"][conditions.compressor_speed] is not None:
       return system.model_data["cooling_cop60"][conditions.compressor_speed]

@@ -136,7 +136,7 @@ class Title24DXModel(DXModel):
     '''
     # If not already in the model data, initialize the model data
     if "cap17" not in system.model_data:
-      system.model_data["cap17"] = [None]*system.number_of_speeds
+      system.model_data["cap17"] = [None]*system.number_of_input_stages
 
     if system.model_data["cap17"][conditions.compressor_speed] is not None:
       # If it's already in the model data, return the stored value
@@ -155,7 +155,7 @@ class Title24DXModel(DXModel):
   @staticmethod
   def get_cap35(conditions, system):
     if "cap35" not in system.model_data:
-      system.model_data["cap35"] = [None]*system.number_of_speeds
+      system.model_data["cap35"] = [None]*system.number_of_input_stages
 
     if system.model_data["cap35"][conditions.compressor_speed] is not None:
       return system.model_data["cap35"][conditions.compressor_speed]
@@ -266,10 +266,10 @@ class Title24DXModel(DXModel):
   @staticmethod
   def calculate_cops(conditions, system):
     if "cop35" not in system.model_data:
-      system.model_data["cop35"] = [None]*system.number_of_speeds
+      system.model_data["cop35"] = [None]*system.number_of_input_stages
 
     if "cop17" not in system.model_data:
-      system.model_data["cop17"] = [None]*system.number_of_speeds
+      system.model_data["cop17"] = [None]*system.number_of_input_stages
 
     hspf = system.kwargs["input_hspf"]
     root_fn = lambda cop17 : Title24DXModel.check_hspf(conditions, system, cop17) - hspf
