@@ -9,23 +9,25 @@ from .models import RESNETDXModel
 
 class VCHPDataPoint:
   def __init__(self,drybulb,capacities,cops):
-      # capacities and cops are array like with two elements: 0 = @ maximum capacity, 1 = @ minimum capacity
+      # capacities and cops are array like objects with one value for each capacity stage
       self.drybulb = drybulb
       self.capacities = capacities
       self.cops = cops
 
 class VCHPDataPoints(list):
-  def __init__(self):
-    self.get_capacity = [None]*2
-    self.get_cop = [None]*2
-    super().__init__()
 
   def setup(self):
     # Sort arrays with increasing drybulb
     self.sort(key=lambda point : point.drybulb)
 
-    # create two-element arrays of functions for interpolation: 0 = @ maximum capacity, 1 = @ minimum capacity
-    for i in range(2):
+    # TODO: Check to make sure all arrays are the same length
+
+    self.number_of_stages = len(self[0].capacities)
+    self.get_capacity = [None]*self.number_of_stages
+    self.get_cop = [None]*self.number_of_stages
+
+    # create arrays of functions for interpolation: 0 = @ maximum capacity, 1 = @ minimum capacity
+    for i in range(self.number_of_stages):
       self.get_capacity[i] = interpolate.interp1d(
         [point.drybulb for point in self],
         [point.capacities[i] for point in self],
@@ -37,37 +39,67 @@ class VCHPDataPoints(list):
 
 
 def make_vchp_unit(
-  cooling_data,
-  heating_data,
+  net_cooling_data,
+  net_heating_data,
+  cooling_full_load_speed_ratio=1.0,
+  cooling_intermediate_stage_speed_ratio=0.5,
+  heating_full_load_speed_ratio=1.0,
+  heating_intermediate_stage_speed_ratio=0.5,
+  c_d_cooling=0.25,
+  c_d_heating=0.25,
   fan_efficacy_cooling_rated=[fr_u(0.2075,'W/(cu_ft/min)')]*2,
   fan_efficacy_heating_rated=[fr_u(0.2075,'W/(cu_ft/min)')]*2,
   flow_rated_per_cap_cooling_rated=[fr_u(400.0,"(cu_ft/min)/ton_of_refrigeration")]*2,
   flow_rated_per_cap_heating_rated=[fr_u(400.0,"(cu_ft/min)/ton_of_refrigeration")]*2,
   base_model=RESNETDXModel()):
 
+  # Add "full" speed
+  if cooling_full_load_speed_ratio < 1.0:
+    for point in net_cooling_data:
+      point.capacities.insert(1, point.capacities[1] + cooling_full_load_speed_ratio*(point.capacities[0] - point.capacities[1]))
+      point.cops.insert(1, point.cops[1] + cooling_full_load_speed_ratio*(point.cops[0] - point.cops[1]))
+    fan_efficacy_cooling_rated.insert(1, fan_efficacy_cooling_rated[1] + cooling_full_load_speed_ratio*(fan_efficacy_cooling_rated[0] - fan_efficacy_cooling_rated[1]))
+    flow_rated_per_cap_cooling_rated.insert(1, flow_rated_per_cap_cooling_rated[1] + cooling_full_load_speed_ratio*(flow_rated_per_cap_cooling_rated[0] - flow_rated_per_cap_cooling_rated[1]))
+
+  if heating_full_load_speed_ratio < 1.0:
+    for point in net_heating_data:
+      point.capacities.insert(1, point.capacities[1] + heating_full_load_speed_ratio*(point.capacities[0] - point.capacities[1]))
+      point.cops.insert(1, point.cops[1] + heating_full_load_speed_ratio*(point.cops[0] - point.cops[1]))
+    fan_efficacy_heating_rated.insert(1, fan_efficacy_heating_rated[1] + heating_full_load_speed_ratio*(fan_efficacy_heating_rated[0] - fan_efficacy_heating_rated[1]))
+    flow_rated_per_cap_heating_rated.insert(1, flow_rated_per_cap_heating_rated[1] + heating_full_load_speed_ratio*(flow_rated_per_cap_heating_rated[0] - flow_rated_per_cap_heating_rated[1]))
+
+  # Add intermediate speed
+  for point in net_cooling_data:
+    point.capacities.insert(1, point.capacities[1] + cooling_intermediate_stage_speed_ratio*(point.capacities[0] - point.capacities[1]))
+    point.cops.insert(1, point.cops[1] + cooling_intermediate_stage_speed_ratio*(point.cops[0] - point.cops[1]))
+  fan_efficacy_cooling_rated.insert(1, fan_efficacy_cooling_rated[1] + cooling_intermediate_stage_speed_ratio*(fan_efficacy_cooling_rated[0] - fan_efficacy_cooling_rated[1]))
+  flow_rated_per_cap_cooling_rated.insert(1, flow_rated_per_cap_cooling_rated[1] + cooling_intermediate_stage_speed_ratio*(flow_rated_per_cap_cooling_rated[0] - flow_rated_per_cap_cooling_rated[1]))
+
+  for point in net_heating_data:
+    point.capacities.insert(1, point.capacities[1] + heating_intermediate_stage_speed_ratio*(point.capacities[0] - point.capacities[1]))
+    point.cops.insert(1, point.cops[1] + heating_intermediate_stage_speed_ratio*(point.cops[0] - point.cops[1]))
+  fan_efficacy_heating_rated.insert(1, fan_efficacy_heating_rated[1] + heating_intermediate_stage_speed_ratio*(fan_efficacy_heating_rated[0] - fan_efficacy_heating_rated[1]))
+  flow_rated_per_cap_heating_rated.insert(1, flow_rated_per_cap_heating_rated[1] + heating_intermediate_stage_speed_ratio*(flow_rated_per_cap_heating_rated[0] - flow_rated_per_cap_heating_rated[1]))
+
   # Setup data
-  cooling_data.setup()
-  heating_data.setup()
+  net_cooling_data.setup()
+  net_heating_data.setup()
 
-  cooling_rated_fan_power = [None]*2
-  heating_rated_fan_power = [None]*2
+  cooling_rated_fan_power = [net_cooling_data.get_capacity[i](fr_u(95.0,"°F"))*fan_efficacy_cooling_rated[i]*flow_rated_per_cap_cooling_rated[i] for i in range(net_cooling_data.number_of_stages)]
+  heating_rated_fan_power = [net_heating_data.get_capacity[i](fr_u(47.0,"°F"))*fan_efficacy_heating_rated[i]*flow_rated_per_cap_heating_rated[i] for i in range(net_heating_data.number_of_stages)]
 
-  for i in range(2):
-    cooling_rated_fan_power[i] = cooling_data.get_capacity[i](fr_u(95.0,"°F"))*fan_efficacy_cooling_rated[i]*flow_rated_per_cap_cooling_rated[i]
-    heating_rated_fan_power[i] = heating_data.get_capacity[i](fr_u(47.0,"°F"))*fan_efficacy_heating_rated[i]*flow_rated_per_cap_heating_rated[i]
-
-  gross_cooling_data = copy.deepcopy(cooling_data)
+  gross_cooling_data = copy.deepcopy(net_cooling_data)
   for point in gross_cooling_data:
-    for i in range(2):
+    for i in range(gross_cooling_data.number_of_stages):
       net_power = point.capacities[i]/point.cops[i]
       gross_capacity = point.capacities[i] + cooling_rated_fan_power[i] # removing fan heat increases capacity
       gross_power = net_power - cooling_rated_fan_power[i]
       point.capacities[i] = gross_capacity
       point.cops[i] = gross_capacity/gross_power
 
-  gross_heating_data = copy.deepcopy(heating_data)
+  gross_heating_data = copy.deepcopy(net_heating_data)
   for point in gross_heating_data:
-    for i in range(2):
+    for i in range(gross_heating_data.number_of_stages):
       net_power = point.capacities[i]/point.cops[i]
       gross_capacity = point.capacities[i] - heating_rated_fan_power[i] # removing fan heat decreases capacity
       gross_power = net_power - heating_rated_fan_power[i]
@@ -125,28 +157,18 @@ def make_vchp_unit(
   new_model.gross_steady_state_heating_power = new_gross_steady_state_heating_power
 
   return DXUnit(model=new_model,
-    net_total_cooling_capacity_rated=[
-      cooling_data.get_capacity[0](fr_u(95.0,"°F")),
-      cooling_data.get_capacity[1](fr_u(95.0,"°F"))
-    ],
-    net_cooling_cop_rated=[
-      cooling_data.get_cop[0](fr_u(95.0,"°F")),
-      cooling_data.get_cop[1](fr_u(95.0,"°F"))
-    ],
-    gross_cooling_cop_rated = None, # Use net instead
-    fan_efficacy_cooling_rated=fan_efficacy_cooling_rated,
-    flow_rated_per_cap_cooling_rated=flow_rated_per_cap_cooling_rated,
-    c_d_cooling=0.25,
-    net_heating_capacity_rated=[
-      heating_data.get_capacity[0](fr_u(47.0,"°F")),
-      heating_data.get_capacity[1](fr_u(47.0,"°F"))
-    ],
-    net_heating_cop_rated=[
-      heating_data.get_cop[0](fr_u(47.0,"°F")),
-      heating_data.get_cop[1](fr_u(47.0,"°F"))
-    ],
-    gross_heating_cop_rated = None, # Use net instead
-    fan_efficacy_heating_rated=fan_efficacy_heating_rated,
-    flow_rated_per_cap_heating_rated=flow_rated_per_cap_heating_rated,
-    c_d_heating=0.25
+    net_total_cooling_capacity_rated = [net_cooling_data.get_capacity[i](fr_u(95.0,"°F")) for i in range(net_cooling_data.number_of_stages)],
+    net_cooling_cop_rated = [net_cooling_data.get_cop[i](fr_u(95.0,"°F")) for i in range(net_cooling_data.number_of_stages)],
+    gross_cooling_cop_rated  =  None, # Use net instead
+    fan_efficacy_cooling_rated = fan_efficacy_cooling_rated,
+    flow_rated_per_cap_cooling_rated = flow_rated_per_cap_cooling_rated,
+    c_d_cooling = c_d_cooling,
+    net_heating_capacity_rated = [net_heating_data.get_capacity[i](fr_u(47.0,"°F")) for i in range(net_heating_data.number_of_stages)],
+    net_heating_cop_rated = [net_heating_data.get_cop[i](fr_u(47.0,"°F")) for i in range(net_heating_data.number_of_stages)],
+    gross_heating_cop_rated  =  None, # Use net instead
+    fan_efficacy_heating_rated = fan_efficacy_heating_rated,
+    flow_rated_per_cap_heating_rated = flow_rated_per_cap_heating_rated,
+    c_d_heating = c_d_heating,
+    full_load_speed = 1 if net_cooling_data.number_of_stages > 3 else 0,
+    intermediate_speed = net_cooling_data.number_of_stages - 2
     )

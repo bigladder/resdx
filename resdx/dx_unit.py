@@ -75,6 +75,8 @@ class DXUnit:
                     heating_on_temperature = fr_u(14.0,"°F"), # TODO: Check value taken from Scott's script for single-stage
                     defrost=Defrost(),
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
+                    full_load_speed = 0,
+                    intermediate_speed = None,
                     staging_type=None, # Allow default based on inputs
                     **kwargs):  # Additional inputs used for specific models
 
@@ -96,6 +98,7 @@ class DXUnit:
     self.heating_on_temperature = heating_on_temperature
     self.defrost = defrost
     self.cycling_method = cycling_method
+    self.full_load_speed = full_load_speed
     self.kwargs = kwargs
 
     # Additional data set for a specific model
@@ -107,7 +110,14 @@ class DXUnit:
     else:
       self.number_of_input_stages = len(self.net_cooling_cop_rated)
 
-    if staging_type == None:
+    if intermediate_speed is None:
+      self.intermediate_speed = full_load_speed + 1
+    else:
+      self.intermediate_speed = intermediate_speed
+
+    self.low_speed = self.number_of_input_stages - 1
+
+    if staging_type is None:
       self.staging_type = StagingType(min(self.number_of_input_stages,3))
     else:
       self.staging_type = staging_type
@@ -153,28 +163,37 @@ class DXUnit:
         self.gross_heating_cop_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_power_rated[i] for i in range(self.number_of_input_stages)]
 
     ## Set rating conditions
-    self.A_full_cond = self.make_condition(CoolingConditions)
-    self.B_full_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(82.0,"°F"),wetbulb=fr_u(65.0,"°F")))
+    self.A_full_cond = self.make_condition(CoolingConditions,compressor_speed=self.full_load_speed)
+    self.B_full_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(82.0,"°F"),wetbulb=fr_u(65.0,"°F")),compressor_speed=self.full_load_speed)
 
-    self.H1_full_cond = self.make_condition(HeatingConditions)
-    self.H2_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(35.0,"°F"),wetbulb=fr_u(33.0,"°F")))
-    self.H3_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(17.0,"°F"),wetbulb=fr_u(15.0,"°F")))
+    self.H1_full_cond = self.make_condition(HeatingConditions,compressor_speed=self.full_load_speed)
+    self.H2_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(35.0,"°F"),wetbulb=fr_u(33.0,"°F")),compressor_speed=self.full_load_speed)
+    self.H3_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(17.0,"°F"),wetbulb=fr_u(15.0,"°F")),compressor_speed=self.full_load_speed)
 
     self.gross_shr_cooling_rated = [self.model.gross_shr(self.A_full_cond)]
-    self.calculate_bypass_factor_rated(0)
+    self.calculate_bypass_factor_rated(self.A_full_cond)
 
     if self.staging_type != StagingType.SINGLE_STAGE:
-      self.A_low_cond = self.make_condition(CoolingConditions,compressor_speed=1) # Not used in AHRI ratings, only used for 'rated' SHR calculations at low speeds
-      self.B_low_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(82.0,"°F"),wetbulb=fr_u(65.0,"°F")),compressor_speed=1)
-      self.F_low_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(67.0,"°F"),wetbulb=fr_u(53.5,"°F")),compressor_speed=1)
+      if self.staging_type == StagingType.VARIABLE_SPEED:
+        self.A_int_cond = self.make_condition(CoolingConditions,compressor_speed=self.intermediate_speed) # Not used in AHRI ratings, only used for 'rated' SHR calculations at low speeds
+        self.E_int_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(87.0,"°F"),wetbulb=fr_u(69.0,"°F")),compressor_speed=self.intermediate_speed)
 
-      self.H0_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(62.0,"°F"),wetbulb=fr_u(56.5,"°F")),compressor_speed=1)
+        self.H2_int_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(35.0,"°F"),wetbulb=fr_u(33.0,"°F")),compressor_speed=self.intermediate_speed)
+
+        self.gross_shr_cooling_rated += [self.model.gross_shr(self.A_int_cond)]
+        self.calculate_bypass_factor_rated(self.A_int_cond)
+
+      self.A_low_cond = self.make_condition(CoolingConditions,compressor_speed=self.low_speed) # Not used in AHRI ratings, only used for 'rated' SHR calculations at low speeds
+      self.B_low_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(82.0,"°F"),wetbulb=fr_u(65.0,"°F")),compressor_speed=self.low_speed)
+      self.F_low_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(67.0,"°F"),wetbulb=fr_u(53.5,"°F")),compressor_speed=self.low_speed)
+
+      self.H0_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(62.0,"°F"),wetbulb=fr_u(56.5,"°F")),compressor_speed=self.low_speed)
       self.H1_low_cond = self.make_condition(HeatingConditions,compressor_speed=1)
-      self.H2_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(35.0,"°F"),wetbulb=fr_u(33.0,"°F")),compressor_speed=1)
-      self.H3_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(17.0,"°F"),wetbulb=fr_u(15.0,"°F")),compressor_speed=1)
+      self.H2_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(35.0,"°F"),wetbulb=fr_u(33.0,"°F")),compressor_speed=self.low_speed)
+      self.H3_low_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(17.0,"°F"),wetbulb=fr_u(15.0,"°F")),compressor_speed=self.low_speed)
 
       self.gross_shr_cooling_rated += [self.model.gross_shr(self.A_low_cond)]
-      self.calculate_bypass_factor_rated(1)
+      self.calculate_bypass_factor_rated(self.A_low_cond)
 
     ## Check for errors
 
@@ -288,11 +307,7 @@ class DXUnit:
       sys.exit(f'Invalid Apparatus Dew Point (ADP). The rated Sensible Heat Ratio (SHR) might not be valid.')
     return PsychState(fr_u(T_ADP,"°C"),pressure=inlet_state.p,hum_rat=w_ADP)
 
-  def calculate_bypass_factor_rated(self, speed): # for rated flow rate
-    if speed == 0:
-      conditions = self.A_full_cond
-    else:
-      conditions = self.A_low_cond
+  def calculate_bypass_factor_rated(self, conditions): # for rated flow rate
     Q_s_rated = self.gross_shr_cooling_rated[conditions.compressor_speed]*self.gross_total_cooling_capacity(conditions)
     outlet_state = self.gross_cooling_outlet_state(conditions,gross_sensible_capacity=Q_s_rated)
     ADP_state = self.calculate_adp_state(conditions.indoor,outlet_state)
@@ -319,10 +334,33 @@ class DXUnit:
     if self.staging_type == StagingType.SINGLE_STAGE:
       plf = 1.0 - 0.5*self.c_d_cooling # eq. 11.56
       seer = plf*self.net_cooling_cop(self.B_full_cond) # eq. 11.55 (using COP to keep things in SI units for now)
-    elif self.staging_type == StagingType.TWO_STAGE:
+    else: #if self.staging_type == StagingType.TWO_STAGE or self.staging_type == StagingType.VARIABLE_SPEED:
       sizing_factor = 1.1 # eq. 11.61
       q_sum = 0.0
       e_sum = 0.0
+      if self.staging_type == StagingType.VARIABLE_SPEED:
+        # Intermediate capacity
+        q_A_full = self.net_total_cooling_capacity(self.A_full_cond)
+        q_B_full = self.net_total_cooling_capacity(self.B_full_cond)
+        q_B_low = self.net_total_cooling_capacity(self.B_low_cond)
+        q_F_low = self.net_total_cooling_capacity(self.F_low_cond)
+        q_E_int = self.net_total_cooling_capacity(self.E_int_cond)
+        q_87_low = interpolate(self.net_total_cooling_capacity, self.F_low_cond, self.B_low_cond, fr_u(87.0,"°F"))
+        q_87_full = interpolate(self.net_total_cooling_capacity, self.B_full_cond, self.A_full_cond, fr_u(87.0,"°F"))
+        N_Cq = (q_E_int - q_87_low)/(q_87_full - q_87_low)
+        M_Cq = (q_B_low - q_F_low)/(fr_u(82,"°F") - fr_u(67.0,"°F"))*(1. - N_Cq) + (q_A_full - q_B_full)/(fr_u(95,"°F") - fr_u(82.0,"°F"))*N_Cq
+
+        # Intermediate power
+        p_A_full = self.net_cooling_power(self.A_full_cond)
+        p_B_full = self.net_cooling_power(self.B_full_cond)
+        p_B_low = self.net_cooling_power(self.B_low_cond)
+        p_F_low = self.net_cooling_power(self.F_low_cond)
+        p_E_int = self.net_cooling_power(self.E_int_cond)
+        p_87_low = interpolate(self.net_cooling_power, self.F_low_cond, self.B_low_cond, fr_u(87.0,"°F"))
+        p_87_full = interpolate(self.net_cooling_power, self.B_full_cond, self.A_full_cond, fr_u(87.0,"°F"))
+        N_CE = (p_E_int - p_87_low)/(p_87_full - p_87_low)
+        M_CE = (p_B_low - p_F_low)/(fr_u(82,"°F") - fr_u(67.0,"°F"))*(1. - N_CE) + (p_A_full - p_B_full)/(fr_u(95,"°F") - fr_u(82.0,"°F"))*N_CE
+
       for i in range(self.cooling_distribution.number_of_bins):
         t = self.cooling_distribution.outdoor_drybulbs[i]
         n = self.cooling_distribution.fractional_hours[i]
@@ -331,24 +369,49 @@ class DXUnit:
         p_low = interpolate(self.net_cooling_power, self.F_low_cond, self.B_low_cond, t) # eq. 11.63
         q_full = interpolate(self.net_total_cooling_capacity, self.B_full_cond, self.A_full_cond, t) # eq. 11.64
         p_full = interpolate(self.net_cooling_power, self.B_full_cond, self.A_full_cond, t) # eq. 11.65
-        if bl <= q_low:
-          clf_low = bl/q_low # eq. 11.68
-          plf_low = 1.0 - self.c_d_cooling*(1.0 - clf_low) # eq. 11.69
-          q = clf_low*q_low*n # eq. 11.66
-          e = clf_low*p_low*n/plf_low # eq. 11.67
-        elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
-          clf_low = (q_full - bl)/(q_full - q_low) # eq. 11.74
-          clf_full = 1.0 - clf_low # eq. 11.75
-          q = (clf_low*q_low + clf_full*q_full)*n # eq. 11.72
-          e = (clf_low*p_low + clf_full*p_full)*n # eq. 11.73
-        elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
-          clf_full = bl/q_full # eq. 11.78
-          plf_full = 1.0 - self.c_d_cooling*(1.0 - clf_full) # eq. 11.79
-          q = clf_full*q_full*n # eq. 11.76
-          e = clf_full*p_full*n/plf_full # eq. 11.77
-        else: # elif bl >= q_full
-          q = q_full*n
-          e = p_full*n
+        if self.staging_type == StagingType.TWO_STAGE:
+          if bl <= q_low:
+            clf_low = bl/q_low # eq. 11.68
+            plf_low = 1.0 - self.c_d_cooling*(1.0 - clf_low) # eq. 11.69
+            q = clf_low*q_low*n # eq. 11.66
+            e = clf_low*p_low*n/plf_low # eq. 11.67
+          elif bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
+            clf_low = (q_full - bl)/(q_full - q_low) # eq. 11.74
+            clf_full = 1.0 - clf_low # eq. 11.75
+            q = (clf_low*q_low + clf_full*q_full)*n # eq. 11.72
+            e = (clf_low*p_low + clf_full*p_full)*n # eq. 11.73
+          elif bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
+            clf_full = bl/q_full # eq. 11.78
+            plf_full = 1.0 - self.c_d_cooling*(1.0 - clf_full) # eq. 11.79
+            q = clf_full*q_full*n # eq. 11.76
+            e = clf_full*p_full*n/plf_full # eq. 11.77
+          else: # elif bl >= q_full
+            q = q_full*n
+            e = p_full*n
+        else:  # if self.staging_type == StagingType.VARIABLE_SPEED
+          q_int = q_E_int + M_Cq*(t - (fr_u(87,"°F")))
+          p_int = p_E_int + M_CE*(t - (fr_u(87,"°F")))
+          cop_low = q_low/p_low
+          cop_int = q_int/p_int
+          cop_full = q_full/p_full
+
+          if bl <= q_low:
+            clf_low = bl/q_low # eq. 11.68
+            plf_low = 1.0 - self.c_d_cooling*(1.0 - clf_low) # eq. 11.69
+            q = clf_low*q_low*n # eq. 11.66
+            e = clf_low*p_low*n/plf_low # eq. 11.67
+          elif bl < q_int:
+            cop_int_bin = cop_low + (cop_int - cop_low)/(q_int - q_low)*(bl - q_low) # eq. 11.101 (2023)
+            q = bl*n
+            e = q/cop_int_bin
+          elif bl <= q_full:
+            cop_int_bin = cop_int + (cop_full - cop_int)/(q_full - q_int)*(bl - q_int) # eq. 11.101 (2023)
+            q = bl*n
+            e = q/cop_int_bin
+          else: # elif bl >= q_full
+            q = q_full*n
+            e = p_full*n
+
         q_sum += q
         e_sum += e
 
