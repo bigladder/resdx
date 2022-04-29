@@ -5,9 +5,9 @@ from scipy import optimize
 
 from .psychrometrics import PsychState, psychrolib
 from .conditions import HeatingConditions, CoolingConditions
-from .defrost import Defrost, DefrostControl, DefrostStrategy
+from .defrost import Defrost, DefrostControl
 from .units import fr_u, to_u
-from .util import calc_biquad, calc_quad, find_nearest
+from .util import find_nearest
 from .models import RESNETDXModel
 
 
