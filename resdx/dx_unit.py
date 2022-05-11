@@ -23,18 +23,36 @@ class StagingType(Enum):
   TWO_STAGE = 2
   VARIABLE_SPEED = 3
 
+class AHRIVersion(Enum):
+  AHRI_210_240_2017 = 1
+  AHRI_210_240_2023 = 2
+
 # AHRI 210/240 2017 distributions
 class HeatingDistribution:
   outdoor_drybulbs = [fr_u(62.0 - delta*5.0,"°F") for delta in range(18)] # 62.0 to -23 F by 5 F increments
   def __init__(self,
     outdoor_design_temperature=fr_u(5.0,"°F"),
-    fractional_hours=[0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0,0,0]
+    fractional_hours=[0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0,0,0],
+    c=None,
+    c_vs=None,
+    zero_load_temperature=None
   ):
     self.outdoor_design_temperature = outdoor_design_temperature
-    self.fractional_hours = fractional_hours
+    self.c = c
+    self.c_vs = c_vs
+    self.zero_load_temperature = zero_load_temperature
+    hour_fraction_sum = sum(fractional_hours)
+    if hour_fraction_sum < 0.98 or hour_fraction_sum > 1.02:
+      # Issue with 2023 standard, unsure how to interpret
+      print(f"Warning: HeatingDistribution sum of fractional hours ({hour_fraction_sum}) is not 1.0.")
+      print(f"         Values will be re-normalized.")
+      self.fractional_hours = [n/hour_fraction_sum for n in fractional_hours]
+    else:
+      self.fractional_hours = fractional_hours
     self.number_of_bins = len(self.fractional_hours)
     if self.number_of_bins != 18:
       sys.exit(f'Heating distributions must be provided in 18 bins.')
+
 
 class CoolingDistribution:
   outdoor_drybulbs = [fr_u(67.0 + delta*5.0,"°F") for delta in range(8)] # 67.0 to 102 F by 5 F increments
@@ -46,13 +64,21 @@ class CoolingDistribution:
 class DXUnit:
 
   regional_heating_distributions = {
-    1: HeatingDistribution(fr_u(37.0,"°F"), [0.291,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
-    2: HeatingDistribution(fr_u(27.0,"°F"), [0.215,0.189,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
-    3: HeatingDistribution(fr_u(17.0,"°F"), [0.153,0.142,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000]),
-    4: HeatingDistribution(fr_u(5.0,"°F"),  [0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000]),
-    5: HeatingDistribution(fr_u(-10.0,"°F"),[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]),
-    6: HeatingDistribution(fr_u(30.0,"°F"), [0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000])
-    }
+    AHRIVersion.AHRI_210_240_2017: {
+      1: HeatingDistribution(fr_u(37.0,"°F"), [0.291,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
+      2: HeatingDistribution(fr_u(27.0,"°F"), [0.215,0.189,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
+      3: HeatingDistribution(fr_u(17.0,"°F"), [0.153,0.142,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000]),
+      4: HeatingDistribution(fr_u(5.0,"°F"),  [0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000]),
+      5: HeatingDistribution(fr_u(-10.0,"°F"),[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]),
+      6: HeatingDistribution(fr_u(30.0,"°F"), [0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000])},
+    AHRIVersion.AHRI_210_240_2023: {
+      1: HeatingDistribution(fr_u(37.0,"°F"), [0.000,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.10, 1.03, fr_u(58.0,"°F")),
+      2: HeatingDistribution(fr_u(27.0,"°F"), [0.000,0.000,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.06, 0.99, fr_u(57.0,"°F")),
+      3: HeatingDistribution(fr_u(17.0,"°F"), [0.000,0.000,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000], 1.30, 1.21, fr_u(56.0,"°F")),
+      4: HeatingDistribution(fr_u(5.0,"°F"),  [0.000,0.000,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000], 1.15, 1.07, fr_u(55.0,"°F")),
+      5: HeatingDistribution(fr_u(-10.0,"°F"),[0.000,0.000,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001], 1.16, 1.08, fr_u(55.0,"°F")),
+      6: HeatingDistribution(fr_u(30.0,"°F"), [0.000,0.000,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.11, 1.03, fr_u(57.0,"°F"))},
+  }
 
   cooling_distribution = CoolingDistribution()
 
@@ -78,6 +104,7 @@ class DXUnit:
                     full_load_speed = 0,
                     intermediate_speed = None,
                     staging_type=None, # Allow default based on inputs
+                    rating_standard=AHRIVersion.AHRI_210_240_2017,
                     **kwargs):  # Additional inputs used for specific models
 
     # Initialize direct values
@@ -99,6 +126,7 @@ class DXUnit:
     self.defrost = defrost
     self.cycling_method = cycling_method
     self.full_load_speed = full_load_speed
+    self.rating_standard = rating_standard
     self.kwargs = kwargs
 
     # Additional data set for a specific model
@@ -162,13 +190,14 @@ class DXUnit:
         self.gross_heating_power_rated = [self.net_heating_power_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_input_stages)]
         self.gross_heating_cop_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_power_rated[i] for i in range(self.number_of_input_stages)]
 
-    ## Set rating conditions
+    ## Set rating conditions TODO: re-set when AHRIStandard version changes (for ESP)
     self.A_full_cond = self.make_condition(CoolingConditions,compressor_speed=self.full_load_speed)
     self.B_full_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(82.0,"°F"),wetbulb=fr_u(65.0,"°F")),compressor_speed=self.full_load_speed)
 
     self.H1_full_cond = self.make_condition(HeatingConditions,compressor_speed=self.full_load_speed)
     self.H2_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(35.0,"°F"),wetbulb=fr_u(33.0,"°F")),compressor_speed=self.full_load_speed)
     self.H3_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(17.0,"°F"),wetbulb=fr_u(15.0,"°F")),compressor_speed=self.full_load_speed)
+    self.H4_full_cond = self.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(5.0,"°F"),wetbulb=fr_u(3.0,"°F")),compressor_speed=self.full_load_speed)
 
     self.gross_shr_cooling_rated = [self.model.gross_shr(self.A_full_cond)]
     self.calculate_bypass_factor_rated(self.A_full_cond)
@@ -330,7 +359,7 @@ class DXUnit:
     return to_u(self.net_cooling_cop(conditions),'Btu/Wh')
 
   def seer(self):
-    '''Based on AHRI 210/240 2017'''
+    '''Based on AHRI 210/240 2023 (unless otherwise noted)'''
     if self.staging_type == StagingType.SINGLE_STAGE:
       plf = 1.0 - 0.5*self.c_d_cooling # eq. 11.56
       seer = plf*self.net_cooling_cop(self.B_full_cond) # eq. 11.55 (using COP to keep things in SI units for now)
@@ -491,21 +520,59 @@ class DXUnit:
     return PsychState(T_odb,pressure=conditions.indoor.p,hum_rat=conditions.indoor.get_hr())
 
   def hspf(self, region=4):
-    '''Based on AHRI 210/240 2017'''
+    '''Based on AHRI 210/240 2023 (unless otherwise noted)'''
     q_sum = 0.0
     e_sum = 0.0
     rh_sum = 0.0
 
-    c = 0.77 # eq. 11.110 (agreement factor)
-    t_od = self.regional_heating_distributions[region].outdoor_design_temperature
+    heating_distribution = self.regional_heating_distributions[self.rating_standard][region]
+    t_od = heating_distribution.outdoor_design_temperature
 
-    dhr_min = self.net_integrated_heating_capacity(self.H1_full_cond)*(fr_u(65,"°F")-t_od)/(fr_u(60,"°R")) # eq. 11.111
-    dhr_min = find_nearest(self.standard_design_heating_requirements, dhr_min)
+    if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
+      c = 0.77 # eq. 11.110 (agreement factor)
+      dhr_min = self.net_integrated_heating_capacity(self.H1_full_cond)*(fr_u(65,"°F")-t_od)/(fr_u(60,"°R")) # eq. 11.111
+      dhr_min = find_nearest(self.standard_design_heating_requirements, dhr_min)
+    else: # if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+      if self.staging_type == StagingType.VARIABLE_SPEED:
+        c_x = heating_distribution.c_vs
+      else:
+        c_x = heating_distribution.c
+      t_zl = heating_distribution.zero_load_temperature
 
-    for i in range(self.regional_heating_distributions[region].number_of_bins):
-      t = self.regional_heating_distributions[region].outdoor_drybulbs[i]
-      n = self.regional_heating_distributions[region].fractional_hours[i]
-      bl = (fr_u(65,"°F")-t)/(fr_u(65,"°F")-t_od)*c*dhr_min # eq. 11.109
+
+    if self.staging_type == StagingType.VARIABLE_SPEED:
+      # Intermediate capacity
+      q_H0_low = self.net_integrated_heating_capacity(self.H0_low_cond)
+      q_H1_low = self.net_integrated_heating_capacity(self.H1_low_cond)
+      q_H2_int = self.net_integrated_heating_capacity(self.H2_int_cond)
+      q_H1_full = self.net_integrated_heating_capacity(self.H1_full_cond)
+      q_H2_full = self.net_integrated_heating_capacity(self.H2_full_cond)
+      q_H3_full = self.net_integrated_heating_capacity(self.H3_full_cond)
+      q_H4_full = self.net_integrated_heating_capacity(self.H4_full_cond)
+      q_35_low = interpolate(self.net_integrated_heating_capacity, self.H0_low_cond, self.H1_low_cond, fr_u(35.0,"°F"))
+      N_Hq = (q_H2_int - q_35_low)/(q_H2_full - q_35_low)
+      M_Hq = (q_H0_low - q_H1_low)/(fr_u(62,"°F") - fr_u(47.0,"°F"))*(1. - N_Hq) + (q_H2_full - q_H3_full)/(fr_u(35,"°F") - fr_u(17.0,"°F"))*N_Hq
+
+      # Intermediate power
+      p_H0_low = self.net_integrated_heating_power(self.H0_low_cond)
+      p_H1_low = self.net_integrated_heating_power(self.H1_low_cond)
+      p_H2_int = self.net_integrated_heating_power(self.H2_int_cond)
+      p_H1_full = self.net_integrated_heating_power(self.H1_full_cond)
+      p_H2_full = self.net_integrated_heating_power(self.H2_full_cond)
+      p_H3_full = self.net_integrated_heating_power(self.H3_full_cond)
+      p_H4_full = self.net_integrated_heating_power(self.H4_full_cond)
+      p_35_low = interpolate(self.net_integrated_heating_power, self.H0_low_cond, self.H1_low_cond, fr_u(35.0,"°F"))
+      N_HE = (p_H2_int - p_35_low)/(p_H2_full - p_35_low)
+      M_HE = (p_H0_low - p_H1_low)/(fr_u(62,"°F") - fr_u(47.0,"°F"))*(1. - N_Hq) + (p_H2_full - p_H3_full)/(fr_u(35,"°F") - fr_u(17.0,"°F"))*N_Hq
+
+    for i in range(heating_distribution.number_of_bins):
+      t = heating_distribution.outdoor_drybulbs[i]
+      n = heating_distribution.fractional_hours[i]
+      if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
+        bl = (fr_u(65,"°F")-t)/(fr_u(65,"°F")-t_od)*c*dhr_min # eq. 11.109
+      else: # if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+        q_A_full = self.net_total_cooling_capacity(self.A_full_cond)
+        bl = (t_zl-t)/(t_zl-t_od)*c_x*q_A_full
 
       t_ob = fr_u(45,"°F") # eq. 11.119
       if t >= t_ob or t <= fr_u(17,"°F"):
@@ -517,11 +584,11 @@ class DXUnit:
       cop_full = q_full/p_full
 
       if t <= self.heating_off_temperature or cop_full < 1.0:
-        delta_full = 0.0 # eq. 11.120 & 11.159
-      elif t > self.heating_on_temperature and cop_full >= 1.0:
-        delta_full = 1.0 # eq. 11.122 & 11.160
+        delta_full = 0.0 # eq. 11.125
+      elif t > self.heating_on_temperature:
+        delta_full = 1.0 # eq. 11.127
       else:
-        delta_full = 0.5 # eq. 11.121 & 11.161
+        delta_full = 0.5 # eq. 11.126
 
       if q_full > bl:
         hlf_full = bl/q_full # eq. 11.115 & 11.154
@@ -532,7 +599,7 @@ class DXUnit:
         plf_full = 1.0 - self.c_d_heating*(1.0 - hlf_full) # eq. 11.125
         e = p_full*hlf_full*delta_full*n/plf_full # eq. 11.156 (not shown for single stage)
         rh = (bl - q_full*hlf_full*delta_full)*n # eq. 11.126
-      else: # elif self.number_of_speeds == 2:
+      elif self.staging_type == StagingType.TWO_STAGE:
         t_ob = fr_u(40,"°F") # eq. 11.134
         if t >= t_ob:
           q_low = interpolate(self.net_integrated_heating_capacity, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.135
@@ -545,32 +612,80 @@ class DXUnit:
           p_low = interpolate(self.net_integrated_heating_power, self.H2_low_cond, self.H3_low_cond, t) # eq. 11.139
 
         cop_low = q_low/p_low
-        if t <= self.heating_off_temperature or cop_low < 1.0:
-          delta_low = 0.0 # eq. 11.147
-        elif t > self.heating_on_temperature and cop_low >= 1.0:
-          delta_low = 1.0 # eq. 11.149
-        else:
-          delta_low = 0.5 # eq. 11.148
-
         if bl <= q_low:
-          hlf_low = bl/q_low # eq. 11.143
-          plf_low = 1.0 - self.c_d_heating*(1.0 - hlf_low) # eq. 11.144
-          e = p_low*hlf_low*delta_low*n/plf_low # eq. 11.141
-          rh = bl*(1.0 - delta_low)*n # eq. 11.142
+          if t <= self.heating_off_temperature or cop_low < 1.0:
+            delta_low = 0.0 # eq. 11.159
+          elif t > self.heating_on_temperature:
+            delta_low = 1.0 # eq. 11.160
+          else:
+            delta_low = 0.5 # eq. 11.161
+
+          hlf_low = bl/q_low # eq. 11.155
+          plf_low = 1.0 - self.c_d_heating*(1.0 - hlf_low) # eq. 11.156
+          e = p_low*hlf_low*delta_low*n/plf_low # eq. 11.153
+          rh = bl*(1.0 - delta_low)*n # eq. 11.154
         elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
-          hlf_low = (q_full - bl)/(q_full - q_low) # eq. 11.151
-          hlf_full = 1.0 - hlf_low # eq. 11.152
-          e = (p_low*hlf_low+p_full*hlf_full)*delta_low*n # eq. 11.150
-          rh = bl*(1.0 - delta_low)*n # eq. 11.142
+          hlf_low = (q_full - bl)/(q_full - q_low) # eq. 11.163
+          hlf_full = 1.0 - hlf_low # eq. 11.164
+          e = (p_low*hlf_low+p_full*hlf_full)*delta_low*n # eq. 11.162
+          rh = bl*(1.0 - delta_low)*n # eq. 11.154
         elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
-          hlf_low = (q_full - bl)/(q_full - q_low) # eq. 11.151
-          plf_full = 1.0 - self.c_d_heating*(1.0 - hlf_low) # eq. 11.155
-          e = p_full*hlf_full*delta_full*n/plf_full # eq. 11.150
+          hlf_low = (q_full - bl)/(q_full - q_low) # eq. 11.163
+          plf_full = 1.0 - self.c_d_heating*(1.0 - hlf_low) # eq. 11.166
+          e = p_full*hlf_full*delta_full*n/plf_full # eq. 11.165
           rh = bl*(1.0 - delta_low)*n # eq. 11.142
         else: # elif bl >= q_full
-          hlf_full = 1.0 # eq. 11.158
-          e = p_full*hlf_full*delta_full*n # eq. 11.156
-          rh = (bl - q_full*hlf_full*delta_full)*n # eq. 11.157
+          hlf_full = 1.0 # eq. 11.170
+          e = p_full*hlf_full*delta_full*n # eq. 11.168
+          rh = (bl - q_full*hlf_full*delta_full)*n # eq. 11.169
+      else: # if self.staging_type == StagingType.VARIABLE_SPEED:
+        # Note: this is strange that there is no defrost cut in the low speed and doesn't use H2 or H3 low
+        q_low = interpolate(self.net_integrated_heating_capacity, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.177
+        p_low = interpolate(self.net_integrated_heating_power, self.H0_low_cond, self.H1_low_cond, t) # eq. 11.178
+        cop_low = q_low/p_low
+        q_int = q_H2_int + M_Hq*(t - (fr_u(35,"°F")))
+        p_int = p_H2_int + M_HE*(t - (fr_u(35,"°F")))
+        cop_int = q_int/p_int
+
+        if bl <= q_low:
+          if t <= self.heating_off_temperature or cop_low < 1.0:
+            delta_low = 0.0 # eq. 11.159
+          elif t > self.heating_on_temperature:
+            delta_low = 1.0 # eq. 11.160
+          else:
+            delta_low = 0.5 # eq. 11.161
+
+          hlf_low = bl/q_low # eq. 11.155
+          plf_low = 1.0 - self.c_d_heating*(1.0 - hlf_low) # eq. 11.156
+          e = p_low*hlf_low*delta_low*n/plf_low # eq. 11.153
+          rh = bl*(1.0 - delta_low)*n # eq. 11.154
+        elif bl < q_full:
+          if bl <= q_int:
+            cop_int_bin = cop_low + (cop_int - cop_low)/(q_int - q_low)*(bl - q_low) # eq. 11.187 (2023)
+          else: # if bl > q_int:
+            cop_int_bin = cop_int + (cop_full - cop_int)/(q_full - q_int)*(bl - q_int) # eq. 11.188 (2023)
+          if t <= self.heating_off_temperature or cop_int_bin < 1.0:
+            delta_int_bin = 0.0 # eq. 11.196
+          elif t > self.heating_on_temperature:
+            delta_int_bin = 1.0 # eq. 11.198
+          else:
+            delta_int_bin = 0.5 # eq. 11.197
+          rh = bl*(1.0 - delta_int_bin)*n
+          q = bl*n
+          e = q/cop_int_bin*delta_int_bin
+        else: # if bl >= q_full:
+          # TODO: allow no H4 conditions
+          # Note: builds on previously defined q_full / p_full
+          if t > fr_u(5,"°F") or t <= fr_u(17,"°F"):
+            q_full = interpolate(self.net_integrated_heating_capacity, self.H4_full_cond, self.H3_full_cond, t) # eq. 11.203
+            p_full = interpolate(self.net_integrated_heating_power, self.H4_full_cond, self.H3_full_cond, t) # eq. 11.204
+          elif t < fr_u(5,"°F"):
+            t_ratio = (t - fr_u(5.0,"°F"))/(fr_u(47,"°F") - fr_u(17.0,"°F"))
+            q_full = q_H4_full + (q_H1_full - q_H3_full)*t_ratio # eq. 11.205
+            p_full = p_H4_full + (p_H1_full - p_H3_full)*t_ratio # eq. 11.206
+          hlf_full = 1.0 # eq. 11.170
+          e = p_full*hlf_full*delta_full*n # eq. 11.168
+          rh = (bl - q_full*hlf_full*delta_full)*n # eq. 11.169
 
       q_sum += n*bl
       e_sum += e

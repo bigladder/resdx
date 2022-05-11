@@ -93,8 +93,8 @@ def test_vchp_regression():
 
   assert vchp_unit.seer() == approx(20.292, 0.01)
   assert vchp_unit.eer() == approx(9.38338, 0.01)
-  assert vchp_unit.hspf() == approx(14.58127, 0.01)
-  assert vchp_unit.hspf(region=2) == approx(21.47041, 0.01)
+  assert vchp_unit.hspf() == approx(14.9806, 0.01)
+  assert vchp_unit.hspf(region=2) == approx(22.8153, 0.01)
 
 
 def test_plot():
