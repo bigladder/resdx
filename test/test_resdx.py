@@ -16,7 +16,7 @@ PsychState = resdx.psychrometrics.PsychState
 HeatingConditions = resdx.dx_unit.HeatingConditions
 CoolingConditions = resdx.dx_unit.CoolingConditions
 
-# Single speed
+# Single speed, SEER 13, HSPF 8
 dx_unit_1_speed = DXUnit()
 
 
@@ -26,30 +26,21 @@ def test_1_speed_regression():
   dx_unit_1_speed.print_heating_info()
   assert dx_unit_1_speed.seer() == approx(13.0, 0.01)
   assert dx_unit_1_speed.eer() == approx(11.19, 0.01)
-  assert dx_unit_1_speed.hspf() == approx(8.01, 0.01)
+  assert dx_unit_1_speed.hspf() == approx(8.49, 0.01)
   assert dx_unit_1_speed.net_total_cooling_capacity() == approx(dx_unit_1_speed.net_total_cooling_capacity_rated[0],0.01)
 
-# Two speed
-dx_unit_2_speed = DXUnit(
-  gross_cooling_cop_rated=[4.7,5.3],
-  fan_efficacy_cooling_rated=[fr_u(0.365,'W/(cu_ft/min)')]*2,
-  flow_rated_per_cap_cooling_rated = [fr_u(360.0,"(cu_ft/min)/ton_of_refrigeration"),fr_u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
-  net_total_cooling_capacity_rated=[fr_u(3.0,'ton_of_refrigeration'),fr_u(1.5,'ton_of_refrigeration')],
-  fan_efficacy_heating_rated=[fr_u(0.365,'W/(cu_ft/min)')]*2,
-  gross_heating_cop_rated=[4.2, 6.2],
-  flow_rated_per_cap_heating_rated = [fr_u(360.0,"(cu_ft/min)/ton_of_refrigeration"),fr_u(300.0,"(cu_ft/min)/ton_of_refrigeration")],
-  net_heating_capacity_rated=[fr_u(3.0,'ton_of_refrigeration'),fr_u(1.5,'ton_of_refrigeration')]
-)
+# Two speed, SEER 17, HSPF 10
+dx_unit_2_speed = DXUnit(number_of_input_stages=2)
 
 def test_2_speed_regression():
   dx_unit_2_speed.print_cooling_info()
 
   dx_unit_2_speed.print_heating_info()
   dx_unit_2_speed.print_heating_info(region=2)
-  assert dx_unit_2_speed.seer() == approx(17, 0.01)
-  assert dx_unit_2_speed.eer() == approx(13, 0.01)
-  assert dx_unit_2_speed.hspf() == approx(10.18, 0.01)
-  assert dx_unit_2_speed.hspf(region=2) == approx(15.1, 0.01)
+  assert dx_unit_2_speed.seer() == approx(14.219, 0.01)
+  assert dx_unit_2_speed.eer() == approx(11.152, 0.01)
+  assert dx_unit_2_speed.hspf() == approx(9.461, 0.01)
+  assert dx_unit_2_speed.hspf(region=2) == approx(11.669, 0.01)
 
 # VCHP (Fujitsu Halcyon 12) https://ashp.neep.org/#!/product/25349/7/25000///0
 # SEER 21.3, EER 13.4, HSPF(4) = 11.7
@@ -93,7 +84,7 @@ def test_vchp_regression():
 
   assert vchp_unit.seer() == approx(20.292, 0.01)
   assert vchp_unit.eer() == approx(9.38338, 0.01)
-  assert vchp_unit.hspf() == approx(14.9806, 0.01)
+  assert vchp_unit.hspf() == approx(20.81, 0.01)
   assert vchp_unit.hspf(region=2) == approx(22.8153, 0.01)
 
 

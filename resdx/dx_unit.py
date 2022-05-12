@@ -44,14 +44,14 @@ class HeatingDistribution:
     hour_fraction_sum = sum(fractional_hours)
     if hour_fraction_sum < 0.98 or hour_fraction_sum > 1.02:
       # Issue with 2023 standard, unsure how to interpret
-      print(f"Warning: HeatingDistribution sum of fractional hours ({hour_fraction_sum}) is not 1.0.")
-      print(f"         Values will be re-normalized.")
+      # print(f"Warning: HeatingDistribution sum of fractional hours ({hour_fraction_sum}) is not 1.0.")
+      # print(f"         Values will be re-normalized.")
       self.fractional_hours = [n/hour_fraction_sum for n in fractional_hours]
     else:
       self.fractional_hours = fractional_hours
     self.number_of_bins = len(self.fractional_hours)
     if self.number_of_bins != 18:
-      sys.exit(f'Heating distributions must be provided in 18 bins.')
+      raise Exception(f'Heating distributions must be provided in 18 bins.')
 
 
 class CoolingDistribution:
@@ -72,6 +72,7 @@ class DXUnit:
       5: HeatingDistribution(fr_u(-10.0,"°F"),[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]),
       6: HeatingDistribution(fr_u(30.0,"°F"), [0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000])},
     AHRIVersion.AHRI_210_240_2023: {
+      # Note: AHRI 2023 issue: None of these distributions add to 1.0!
       1: HeatingDistribution(fr_u(37.0,"°F"), [0.000,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.10, 1.03, fr_u(58.0,"°F")),
       2: HeatingDistribution(fr_u(27.0,"°F"), [0.000,0.000,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.06, 0.99, fr_u(57.0,"°F")),
       3: HeatingDistribution(fr_u(17.0,"°F"), [0.000,0.000,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000], 1.30, 1.21, fr_u(56.0,"°F")),
@@ -84,59 +85,57 @@ class DXUnit:
 
   standard_design_heating_requirements = [(fr_u(5000,"Btu/hr")+i*fr_u(5000,"Btu/hr")) for i in range(0,8)] + [(fr_u(50000,"Btu/hr")+i*fr_u(10000,"Btu/hr")) for i in range(0,9)]
 
-  def __init__(self,model=RESNETDXModel(),
-                    net_total_cooling_capacity_rated=[fr_u(3.0,'ton_of_refrigeration')],
-                    gross_cooling_cop_rated=[3.72],
-                    net_cooling_cop_rated=None,
-                    fan_efficacy_cooling_rated=[fr_u(0.25,'W/(cu_ft/min)')],
-                    flow_rated_per_cap_cooling_rated = [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")], # Per net total cooling capacity
-                    c_d_cooling=0.1,
-                    net_heating_capacity_rated=[fr_u(3.0,'ton_of_refrigeration')],
-                    gross_heating_cop_rated=[3.82],
-                    net_heating_cop_rated=None,
-                    fan_efficacy_heating_rated=[fr_u(0.25,'W/(cu_ft/min)')],
-                    flow_rated_per_cap_heating_rated = [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")], # Per net total cooling capacity, TODO: Check assumption
-                    c_d_heating=0.142,
-                    heating_off_temperature = fr_u(10.0,"°F"), # TODO: Check value taken from Scott's script for single-stage
-                    heating_on_temperature = fr_u(14.0,"°F"), # TODO: Check value taken from Scott's script for single-stage
-                    defrost=Defrost(),
+  def __init__(self,model = RESNETDXModel(),
+                    number_of_input_stages=None,
+                    net_total_cooling_capacity_rated = fr_u(3.0,'ton_of_refrigeration'),
+                    gross_cooling_cop_rated = 3.72,
+                    net_cooling_cop_rated = None,
+                    fan_efficacy_cooling_rated = fr_u(0.25,'W/(cu_ft/min)'),
+                    flow_rated_per_cap_cooling_rated = fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration"), # Per net total cooling capacity
+                    c_d_cooling = 0.1,
+                    net_heating_capacity_rated = None,
+                    gross_heating_cop_rated = 3.82,
+                    net_heating_cop_rated = None,
+                    fan_efficacy_heating_rated = fr_u(0.25,'W/(cu_ft/min)'),
+                    flow_rated_per_cap_heating_rated = fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration"), # Per net total cooling capacity, TODO: Check assumption
+                    c_d_heating = 0.142,
+                    heating_off_temperature = fr_u(0.0,"°F"),
+                    heating_on_temperature = None, # default to heating_off_temperature
+                    defrost = Defrost(),
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
-                    full_load_speed = 0,
+                    full_load_speed = 0, # The first entry (index = 0) in arrays reflects AHRI "full" speed.
                     intermediate_speed = None,
-                    staging_type=None, # Allow default based on inputs
-                    rating_standard=AHRIVersion.AHRI_210_240_2017,
+                    staging_type = None, # Allow default based on inputs
+                    rating_standard = AHRIVersion.AHRI_210_240_2017,
                     **kwargs):  # Additional inputs used for specific models
 
     # Initialize direct values
     self.model = model
-    self.net_total_cooling_capacity_rated = net_total_cooling_capacity_rated
-    self.gross_cooling_cop_rated = gross_cooling_cop_rated
-    self.fan_efficacy_cooling_rated = fan_efficacy_cooling_rated
-    self.flow_rated_per_cap_cooling_rated = flow_rated_per_cap_cooling_rated
-    self.net_cooling_cop_rated = net_cooling_cop_rated
     self.c_d_cooling = c_d_cooling
-    self.net_heating_capacity_rated = net_heating_capacity_rated
-    self.gross_heating_cop_rated = gross_heating_cop_rated
-    self.net_heating_cop_rated = net_heating_cop_rated
-    self.fan_efficacy_heating_rated = fan_efficacy_heating_rated
-    self.flow_rated_per_cap_heating_rated = flow_rated_per_cap_heating_rated
     self.c_d_heating = c_d_heating
-    self.heating_off_temperature = heating_off_temperature
-    self.heating_on_temperature = heating_on_temperature
-    self.defrost = defrost
-    self.cycling_method = cycling_method
-    self.full_load_speed = full_load_speed
-    self.rating_standard = rating_standard
     self.kwargs = kwargs
+    self.cycling_method = cycling_method
+    self.rating_standard = rating_standard
+    self.defrost = defrost
+    self.heating_off_temperature = heating_off_temperature
 
-    # Additional data set for a specific model
+    # Placeholder for additional data set specific to the model
     self.model_data = {}
 
-    # Initialize calculated values
-    if self.net_cooling_cop_rated is None:
-      self.number_of_input_stages = len(self.gross_cooling_cop_rated)
+    # Calculated / default values
+    # Number of stages/speeds
+    if number_of_input_stages is not None:
+      self.number_of_input_stages = number_of_input_stages
+      if type(net_total_cooling_capacity_rated) is list:
+        num_capacities = len(net_total_cooling_capacity_rated)
+        if num_capacities != number_of_input_stages:
+          raise Exception(f'Length of \'net_total_cooling_capacity_rated\' ({num_capacities}) != \'number_of_input_stages\' ({number_of_input_stages}).')
+    elif type(net_total_cooling_capacity_rated) is list:
+      self.number_of_input_stages = len(net_total_cooling_capacity_rated)
     else:
-      self.number_of_input_stages = len(self.net_cooling_cop_rated)
+      self.number_of_input_stages = 1
+
+    self.full_load_speed = full_load_speed
 
     if intermediate_speed is None:
       self.intermediate_speed = full_load_speed + 1
@@ -150,17 +149,40 @@ class DXUnit:
     else:
       self.staging_type = staging_type
 
+    # Other defaults
+    if heating_on_temperature == None:
+      self.heating_on_temperature = self.heating_off_temperature
+
+    # Default staging array inputs
+    self.net_total_cooling_capacity_rated = self.set_value(net_total_cooling_capacity_rated, [lambda x : x*0.72]) # from Cutler's work (two speeds)
+    self.fan_efficacy_cooling_rated = self.set_value(fan_efficacy_cooling_rated)
+    self.flow_rated_per_cap_cooling_rated = self.set_value(flow_rated_per_cap_cooling_rated, [lambda x : x*0.86])
+
+    if net_heating_capacity_rated is None:
+      net_heating_capacity_rated = self.net_total_cooling_capacity_rated[0]*0.98 + fr_u(180.,"Btu/hr")
+    self.net_heating_capacity_rated = self.set_value(net_heating_capacity_rated, [lambda x : x*0.72]) # from Cutler's work (two speeds)
+    self.fan_efficacy_heating_rated = self.set_value(fan_efficacy_heating_rated)
+    self.flow_rated_per_cap_heating_rated = self.set_value(flow_rated_per_cap_heating_rated, [lambda x : x*0.8])
+
+    # Derived staging array values
     self.cooling_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_cooling_rated[i]*self.flow_rated_per_cap_cooling_rated[i] for i in range(self.number_of_input_stages)]
     self.heating_fan_power_rated = [self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_heating_rated[i]*self.flow_rated_per_cap_heating_rated[i] for i in range(self.number_of_input_stages)] # note: heating fan flow is intentionally based on cooling capacity
     self.gross_total_cooling_capacity_rated = [self.net_total_cooling_capacity_rated[i] + self.cooling_fan_power_rated[i] for i in range(self.number_of_input_stages)]
     self.gross_heating_capacity_rated = [self.net_heating_capacity_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_input_stages)]
+
+    # Placeholders for derived staging array values
     self.bypass_factor_rated = [None]*self.number_of_input_stages
     self.normalized_ntu = [None]*self.number_of_input_stages
 
-    # Exclusive checks
+    # COP determinations
+    self.net_cooling_cop_rated = self.set_value(net_cooling_cop_rated)
+    self.gross_cooling_cop_rated = self.set_value(gross_cooling_cop_rated, [lambda x : 1./(0.8887 * (1./x) + 0.0083)]) # from Cutler's work (two speeds)
+    self.gross_heating_cop_rated = self.set_value(gross_heating_cop_rated, [lambda x : 1./(0.6241 * (1./x) + 0.0681)]) # from Cutler's work (two speeds))
+    self.net_heating_cop_rated = self.set_value(net_heating_cop_rated)
+
     if self.net_cooling_cop_rated is None:
       if self.gross_cooling_cop_rated is None:
-        sys.exit(f'Must define either \'net_cooling_cop_rated\' or \'gross_cooling_cop_rated\'.')
+        raise Exception(f'Must define either \'net_cooling_cop_rated\' or \'gross_cooling_cop_rated\'.')
       else:
         self.gross_cooling_power_rated = [self.gross_total_cooling_capacity_rated[i]/self.gross_cooling_cop_rated[i] for i in range(self.number_of_input_stages)]
         self.net_cooling_power_rated = [self.gross_cooling_power_rated[i] + self.cooling_fan_power_rated[i] for i in range(self.number_of_input_stages)]
@@ -168,7 +190,7 @@ class DXUnit:
 
     if self.gross_cooling_cop_rated is None:
       if self.net_cooling_cop_rated is None:
-        sys.exit(f'Must define either \'net_cooling_cop_rated\' or \'gross_cooling_cop_rated\'.')
+        raise Exception(f'Must define either \'net_cooling_cop_rated\' or \'gross_cooling_cop_rated\'.')
       else:
         self.net_cooling_power_rated = [self.net_total_cooling_capacity_rated[i]/self.net_cooling_cop_rated[i] for i in range(self.number_of_input_stages)]
         self.gross_cooling_power_rated = [self.net_cooling_power_rated[i] - self.cooling_fan_power_rated[i] for i in range(self.number_of_input_stages)]
@@ -176,7 +198,7 @@ class DXUnit:
 
     if self.net_heating_cop_rated is None:
       if self.gross_heating_cop_rated is None:
-        sys.exit(f'Must define either \'net_heating_cop_rated\' or \'gross_heating_cop_rated\'.')
+        raise Exception(f'Must define either \'net_heating_cop_rated\' or \'gross_heating_cop_rated\'.')
       else:
         self.gross_heating_power_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_cop_rated[i] for i in range(self.number_of_input_stages)]
         self.net_heating_power_rated = [self.gross_heating_power_rated[i] + self.heating_fan_power_rated[i] for i in range(self.number_of_input_stages)]
@@ -184,7 +206,7 @@ class DXUnit:
 
     if self.gross_heating_cop_rated is None:
       if self.net_heating_cop_rated is None:
-        sys.exit(f'Must define either \'net_heating_cop_rated\' or \'gross_heating_cop_rated\'.')
+        raise Exception(f'Must define either \'net_heating_cop_rated\' or \'gross_heating_cop_rated\'.')
       else:
         self.net_heating_power_rated = [self.net_heating_capacity_rated[i]/self.net_heating_cop_rated[i] for i in range(self.number_of_input_stages)]
         self.gross_heating_power_rated = [self.net_heating_power_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_input_stages)]
@@ -233,9 +255,23 @@ class DXUnit:
     self.check_array_order(self.net_total_cooling_capacity_rated)
     self.check_array_order(self.net_heating_capacity_rated)
 
+  def set_value(self, input, modifications=None):
+    if input is None:
+      return None
+    elif type(input) is list:
+      return input
+    else:
+      # derrive from scalar
+      num_mods = self.number_of_input_stages - 1
+      if modifications is None:
+        modifications = [lambda x : x]*num_mods
+      elif len(modifications) < num_mods:
+        raise Exception(f"Not enough \'modifications\' for {self.number_of_input_stages} speed systems")
+      return [input] + [modifications[i](input) for i in range(num_mods)]
+
   def check_array_length(self, array):
     if (len(array) != self.number_of_input_stages):
-      sys.exit(f'Unexpected array length ({len(array)}). Number of speeds is {self.number_of_input_stages}. Array items are {array}.')
+      raise Exception(f'Unexpected array length ({len(array)}). Number of speeds is {self.number_of_input_stages}. Array items are {array}.')
 
   def check_array_lengths(self):
     self.check_array_length(self.fan_efficacy_cooling_rated)
@@ -249,7 +285,7 @@ class DXUnit:
 
   def check_array_order(self, array):
     if not all(earlier >= later for earlier, later in zip(array, array[1:])):
-      sys.exit(f'Arrays must be in order of decreasing capacity. Array items are {array}.')
+      raise Exception(f'Arrays must be in order of decreasing capacity. Array items are {array}.')
 
   def make_condition(self, condition_type, compressor_speed=0, indoor=None, outdoor=None):
     if indoor is None:
@@ -333,7 +369,7 @@ class DXUnit:
     w_ADP = w_i - (w_i - w_o)/(T_idb - T_odb)*(T_idb - T_ADP)
     # Output an error if ADP calculation method is not applicable:
     if (T_odb < T_ADP or w_o <  w_ADP):
-      sys.exit(f'Invalid Apparatus Dew Point (ADP). The rated Sensible Heat Ratio (SHR) might not be valid.')
+      raise Exception(f'Invalid Apparatus Dew Point (ADP). The rated Sensible Heat Ratio (SHR) might not be valid.')
     return PsychState(fr_u(T_ADP,"°C"),pressure=inlet_state.p,hum_rat=w_ADP)
 
   def calculate_bypass_factor_rated(self, conditions): # for rated flow rate
