@@ -1,37 +1,37 @@
 class DXModel:
 
+  def __init__(self):
+    self.system = None
+
+  def set_system(self, system):
+    self.system = system
+    if "base_model" in system.kwargs:
+      system.kwargs["base_model"].system = system
+
   # Power and capacity
-  @staticmethod
-  def gross_cooling_power(conditions, system):
+  def gross_cooling_power(self, conditions):
     raise NotImplementedError()
 
-  @staticmethod
-  def gross_total_cooling_capacity(conditions, system):
+  def gross_total_cooling_capacity(self, conditions):
     raise NotImplementedError()
 
-  @staticmethod
-  def gross_sensible_cooling_capacity(conditions, system):
+  def gross_sensible_cooling_capacity(self, conditions):
     raise NotImplementedError()
 
-  @staticmethod
-  def gross_shr(conditions):
+  def gross_shr(self, conditions):
     '''This is used to calculate the SHR at rated conditions'''
     raise NotImplementedError()
 
-  @staticmethod
-  def gross_steady_state_heating_capacity(conditions, system):
+  def gross_steady_state_heating_capacity(self, conditions):
     raise NotImplementedError()
 
-  @staticmethod
-  def gross_integrated_heating_capacity(conditions, system):
+  def gross_integrated_heating_capacity(self, conditions):
     raise NotImplementedError()
 
-  @staticmethod
-  def gross_steady_state_heating_power(conditions, system):
+  def gross_steady_state_heating_power(self, conditions):
     raise NotImplementedError()
 
-  @staticmethod
-  def gross_integrated_heating_power(conditions, system):
+  def gross_integrated_heating_power(self, conditions):
     raise NotImplementedError()
 
   # Defaults
@@ -42,13 +42,7 @@ class DXModel:
     else:
       return input
 
-  @staticmethod
-  def set_c_d_cooling(input, system):
-    system.c_d_cooling = DXModel.set_default(input, 0.25)
-
-  @staticmethod
-  def fan_efficacy(system):
-    raise NotImplementedError()
-
+  def set_c_d_cooling(self, input):
+    self.system.c_d_cooling = DXModel.set_default(input, 0.25)
 
 

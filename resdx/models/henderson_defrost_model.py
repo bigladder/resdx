@@ -21,17 +21,15 @@ class HendersonDefrostModel(DXModel):
   defrost_temperatures = [fr_u(-20,"°F"), fr_u(17,"°F"), fr_u(27,"°F"), fr_u(37,"°F")]
   defrost_fractions = [0.075, 0.085, 0.11, 0.09]
 
-  @staticmethod
-  def gross_integrated_heating_capacity(conditions, system):
+  def gross_integrated_heating_capacity(self, conditions):
 
-    if system.defrost.in_defrost(conditions):
-      return system.gross_steady_state_heating_capacity(conditions) * (1-HendersonDefrostModel.fdef(conditions))
+    if self.system.defrost.in_defrost(conditions):
+      return self.system.gross_steady_state_heating_capacity(conditions) * (1-HendersonDefrostModel.fdef(conditions))
     else:
-      return system.gross_steady_state_heating_capacity(conditions)
+      return self.system.gross_steady_state_heating_capacity(conditions)
 
-  @staticmethod
-  def gross_integrated_heating_power(conditions, system):
-      return system.gross_steady_state_heating_power(conditions)
+  def gross_integrated_heating_power(self, conditions):
+      return self.system.gross_steady_state_heating_power(conditions)
 
   @staticmethod
   def fdef(conditions):

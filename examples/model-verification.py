@@ -5,13 +5,11 @@ import resdx
 
 class DefrostVerificationModel_nrel(resdx.models.ConstantDXModel): # Implemented in EnergyPlus
 
-  @staticmethod
-  def gross_integrated_heating_capacity(conditions, system):
-    return resdx.models.NRELDXModel.gross_integrated_heating_capacity(conditions, system)
+  def gross_integrated_heating_capacity(self, conditions):
+    return resdx.models.NRELDXModel.gross_integrated_heating_capacity(self, conditions)
 
-  @staticmethod
-  def gross_integrated_heating_power(conditions, system):
-    return resdx.models.NRELDXModel.gross_integrated_heating_power(conditions, system)
+  def gross_integrated_heating_power(self, conditions):
+    return resdx.models.NRELDXModel.gross_integrated_heating_power(self, conditions)
 
 
 test_dx_system = resdx.DXUnit(model=DefrostVerificationModel_nrel(), # These inputs should be similar to EnergyPlus model.
@@ -22,13 +20,11 @@ test_dx_system = resdx.DXUnit(model=DefrostVerificationModel_nrel(), # These inp
 
 class DefrostVerificationModel_henderson(resdx.models.ConstantDXModel):
 
-  @staticmethod
-  def gross_integrated_heating_capacity(conditions, system):
-    return resdx.models.HendersonDefrostModel.gross_integrated_heating_capacity(conditions, system)
+  def gross_integrated_heating_capacity(self, conditions):
+    return resdx.models.HendersonDefrostModel.gross_integrated_heating_capacity(self, conditions)
 
-  @staticmethod
-  def gross_integrated_heating_power(conditions, system):
-    return resdx.models.HendersonDefrostModel.gross_integrated_heating_power(conditions, system)
+  def gross_integrated_heating_power(self, conditions):
+    return resdx.models.HendersonDefrostModel.gross_integrated_heating_power(self, conditions)
 
 test_dx_system_henderson = resdx.DXUnit(model=DefrostVerificationModel_henderson(),
                         net_heating_cop_rated=[5],

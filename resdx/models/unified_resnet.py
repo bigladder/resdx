@@ -28,34 +28,26 @@ def estimated_seer(hspf): # Linear model fitted (R² = 0.994) based on data of t
 class RESNETDXModel(DXModel):
 
   # Power and capacity
-  @staticmethod
-  def gross_cooling_power(conditions, system):
-    return NRELDXModel.gross_cooling_power(conditions, system)
+  def gross_cooling_power(self, conditions):
+    return NRELDXModel.gross_cooling_power(self, conditions)
 
-  @staticmethod
-  def gross_total_cooling_capacity(conditions, system):
-    return NRELDXModel.gross_total_cooling_capacity(conditions, system)
+  def gross_total_cooling_capacity(self, conditions):
+    return NRELDXModel.gross_total_cooling_capacity(self, conditions)
 
-  @staticmethod
-  def gross_sensible_cooling_capacity(conditions, system):
-    return NRELDXModel.gross_sensible_cooling_capacity(conditions, system)
+  def gross_sensible_cooling_capacity(self, conditions):
+    return NRELDXModel.gross_sensible_cooling_capacity(self, conditions)
 
-  @staticmethod
-  def gross_shr(conditions):
-    return Title24DXModel.gross_shr(conditions)
+  def gross_shr(self, conditions):
+    return Title24DXModel.gross_shr(self, conditions)
 
-  @staticmethod
-  def gross_steady_state_heating_capacity(conditions, system):
-    return NRELDXModel.gross_steady_state_heating_capacity(conditions, system)
+  def gross_steady_state_heating_capacity(self, conditions):
+    return NRELDXModel.gross_steady_state_heating_capacity(self, conditions)
 
-  @staticmethod
-  def gross_integrated_heating_capacity(conditions, system):
-    return HendersonDefrostModel.gross_integrated_heating_capacity(conditions, system)
+  def gross_integrated_heating_capacity(self, conditions):
+    return HendersonDefrostModel.gross_integrated_heating_capacity(self, conditions)
 
-  @staticmethod
-  def gross_steady_state_heating_power(conditions, system):
-    return NRELDXModel.gross_steady_state_heating_power(conditions, system)
+  def gross_steady_state_heating_power(self, conditions):
+    return NRELDXModel.gross_steady_state_heating_power(self, conditions)
 
-  @staticmethod
-  def gross_integrated_heating_power(conditions, system):
-    return HendersonDefrostModel.gross_integrated_heating_power(conditions, system)
+  def gross_integrated_heating_power(self, conditions):
+    return HendersonDefrostModel.gross_integrated_heating_power(self, conditions)

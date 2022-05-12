@@ -1,4 +1,5 @@
 import copy
+import types
 
 from resdx.conditions import CoolingConditions, HeatingConditions
 from resdx.psychrometrics import PsychState
@@ -111,50 +112,51 @@ def make_vchp_unit(
 
   new_model = copy.deepcopy(base_model)
 
-  def new_gross_cooling_power(conditions, system):
-    rated_conditions = system.make_condition(CoolingConditions,compressor_speed=0,outdoor=PsychState(drybulb=conditions.outdoor.db,rel_hum=0.4))
+  def new_gross_cooling_power(self, conditions):
+    rated_conditions = self.system.make_condition(CoolingConditions,compressor_speed=0,outdoor=PsychState(drybulb=conditions.outdoor.db,rel_hum=0.4))
 
     single_speed_conditions = copy.deepcopy(conditions)
     single_speed_conditions.compressor_speed = 0
 
-    correction_factor = base_model.gross_cooling_power(single_speed_conditions, system) / base_model.gross_cooling_power(rated_conditions, system)
+    correction_factor = base_model.gross_cooling_power(single_speed_conditions) / base_model.gross_cooling_power(rated_conditions)
 
     return correction_factor * gross_cooling_data.get_capacity[conditions.compressor_speed](conditions.outdoor.db) / gross_cooling_data.get_cop[conditions.compressor_speed](conditions.outdoor.db)
 
-  def new_gross_total_cooling_capacity(conditions, system):
-    rated_conditions = system.make_condition(CoolingConditions,compressor_speed=0,outdoor=PsychState(drybulb=conditions.outdoor.db,rel_hum=0.4))
+  def new_gross_total_cooling_capacity(self, conditions):
+
+    rated_conditions = self.system.make_condition(CoolingConditions,compressor_speed=0,outdoor=PsychState(drybulb=conditions.outdoor.db,rel_hum=0.4))
 
     single_speed_conditions = copy.deepcopy(conditions)
     single_speed_conditions.compressor_speed = 0
 
-    correction_factor = base_model.gross_total_cooling_capacity(single_speed_conditions, system) / base_model.gross_total_cooling_capacity(rated_conditions, system)
+    correction_factor = base_model.gross_total_cooling_capacity(single_speed_conditions) / base_model.gross_total_cooling_capacity(rated_conditions)
 
     return correction_factor * gross_cooling_data.get_capacity[conditions.compressor_speed](conditions.outdoor.db)
 
-  def new_gross_steady_state_heating_capacity(conditions, system):
-    rated_conditions = system.make_condition(HeatingConditions,compressor_speed=0,outdoor=PsychState(drybulb=conditions.outdoor.db,rel_hum=0.4))
+  def new_gross_steady_state_heating_capacity(self, conditions):
+    rated_conditions = self.system.make_condition(HeatingConditions,compressor_speed=0,outdoor=PsychState(drybulb=conditions.outdoor.db,rel_hum=0.4))
 
     single_speed_conditions = copy.deepcopy(conditions)
     single_speed_conditions.compressor_speed = 0
 
-    correction_factor = base_model.gross_steady_state_heating_capacity(single_speed_conditions, system) / base_model.gross_steady_state_heating_capacity(rated_conditions, system)
+    correction_factor = base_model.gross_steady_state_heating_capacity(single_speed_conditions) / base_model.gross_steady_state_heating_capacity(rated_conditions)
 
     return correction_factor * gross_cooling_data.get_capacity[conditions.compressor_speed](conditions.outdoor.db)
 
-  def new_gross_steady_state_heating_power(conditions, system):
-    rated_conditions = system.make_condition(HeatingConditions,compressor_speed=0,outdoor=PsychState(drybulb=conditions.outdoor.db,rel_hum=0.4))
+  def new_gross_steady_state_heating_power(self, conditions):
+    rated_conditions = self.system.make_condition(HeatingConditions,compressor_speed=0,outdoor=PsychState(drybulb=conditions.outdoor.db,rel_hum=0.4))
 
     single_speed_conditions = copy.deepcopy(conditions)
     single_speed_conditions.compressor_speed = 0
 
-    correction_factor = base_model.gross_steady_state_heating_power(single_speed_conditions, system) / base_model.gross_steady_state_heating_power(rated_conditions, system)
+    correction_factor = base_model.gross_steady_state_heating_power(single_speed_conditions) / base_model.gross_steady_state_heating_power(rated_conditions)
 
     return correction_factor * gross_cooling_data.get_capacity[conditions.compressor_speed](conditions.outdoor.db) / gross_cooling_data.get_cop[conditions.compressor_speed](conditions.outdoor.db)
 
-  new_model.gross_cooling_power = new_gross_cooling_power
-  new_model.gross_total_cooling_capacity = new_gross_total_cooling_capacity
-  new_model.gross_steady_state_heating_capacity = new_gross_steady_state_heating_capacity
-  new_model.gross_steady_state_heating_power = new_gross_steady_state_heating_power
+  new_model.gross_cooling_power = types.MethodType(new_gross_cooling_power, new_model)
+  new_model.gross_total_cooling_capacity = types.MethodType(new_gross_total_cooling_capacity, new_model)
+  new_model.gross_steady_state_heating_capacity = types.MethodType(new_gross_steady_state_heating_capacity, new_model)
+  new_model.gross_steady_state_heating_power = types.MethodType(new_gross_steady_state_heating_power, new_model)
 
   return DXUnit(model=new_model,
     net_total_cooling_capacity_rated = [net_cooling_data.get_capacity[i](fr_u(95.0,"°F")) for i in range(net_cooling_data.number_of_stages)],
@@ -170,5 +172,6 @@ def make_vchp_unit(
     flow_rated_per_cap_heating_rated = flow_rated_per_cap_heating_rated,
     c_d_heating = c_d_heating,
     full_load_speed = 1 if net_cooling_data.number_of_stages > 3 else 0,
-    intermediate_speed = net_cooling_data.number_of_stages - 2
+    intermediate_speed = net_cooling_data.number_of_stages - 2,
+    base_model=base_model
     )

@@ -110,10 +110,13 @@ class DXUnit:
                     **kwargs):  # Additional inputs used for specific models
 
     # Initialize direct values
+    self.kwargs = kwargs
+
     self.model = model
+    self.model.set_system(self)
+
     self.c_d_cooling = c_d_cooling
     self.c_d_heating = c_d_heating
-    self.kwargs = kwargs
     self.cycling_method = cycling_method
     self.rating_standard = rating_standard
     self.defrost = defrost
@@ -313,12 +316,12 @@ class DXUnit:
   def gross_total_cooling_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.model.gross_total_cooling_capacity(conditions, self)
+    return self.model.gross_total_cooling_capacity(conditions)
 
   def gross_sensible_cooling_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.model.gross_sensible_cooling_capacity(conditions, self)
+    return self.model.gross_sensible_cooling_capacity(conditions)
 
   def gross_shr(self, conditions=None):
     return self.gross_sensible_cooling_capacity(conditions)/self.gross_total_cooling_capacity(conditions)
@@ -326,7 +329,7 @@ class DXUnit:
   def gross_cooling_power(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.model.gross_cooling_power(conditions,self)
+    return self.model.gross_cooling_power(conditions)
 
   def net_total_cooling_capacity(self, conditions=None):
     return self.gross_total_cooling_capacity(conditions) - self.cooling_fan_heat(conditions)
@@ -496,22 +499,22 @@ class DXUnit:
   def gross_steady_state_heating_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.model.gross_steady_state_heating_capacity(conditions, self)
+    return self.model.gross_steady_state_heating_capacity(conditions)
 
   def gross_steady_state_heating_power(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.model.gross_steady_state_heating_power(conditions, self)
+    return self.model.gross_steady_state_heating_power(conditions)
 
   def gross_integrated_heating_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.model.gross_integrated_heating_capacity(conditions, self)
+    return self.model.gross_integrated_heating_capacity(conditions)
 
   def gross_integrated_heating_power(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.model.gross_integrated_heating_power(conditions, self)
+    return self.model.gross_integrated_heating_power(conditions)
 
   def net_steady_state_heating_capacity(self, conditions=None):
     return self.gross_steady_state_heating_capacity(conditions) + self.heating_fan_heat(conditions)

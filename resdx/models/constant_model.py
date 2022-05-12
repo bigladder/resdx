@@ -12,36 +12,28 @@ class ConstantDXModel(DXModel):
 
   '''This model is developed for testing purposes where the performance is constant across all conditions'''
 
-  @staticmethod
-  def gross_cooling_power(conditions, system):
-    return system.gross_total_cooling_capacity_rated[conditions.compressor_speed]/system.gross_cooling_cop_rated[conditions.compressor_speed]
+  def gross_cooling_power(self, conditions):
+    return self.system.gross_total_cooling_capacity_rated[conditions.compressor_speed]/self.system.gross_cooling_cop_rated[conditions.compressor_speed]
 
-  @staticmethod
-  def gross_total_cooling_capacity(conditions, system):
-    return system.gross_total_cooling_capacity_rated[conditions.compressor_speed]
+  def gross_total_cooling_capacity(self, conditions):
+    return self.system.gross_total_cooling_capacity_rated[conditions.compressor_speed]
 
-  @staticmethod
-  def gross_steady_state_heating_power(conditions, system):
-    return system.gross_heating_capacity_rated[conditions.compressor_speed]/system.gross_heating_cop_rated[conditions.compressor_speed]
+  def gross_steady_state_heating_power(self, conditions):
+    return self.system.gross_heating_capacity_rated[conditions.compressor_speed]/self.system.gross_heating_cop_rated[conditions.compressor_speed]
 
-  @staticmethod
-  def gross_steady_state_heating_capacity(conditions, system):
-    return system.gross_heating_capacity_rated[conditions.compressor_speed]
+  def gross_steady_state_heating_capacity(self, conditions):
+    return self.system.gross_heating_capacity_rated[conditions.compressor_speed]
 
-  @staticmethod
-  def gross_integrated_heating_capacity(conditions, system):
-    return system.gross_steady_state_heating_capacity(conditions)
+  def gross_integrated_heating_capacity(self, conditions):
+    return self.system.gross_steady_state_heating_capacity(conditions)
 
-  @staticmethod
-  def gross_integrated_heating_power(conditions, system):
-    return system.gross_steady_state_heating_power(conditions)
+  def gross_integrated_heating_power(self, conditions):
+    return self.system.gross_steady_state_heating_power(conditions)
 
-  @staticmethod
-  def gross_sensible_cooling_capacity(conditions, system):
-    return system.gross_total_cooling_capacity(conditions)*gross_shr(conditions)
+  def gross_sensible_cooling_capacity(self, conditions):
+    return self.system.gross_total_cooling_capacity(conditions)*self.gross_shr(conditions)
 
-  @staticmethod
-  def gross_shr(conditions):
+  def gross_shr(self, conditions):
     return 0.7
 
 
