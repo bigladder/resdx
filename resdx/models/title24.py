@@ -311,3 +311,5 @@ class Title24DXModel(DXModel):
     else:
       slope = (inp47 - inp17)/(47.0 - 17.0)
     return inp17 + slope*(T_odb - 17.0) - self.system.heating_fan_power_rated[conditions.compressor_speed]
+
+  # TODO: Default assumptions

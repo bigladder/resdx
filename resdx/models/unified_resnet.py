@@ -94,3 +94,15 @@ class RESNETDXModel(DXModel):
 
   def set_c_d_heating(self, input):
     self.system.c_d_heating = self.set_default(input, 0.142)
+
+  def set_net_cooling_cop_rated(self, input):
+    NRELDXModel.set_net_cooling_cop_rated(self, input)
+
+  def set_gross_cooling_cop_rated(self, input):
+    NRELDXModel.set_gross_cooling_cop_rated(self, input)
+
+  def set_net_heating_cop_rated(self, input):
+    NRELDXModel.set_net_heating_cop_rated(self, input)
+
+  def set_gross_heating_cop_rated(self, input):
+    NRELDXModel.set_gross_heating_cop_rated(self, input)

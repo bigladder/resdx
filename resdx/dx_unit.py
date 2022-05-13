@@ -177,36 +177,23 @@ class DXUnit:
       self.gross_heating_capacity_rated[i] = self.net_heating_capacity_rated[i] - self.heating_fan_power_rated[i]
 
     # COP determinations
-    self.net_cooling_cop_rated = self.set_value(net_cooling_cop_rated)
-    self.gross_cooling_cop_rated = self.set_value(gross_cooling_cop_rated, [lambda x : 1./(0.8887 * (1./x) + 0.0083)]) # from Cutler's work (two speeds)
-    self.gross_heating_cop_rated = self.set_value(gross_heating_cop_rated, [lambda x : 1./(0.6241 * (1./x) + 0.0681)]) # from Cutler's work (two speeds))
-    self.net_heating_cop_rated = self.set_value(net_heating_cop_rated)
+    if net_cooling_cop_rated is None and gross_cooling_cop_rated is None:
+      raise Exception(f'Must define either \'net_cooling_cop_rated\' or \'gross_cooling_cop_rated\'.')
 
-    if self.net_cooling_cop_rated is None:
-      if self.gross_cooling_cop_rated is None:
-        raise Exception(f'Must define either \'net_cooling_cop_rated\' or \'gross_cooling_cop_rated\'.')
-      else:
-        self.gross_cooling_power_rated = [self.gross_total_cooling_capacity_rated[i]/self.gross_cooling_cop_rated[i] for i in range(self.number_of_input_stages)]
-        self.net_cooling_power_rated = [self.gross_cooling_power_rated[i] + self.cooling_fan_power_rated[i] for i in range(self.number_of_input_stages)]
-        self.net_cooling_cop_rated = [self.net_total_cooling_capacity_rated[i]/self.net_cooling_power_rated[i] for i in range(self.number_of_input_stages)]
+    if net_heating_cop_rated is None and gross_heating_cop_rated is None:
+      raise Exception(f'Must define either \'net_heating_cop_rated\' or \'gross_heating_cop_rated\'.')
 
-    if self.gross_cooling_cop_rated is None:
-      self.net_cooling_power_rated = [self.net_total_cooling_capacity_rated[i]/self.net_cooling_cop_rated[i] for i in range(self.number_of_input_stages)]
-      self.gross_cooling_power_rated = [self.net_cooling_power_rated[i] - self.cooling_fan_power_rated[i] for i in range(self.number_of_input_stages)]
-      self.gross_cooling_cop_rated = [self.gross_total_cooling_capacity_rated[i]/self.gross_cooling_power_rated[i] for i in range(self.number_of_input_stages)]
+    if net_cooling_cop_rated is not None:
+      self.model.set_net_cooling_cop_rated(net_cooling_cop_rated)
 
-    if self.net_heating_cop_rated is None:
-      if self.gross_heating_cop_rated is None:
-        raise Exception(f'Must define either \'net_heating_cop_rated\' or \'gross_heating_cop_rated\'.')
-      else:
-        self.gross_heating_power_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_cop_rated[i] for i in range(self.number_of_input_stages)]
-        self.net_heating_power_rated = [self.gross_heating_power_rated[i] + self.heating_fan_power_rated[i] for i in range(self.number_of_input_stages)]
-        self.net_heating_cop_rated = [self.net_heating_capacity_rated[i]/self.net_heating_power_rated[i] for i in range(self.number_of_input_stages)]
+    if gross_cooling_cop_rated is not None:
+      self.model.set_gross_cooling_cop_rated(gross_cooling_cop_rated)
 
-    if self.gross_heating_cop_rated is None:
-      self.net_heating_power_rated = [self.net_heating_capacity_rated[i]/self.net_heating_cop_rated[i] for i in range(self.number_of_input_stages)]
-      self.gross_heating_power_rated = [self.net_heating_power_rated[i] - self.heating_fan_power_rated[i] for i in range(self.number_of_input_stages)]
-      self.gross_heating_cop_rated = [self.gross_heating_capacity_rated[i]/self.gross_heating_power_rated[i] for i in range(self.number_of_input_stages)]
+    if net_heating_cop_rated is not None:
+      self.model.set_net_heating_cop_rated(net_heating_cop_rated)
+
+    if gross_heating_cop_rated is not None:
+      self.model.set_gross_heating_cop_rated(gross_heating_cop_rated)
 
     ## Set rating conditions TODO: re-set when AHRIStandard version changes (for ESP)
     self.A_full_cond = self.make_condition(CoolingConditions,compressor_speed=self.full_load_speed)
@@ -251,20 +238,6 @@ class DXUnit:
     self.check_array_order(self.net_total_cooling_capacity_rated)
     self.check_array_order(self.net_heating_capacity_rated)
 
-  def set_value(self, input, modifications=None):
-    if input is None:
-      return None
-    elif type(input) is list:
-      return input
-    else:
-      # derrive from scalar
-      num_mods = self.number_of_input_stages - 1
-      if modifications is None:
-        modifications = [lambda x : x]*num_mods
-      elif len(modifications) < num_mods:
-        raise Exception(f"Not enough \'modifications\' for {self.number_of_input_stages} speed systems")
-      return [input] + [modifications[i](input) for i in range(num_mods)]
-
   def check_array_length(self, array):
     if (len(array) != self.number_of_input_stages):
       raise Exception(f'Unexpected array length ({len(array)}). Number of speeds is {self.number_of_input_stages}. Array items are {array}.')
@@ -290,6 +263,16 @@ class DXUnit:
     self.gross_heating_capacity_rated = [None]*self.number_of_input_stages
     self.bypass_factor_rated = [None]*self.number_of_input_stages
     self.normalized_ntu = [None]*self.number_of_input_stages
+
+    self.net_cooling_cop_rated = [None]*self.number_of_input_stages
+    self.net_cooling_power_rated = [None]*self.number_of_input_stages
+    self.gross_cooling_power_rated = [None]*self.number_of_input_stages
+    self.gross_cooling_cop_rated = [None]*self.number_of_input_stages
+
+    self.net_heating_cop_rated = [None]*self.number_of_input_stages
+    self.net_heating_power_rated = [None]*self.number_of_input_stages
+    self.gross_heating_power_rated = [None]*self.number_of_input_stages
+    self.gross_heating_cop_rated = [None]*self.number_of_input_stages
 
   def make_condition(self, condition_type, compressor_speed=0, indoor=None, outdoor=None):
     if indoor is None:
