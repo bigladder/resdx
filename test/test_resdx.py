@@ -2,6 +2,7 @@ import resdx
 
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy import optimize
 
 sns.set()
 
@@ -16,66 +17,76 @@ PsychState = resdx.psychrometrics.PsychState
 HeatingConditions = resdx.dx_unit.HeatingConditions
 CoolingConditions = resdx.dx_unit.CoolingConditions
 
-# Single speed, SEER 13, HSPF 8
-dx_unit_1_speed = DXUnit()
-
 
 # Tests
 def test_1_speed_regression():
+  # Single speed, SEER 13, HSPF 8
+  seer_1 = 13.
+  hspf_1 = 8.
+  cop_1_c, solution_1_c = optimize.newton(lambda x : DXUnit(gross_cooling_cop_rated=x, input_seer=seer_1).seer() - seer_1, seer_1/3.33, full_output = True)
+  cop_1_h, solution_1_h = optimize.newton(lambda x : DXUnit(gross_heating_cop_rated=x, input_hspf=hspf_1).hspf() - hspf_1, hspf_1/2., full_output = True)
+  dx_unit_1_speed = DXUnit(gross_cooling_cop_rated=cop_1_c, gross_heating_cop_rated=cop_1_h, input_seer=seer_1, input_hspf=hspf_1)
+
   dx_unit_1_speed.print_cooling_info()
   dx_unit_1_speed.print_heating_info()
-  assert dx_unit_1_speed.seer() == approx(13.0, 0.01)
-  assert dx_unit_1_speed.eer() == approx(11.19, 0.01)
-  assert dx_unit_1_speed.hspf() == approx(8.49, 0.01)
+  assert dx_unit_1_speed.seer() == approx(seer_1, 0.0001)
+  assert dx_unit_1_speed.gross_cooling_cop_rated[0] == approx(3.716, 0.001)
+  assert dx_unit_1_speed.hspf() == approx(hspf_1, 0.0001)
+  assert dx_unit_1_speed.gross_heating_cop_rated[0] == approx(3.476, 0.001)
   assert dx_unit_1_speed.net_total_cooling_capacity() == approx(dx_unit_1_speed.net_total_cooling_capacity_rated[0],0.01)
 
-# Two speed, SEER 17, HSPF 10
-dx_unit_2_speed = DXUnit(number_of_input_stages=2)
 
 def test_2_speed_regression():
+  # Two speed, SEER 17, HSPF 10
+  seer_2 = 17.
+  hspf_2 = 10.
+  cop_2_c, solution_2_c = optimize.newton(lambda x : DXUnit(number_of_input_stages=2, gross_cooling_cop_rated=x, input_seer=seer_2).seer() - seer_2,seer_2/3.33, full_output = True)
+  cop_2_h, solution_2_h = optimize.newton(lambda x : DXUnit(number_of_input_stages=2, gross_heating_cop_rated=x, input_hspf=hspf_2).hspf() - hspf_2,hspf_2/2., full_output = True)
+
+  dx_unit_2_speed = DXUnit(number_of_input_stages=2, gross_cooling_cop_rated=cop_2_c, gross_heating_cop_rated=cop_2_h, input_seer=seer_2, input_hspf=hspf_2)
+
   dx_unit_2_speed.print_cooling_info()
 
   dx_unit_2_speed.print_heating_info()
   dx_unit_2_speed.print_heating_info(region=2)
-  assert dx_unit_2_speed.seer() == approx(14.219, 0.01)
-  assert dx_unit_2_speed.eer() == approx(11.152, 0.01)
-  assert dx_unit_2_speed.hspf() == approx(9.461, 0.01)
-  assert dx_unit_2_speed.hspf(region=2) == approx(11.669, 0.01)
-
-# VCHP (Fujitsu Halcyon 12) https://ashp.neep.org/#!/product/25349/7/25000///0
-# SEER 21.3, EER 13.4, HSPF(4) = 11.7
-cooling_data = resdx.VCHPDataPoints()
-cooling_data.append(
-  resdx.VCHPDataPoint(
-    drybulb=fr_u(95.0,"°F"),
-    capacities=[fr_u(13600,"Btu/hr"),fr_u(3100,"Btu/hr")],
-    cops=[2.75,7.57]))
-cooling_data.append(
-  resdx.VCHPDataPoint(
-    drybulb=fr_u(82.0,"°F"),
-    capacities=[fr_u(15276,"Btu/hr"),fr_u(3437,"Btu/hr")],
-    cops=[3.2,8.39]))
-
-heating_data = resdx.VCHPDataPoints()
-heating_data.append(
-  resdx.VCHPDataPoint(
-    drybulb=fr_u(47.0,"°F"),
-    capacities=[fr_u(19400,"Btu/hr"),fr_u(3100,"Btu/hr")],
-    cops=[3.09,6.49]))
-heating_data.append(
-  resdx.VCHPDataPoint(
-    drybulb=fr_u(17.0,"°F"),
-    capacities=[fr_u(17600,"Btu/hr"),fr_u(2824,"Btu/hr")],
-    cops=[2.62,5.52]))
-heating_data.append(
-  resdx.VCHPDataPoint(
-    drybulb=fr_u(5.0,"°F"),
-    capacities=[fr_u(16710,"Btu/hr"),fr_u(2671,"Btu/hr")],
-    cops=[2.37,4.89]))
-
-vchp_unit = resdx.make_vchp_unit(cooling_data, heating_data)
+  assert dx_unit_2_speed.seer() == approx(seer_2, 0.01)
+  assert dx_unit_2_speed.gross_cooling_cop_rated[0] == approx(4.379, 0.001)
+  assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
+  assert dx_unit_2_speed.gross_heating_cop_rated[0] == approx(4.011, 0.001)
 
 def test_vchp_regression():
+  # VCHP (Fujitsu Halcyon 12) https://ashp.neep.org/#!/product/25349/7/25000///0
+  # SEER 21.3, EER 13.4, HSPF(4) = 11.7
+  cooling_data = resdx.VCHPDataPoints()
+  cooling_data.append(
+    resdx.VCHPDataPoint(
+      drybulb=fr_u(95.0,"°F"),
+      capacities=[fr_u(13600,"Btu/hr"),fr_u(3100,"Btu/hr")],
+      cops=[2.75,7.57]))
+  cooling_data.append(
+    resdx.VCHPDataPoint(
+      drybulb=fr_u(82.0,"°F"),
+      capacities=[fr_u(15276,"Btu/hr"),fr_u(3437,"Btu/hr")],
+      cops=[3.2,8.39]))
+
+  heating_data = resdx.VCHPDataPoints()
+  heating_data.append(
+    resdx.VCHPDataPoint(
+      drybulb=fr_u(47.0,"°F"),
+      capacities=[fr_u(19400,"Btu/hr"),fr_u(3100,"Btu/hr")],
+      cops=[3.09,6.49]))
+  heating_data.append(
+    resdx.VCHPDataPoint(
+      drybulb=fr_u(17.0,"°F"),
+      capacities=[fr_u(17600,"Btu/hr"),fr_u(2824,"Btu/hr")],
+      cops=[2.62,5.52]))
+  heating_data.append(
+    resdx.VCHPDataPoint(
+      drybulb=fr_u(5.0,"°F"),
+      capacities=[fr_u(16710,"Btu/hr"),fr_u(2671,"Btu/hr")],
+      cops=[2.37,4.89]))
+
+  vchp_unit = resdx.make_vchp_unit(cooling_data, heating_data)
   assert vchp_unit.net_total_cooling_capacity() == approx(vchp_unit.net_total_cooling_capacity_rated[0],0.01)
   vchp_unit.print_cooling_info()
 
@@ -89,6 +100,13 @@ def test_vchp_regression():
 
 
 def test_plot():
+  # Single speed, SEER 13, HSPF 8
+  seer_1 = 13.
+  hspf_1 = 8.
+  cop_1_c, solution_1_c = optimize.newton(lambda x : DXUnit(gross_cooling_cop_rated=x, input_seer=seer_1).seer() - seer_1, seer_1/3.33, full_output = True)
+  cop_1_h, solution_1_h = optimize.newton(lambda x : DXUnit(gross_heating_cop_rated=x, input_hspf=hspf_1).hspf() - hspf_1, hspf_1/2., full_output = True)
+  dx_unit_1_speed = DXUnit(gross_cooling_cop_rated=cop_1_c, gross_heating_cop_rated=cop_1_h, input_seer=seer_1, input_hspf=hspf_1)
+
   # Plot integrated power and capacity
   T_out = np.arange(-23,76,1)
   conditions = [dx_unit_1_speed.make_condition(HeatingConditions,outdoor=PsychState(drybulb=fr_u(T,"°F"),rel_hum=0.4)) for T in T_out]

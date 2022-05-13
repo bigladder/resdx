@@ -4,27 +4,6 @@ from .title24 import Title24DXModel
 from .henderson_defrost_model import HendersonDefrostModel
 from ..units import fr_u, to_u
 
-def fan_efficacy(seer):
-    if seer <= 14:
-        return fr_u(0.25,'W/(cu_ft/min)')
-    elif seer >= 16:
-        return fr_u(0.18,'W/(cu_ft/min)')
-    else:
-        return fr_u(0.25,'W/(cu_ft/min)') + (fr_u(0.18,'W/(cu_ft/min)') - fr_u(0.25,'W/(cu_ft/min)'))/2.0 * (seer - 14.0)
-
-
-def c_d(seer):
-    if seer <= 12:
-        return 0.2
-    elif seer >= 13:
-        return 0.1
-    else:
-        return 0.2 + (0.1 - 0.2)*(seer - 12.0)
-
-def estimated_seer(hspf): # Linear model fitted (R² = 0.994) based on data of the histrory of federal minimums (https://www.eia.gov/todayinenergy/detail.php?id=40232#).
-    return (hspf - 3.2627)/0.3526
-
-
 class RESNETDXModel(DXModel):
 
   # Power and capacity
@@ -53,6 +32,20 @@ class RESNETDXModel(DXModel):
     return HendersonDefrostModel.gross_integrated_heating_power(self, conditions)
 
   # Default assumptions
+  def set_fan_efficacy_cooling_rated(self, input):
+    if self.system.input_seer is None:
+      default = fr_u(0.25,'W/(cu_ft/min)')
+    else:
+      default = RESNETDXModel.fan_efficacy(self.system.input_seer)
+    self.system.fan_efficacy_cooling_rated = self.set_default(input, [default]*self.system.number_of_input_stages)
+
+  def set_fan_efficacy_heating_rated(self, input):
+    if self.system.input_hspf is None:
+      default = fr_u(0.25,'W/(cu_ft/min)')
+    else:
+      default = RESNETDXModel.fan_efficacy(RESNETDXModel.estimated_seer(self.system.input_hspf))
+    self.system.fan_efficacy_heating_rated = self.set_default(input, [default]*self.system.number_of_input_stages)
+
   def set_flow_rated_per_cap_cooling_rated(self, input):
     default = fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")
     if self.system.number_of_input_stages == 1:
@@ -90,10 +83,18 @@ class RESNETDXModel(DXModel):
         self.system.net_heating_capacity_rated = [input, net_cap_1]
 
   def set_c_d_cooling(self, input):
-    self.system.c_d_cooling = self.set_default(input, 0.1)
+    if self.system.input_seer is None:
+      default = 0.25
+    else:
+      default = RESNETDXModel.c_d(self.system.input_seer)
+    self.system.c_d_cooling = self.set_default(input, default)
 
   def set_c_d_heating(self, input):
-    self.system.c_d_heating = self.set_default(input, 0.142)
+    if self.system.input_hspf is None:
+      default = 0.25
+    else:
+      default = RESNETDXModel.c_d(RESNETDXModel.estimated_seer(self.system.input_hspf))
+    self.system.c_d_heating = self.set_default(input, default)
 
   def set_net_cooling_cop_rated(self, input):
     NRELDXModel.set_net_cooling_cop_rated(self, input)
@@ -106,3 +107,30 @@ class RESNETDXModel(DXModel):
 
   def set_gross_heating_cop_rated(self, input):
     NRELDXModel.set_gross_heating_cop_rated(self, input)
+
+  @staticmethod
+  def fan_efficacy(seer):
+      if seer <= 14:
+          return fr_u(0.25,'W/(cu_ft/min)')
+      elif seer >= 16:
+          return fr_u(0.18,'W/(cu_ft/min)')
+      else:
+          return fr_u(0.25,'W/(cu_ft/min)') + (fr_u(0.18,'W/(cu_ft/min)') - fr_u(0.25,'W/(cu_ft/min)'))/2.0 * (seer - 14.0)
+
+  @staticmethod
+  def c_d(seer):
+      if seer <= 12:
+          return 0.2
+      elif seer >= 13:
+          return 0.1
+      else:
+          return 0.2 + (0.1 - 0.2)*(seer - 12.0)
+
+  @staticmethod
+  def estimated_seer(hspf): # Linear model fitted (R² = 0.994) based on data of the histrory of federal minimums (https://www.eia.gov/todayinenergy/detail.php?id=40232#).
+      return (hspf - 3.2627)/0.3526
+
+  @staticmethod
+  def estimated_hspf(seer): # Linear model fitted (R² = 0.994) based on data of the histrory of federal minimums (https://www.eia.gov/todayinenergy/detail.php?id=40232#).
+      return seer*0.3526 + 3.2627
+

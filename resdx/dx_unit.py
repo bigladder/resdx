@@ -108,6 +108,10 @@ class DXUnit:
                     intermediate_speed = None,
                     staging_type = None, # Allow default based on inputs
                     rating_standard = AHRIVersion.AHRI_210_240_2017,
+
+                    # Used for comparisons and to inform some defaults
+                    input_seer = None,
+                    input_hspf = None,
                     **kwargs):  # Additional inputs used for specific models
 
     # Initialize direct values
@@ -116,6 +120,8 @@ class DXUnit:
     self.model = model
     self.model.set_system(self)
 
+    self.input_seer = input_seer
+    self.input_hspf = input_hspf
     self.cycling_method = cycling_method
     self.defrost = defrost
     self.rating_standard = rating_standard
@@ -733,6 +739,7 @@ class DXUnit:
       print(f"Net cooling power for stage {speed + 1} : {self.net_cooling_power(conditions)}")
       print(f"Net cooling capacity for stage {speed + 1} : {self.net_total_cooling_capacity(conditions)}")
       print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions)}")
+      print(f"Gross cooling COP for stage {speed + 1} : {self.gross_cooling_cop(conditions)}")
       print(f"Net SHR for stage {speed + 1} : {self.net_shr(conditions)}")
 
   def print_heating_info(self, region=4):
@@ -741,6 +748,7 @@ class DXUnit:
       conditions = HeatingConditions(compressor_speed=speed)
       conditions.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[speed], self.net_total_cooling_capacity_rated[speed])
       print(f"Net heating power for stage {speed + 1} : {self.net_integrated_heating_power(conditions)}")
+      print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions)}")
       print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")
 
   def writeA205(self):

@@ -77,7 +77,7 @@ class Title24DXModel(DXModel):
     cap95 = self.system.net_total_cooling_capacity_rated[conditions.compressor_speed]
     q_fan = self.system.cooling_fan_power_rated[conditions.compressor_speed]
     if T_odb < 95.0:
-      seer = fr_u(self.system.kwargs["input_seer"],'Btu/Wh')
+      seer = fr_u(self.system.input_seer,'Btu/Wh')
       if shr < 1:
         seer_coeffs = [0,-0.0202256,0.0236703,-0.0006638,0,0,-0.0001841,0.0000214,-0.00000812,0.0002971,-27.95672,0.209951063]
         cap_coeffs = [0,0.009645900,0.002536900,0.000171500,0,0,-0.000095900,0.000008180,-0.000007550,0.000105700,-53.542300000,0.381567150]
@@ -144,7 +144,7 @@ class Title24DXModel(DXModel):
       else:
         # or use the Title 24 default calculation
         cap47 = self.system.net_heating_capacity_rated[conditions.compressor_speed]
-        self.system.model_data["cap17"][conditions.compressor_speed] = self.cap17_ratio_rated(self.system.kwargs["input_hspf"])*cap47
+        self.system.model_data["cap17"][conditions.compressor_speed] = self.cap17_ratio_rated(self.system.input_hspf)*cap47
       return self.system.model_data["cap17"][conditions.compressor_speed]
 
   def get_cap35(self, conditions):
@@ -261,8 +261,7 @@ class Title24DXModel(DXModel):
     if "cop17" not in self.system.model_data:
       self.system.model_data["cop17"] = [None]*self.system.number_of_input_stages
 
-    hspf = self.system.kwargs["input_hspf"]
-    root_fn = lambda cop17 : self.check_hspf(conditions, cop17) - hspf
+    root_fn = lambda cop17 : self.check_hspf(conditions, cop17) - self.system.input_hspf
     cop17_guess = 3.0 #0.2186*hspf + 0.6734
     self.system.model_data["cop17"][conditions.compressor_speed] = optimize.newton(root_fn, cop17_guess)
 
