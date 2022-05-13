@@ -51,8 +51,10 @@ def test_2_speed_regression():
   dx_unit_2_speed.print_heating_info(region=2)
   assert dx_unit_2_speed.seer() == approx(seer_2, 0.01)
   assert dx_unit_2_speed.gross_cooling_cop_rated[0] == approx(4.379, 0.001)
+  assert dx_unit_2_speed.gross_cooling_cop_rated[1] == approx(4.734, 0.001)
   assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
   assert dx_unit_2_speed.gross_heating_cop_rated[0] == approx(4.011, 0.001)
+  assert dx_unit_2_speed.gross_heating_cop_rated[1] == approx(4.470, 0.001)
 
 def test_vchp_regression():
   # VCHP (Fujitsu Halcyon 12) https://ashp.neep.org/#!/product/25349/7/25000///0
