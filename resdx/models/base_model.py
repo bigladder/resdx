@@ -1,3 +1,6 @@
+from ..units import fr_u, to_u
+
+
 class DXModel:
 
   def __init__(self):
@@ -34,15 +37,48 @@ class DXModel:
   def gross_integrated_heating_power(self, conditions):
     raise NotImplementedError()
 
-  # Defaults
-  @staticmethod
-  def set_default(input, default):
+  # Default assumptions
+  def set_default(self, input, default):
     if input is None:
       return default
     else:
-      return input
+      if type(default) is list:
+        if type(input) is list:
+          return input
+        else:
+          return [input]*self.system.number_of_input_stages
+      else:
+        return input
+
+  def set_fan_efficacy_cooling_rated(self, input):
+    self.system.fan_efficacy_cooling_rated = self.set_default(input, [fr_u(0.25,'W/(cu_ft/min)')]*self.system.number_of_input_stages)
+
+  def set_fan_efficacy_heating_rated(self, input):
+    self.system.fan_efficacy_heating_rated = self.set_default(input, [fr_u(0.25,'W/(cu_ft/min)')]*self.system.number_of_input_stages)
+
+  def set_flow_rated_per_cap_cooling_rated(self, input):
+    self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")]*self.system.number_of_input_stages)
+
+  def set_flow_rated_per_cap_heating_rated(self, input):
+    self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")]*self.system.number_of_input_stages) # TODO: Check assumption
+
+  def set_net_total_cooling_capacity_rated(self, input):
+    # No default, but need to set to list (and default lower speeds)
+    if type(input) is list:
+      self.system.net_total_cooling_capacity_rated = input
+    else:
+      self.system.net_total_cooling_capacity_rated = [input]*self.system.number_of_input_stages
+
+  def set_net_heating_capacity_rated(self, input):
+    input = self.set_default(input, self.system.net_total_cooling_capacity_rated[0])
+    if type(input) is list:
+      self.system.net_heating_capacity_rated = input
+    else:
+      self.system.net_heating_capacity_rated = [input]*self.system.number_of_input_stages
 
   def set_c_d_cooling(self, input):
-    self.system.c_d_cooling = DXModel.set_default(input, 0.25)
+    self.system.c_d_cooling = self.set_default(input, 0.25)
 
+  def set_c_d_heating(self, input):
+    self.system.c_d_heating = self.set_default(input, 0.25)
 

@@ -51,3 +51,46 @@ class RESNETDXModel(DXModel):
 
   def gross_integrated_heating_power(self, conditions):
     return HendersonDefrostModel.gross_integrated_heating_power(self, conditions)
+
+  # Default assumptions
+  def set_flow_rated_per_cap_cooling_rated(self, input):
+    default = fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")
+    if self.system.number_of_input_stages == 1:
+      self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [default])
+    elif self.system.number_of_input_stages == 2:
+      self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [default, default*0.86])
+    else:
+      self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [default]*self.system.number_of_input_stages)
+
+  def set_flow_rated_per_cap_heating_rated(self, input):
+    default = fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")
+    if self.system.number_of_input_stages == 1:
+      self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [default])
+    elif self.system.number_of_input_stages == 2:
+      self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [default, default*0.8])
+    else:
+      self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [default]*self.system.number_of_input_stages)
+
+  def set_net_total_cooling_capacity_rated(self, input):
+    NRELDXModel.set_net_total_cooling_capacity_rated(self, input)
+
+  def set_net_heating_capacity_rated(self, input):
+    input = self.set_default(input, self.system.net_total_cooling_capacity_rated[0]*0.98 + fr_u(180.,"Btu/hr")) # From Title24
+    if type(input) is list:
+      self.system.net_heating_capacity_rated = input
+    else:
+      # From NREL
+      if self.system.number_of_input_stages == 1:
+        self.system.net_heating_capacity_rated = [input]
+      elif self.system.number_of_input_stages == 2:
+        fan_power_0 = input*self.system.fan_efficacy_heating_rated[0]*self.system.flow_rated_per_cap_heating_rated[0]
+        gross_cap_0 = input - fan_power_0
+        gross_cap_1 = gross_cap_0*0.72
+        net_cap_1 = gross_cap_1/(1. - self.system.fan_efficacy_heating_rated[1]*self.system.flow_rated_per_cap_heating_rated[1])
+        self.system.net_heating_capacity_rated = [input, net_cap_1]
+
+  def set_c_d_cooling(self, input):
+    self.system.c_d_cooling = self.set_default(input, 0.1)
+
+  def set_c_d_heating(self, input):
+    self.system.c_d_heating = self.set_default(input, 0.142)

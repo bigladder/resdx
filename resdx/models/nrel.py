@@ -11,6 +11,7 @@ from .base_model import DXModel
 class NRELDXModel(DXModel):
 
   '''Based on Cutler et al, but also includes internal EnergyPlus calculations'''
+  '''Also, some assumptions from: https://github.com/NREL/OpenStudio-ERI/blob/master/hpxml-measures/HPXMLtoOpenStudio/resources/hvac.rb'''
 
   def gross_cooling_power(self, conditions):
     '''From Cutler et al.'''
@@ -126,4 +127,47 @@ class NRELDXModel(DXModel):
     w_ADP = psychrolib.GetSatHumRatio(T_ADP, conditions.indoor.p)
     h_sensible = psychrolib.GetMoistAirEnthalpy(conditions.indoor.db_C,w_ADP)
     return Q_t*(h_sensible - h_ADP)/(h_i - h_ADP)
+
+  # Default assumptions
+  def set_flow_rated_per_cap_cooling_rated(self, input):
+    if self.system.number_of_input_stages == 1:
+      self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [fr_u(394.2,"(cu_ft/min)/ton_of_refrigeration")])
+    elif self.system.number_of_input_stages == 2:
+      default = fr_u(344.1,"(cu_ft/min)/ton_of_refrigeration")
+      self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [default, default*0.86])
+
+  def set_flow_rated_per_cap_heating_rated(self, input):
+    if self.system.number_of_input_stages == 1:
+      self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [fr_u(384.1,"(cu_ft/min)/ton_of_refrigeration")])
+    elif self.system.number_of_input_stages == 2:
+      default = fr_u(352.2,"(cu_ft/min)/ton_of_refrigeration")
+      self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [default, default*0.8])
+
+  def set_net_total_cooling_capacity_rated(self, input):
+    # No default, but need to set to list (and default lower speeds)
+    if type(input) is list:
+      self.system.net_total_cooling_capacity_rated = input
+    else:
+      if self.system.number_of_input_stages == 1:
+        self.system.net_total_cooling_capacity_rated = [input]
+      elif self.system.number_of_input_stages == 2:
+        fan_power_0 = input*self.system.fan_efficacy_cooling_rated[0]*self.system.flow_rated_per_cap_cooling_rated[0]
+        gross_cap_0 = input + fan_power_0
+        gross_cap_1 = gross_cap_0*0.72
+        net_cap_1 = gross_cap_1/(1. + self.system.fan_efficacy_cooling_rated[1]*self.system.flow_rated_per_cap_cooling_rated[1])
+        self.system.net_total_cooling_capacity_rated = [input, net_cap_1]
+
+  def set_net_heating_capacity_rated(self, input):
+    input = self.set_default(input, self.system.net_total_cooling_capacity_rated[0])
+    if type(input) is list:
+      self.system.net_heating_capacity_rated = input
+    else:
+      if self.system.number_of_input_stages == 1:
+        self.system.net_heating_capacity_rated = [input]
+      elif self.system.number_of_input_stages == 2:
+        fan_power_0 = input*self.system.fan_efficacy_heating_rated[0]*self.system.flow_rated_per_cap_heating_rated[0]
+        gross_cap_0 = input - fan_power_0
+        gross_cap_1 = gross_cap_0*0.72
+        net_cap_1 = gross_cap_1/(1. - self.system.fan_efficacy_heating_rated[1]*self.system.flow_rated_per_cap_heating_rated[1])
+        self.system.net_heating_capacity_rated = [input, net_cap_1]
 
