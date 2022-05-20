@@ -751,6 +751,6 @@ class DXUnit:
       print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions)}")
       print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")
 
-  def writeA205(self):
+  def write_A205(self):
     '''TODO: Write ASHRAE 205 file!!!'''
     return
