@@ -35,6 +35,18 @@ def test_1_speed_regression():
   assert dx_unit_1_speed.gross_heating_cop_rated[0] == approx(3.476, 0.001)
   assert dx_unit_1_speed.net_total_cooling_capacity() == approx(dx_unit_1_speed.net_total_cooling_capacity_rated[0],0.01)
 
+def test_1_speed_refrigerant_charge_regression():
+  # Single speed, SEER 13, HSPF 8
+  seer_1 = 13.
+  hspf_1 = 8.
+  cop_1_c, solution_1_c = optimize.newton(lambda x : DXUnit(gross_cooling_cop_rated=x, input_seer=seer_1).seer() - seer_1, seer_1/3.33, full_output = True)
+  cop_1_h, solution_1_h = optimize.newton(lambda x : DXUnit(gross_heating_cop_rated=x, input_hspf=hspf_1).hspf() - hspf_1, hspf_1/2., full_output = True)
+  dx_unit_1_speed = DXUnit(gross_cooling_cop_rated=cop_1_c, gross_heating_cop_rated=cop_1_h, input_seer=seer_1, input_hspf=hspf_1, refrigerant_charge_deviation=-0.25)
+
+  dx_unit_1_speed.print_cooling_info()
+  dx_unit_1_speed.print_heating_info()
+  assert dx_unit_1_speed.seer() == approx(11.16, 0.01)
+  assert dx_unit_1_speed.hspf() == approx(7.18, 0.01)
 
 def test_2_speed_regression():
   # Two speed, SEER 17, HSPF 10

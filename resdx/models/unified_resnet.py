@@ -31,6 +31,18 @@ class RESNETDXModel(DXModel):
   def gross_integrated_heating_power(self, conditions):
     return HendersonDefrostModel.gross_integrated_heating_power(self, conditions)
 
+  def gross_cooling_power_charge_factor(self, conditions):
+    return NRELDXModel.gross_cooling_power_charge_factor(self, conditions)
+
+  def gross_total_cooling_capacity_charge_factor(self, conditions):
+    return NRELDXModel.gross_total_cooling_capacity_charge_factor(self, conditions)
+
+  def gross_steady_state_heating_capacity_charge_factor(self, conditions):
+    return NRELDXModel.gross_steady_state_heating_capacity_charge_factor(self, conditions)
+
+  def gross_steady_state_heating_power_charge_factor(self, conditions):
+    return NRELDXModel.gross_steady_state_heating_power_charge_factor(self, conditions)
+
   # Default assumptions
   def set_fan_efficacy_cooling_rated(self, input):
     if self.system.input_seer is None:

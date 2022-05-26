@@ -103,6 +103,7 @@ class DXUnit:
                     heating_off_temperature = fr_u(0.0,"°F"),
                     heating_on_temperature = None, # default to heating_off_temperature
                     defrost = Defrost(),
+                    refrigerant_charge_deviation=0.0,
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
                     full_load_speed = 0, # The first entry (index = 0) in arrays reflects AHRI "full" speed.
                     intermediate_speed = None,
@@ -126,6 +127,7 @@ class DXUnit:
     self.defrost = defrost
     self.rating_standard = rating_standard
     self.heating_off_temperature = heating_off_temperature
+    self.refrigerant_charge_deviation = refrigerant_charge_deviation
     if heating_on_temperature == None:
       self.heating_on_temperature = self.heating_off_temperature
 
@@ -306,7 +308,7 @@ class DXUnit:
   def gross_total_cooling_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.model.gross_total_cooling_capacity(conditions)
+    return self.model.gross_total_cooling_capacity(conditions)*self.model.gross_total_cooling_capacity_charge_factor(conditions)
 
   def gross_sensible_cooling_capacity(self, conditions=None):
     if conditions is None:
@@ -319,7 +321,7 @@ class DXUnit:
   def gross_cooling_power(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.model.gross_cooling_power(conditions)
+    return self.model.gross_cooling_power(conditions)*self.model.gross_cooling_power_charge_factor(conditions)
 
   def net_total_cooling_capacity(self, conditions=None):
     return self.gross_total_cooling_capacity(conditions) - self.cooling_fan_heat(conditions)
@@ -489,12 +491,12 @@ class DXUnit:
   def gross_steady_state_heating_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.model.gross_steady_state_heating_capacity(conditions)
+    return self.model.gross_steady_state_heating_capacity(conditions)*self.model.gross_steady_state_heating_capacity_charge_factor(conditions)
 
   def gross_steady_state_heating_power(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.model.gross_steady_state_heating_power(conditions)
+    return self.model.gross_steady_state_heating_power(conditions)*self.model.gross_steady_state_heating_power_charge_factor(conditions)
 
   def gross_integrated_heating_capacity(self, conditions=None):
     if conditions is None:
