@@ -37,6 +37,21 @@ class DXModel:
   def gross_integrated_heating_power(self, conditions):
     raise NotImplementedError()
 
+  def gross_total_cooling_capacity_charge_factor(self, conditions):
+    return 1.0
+
+  def gross_total_cooling_capacity_charge_factor(self, conditions):
+    return 1.0
+
+  def gross_cooling_power_charge_factor(self, conditions):
+    return 1.0
+
+  def gross_steady_state_heating_capacity_charge_factor(self, conditions):
+    return 1.0
+
+  def gross_steady_state_heating_power_charge_factor(self, conditions):
+    return 1.0
+
   # Default assumptions
   def set_default(self, input, default):
     if input is None:
