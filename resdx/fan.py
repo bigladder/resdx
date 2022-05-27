@@ -8,6 +8,7 @@ class FanConditions:
     self.speed_setting = speed_setting
 
 class Fan:
+  '''Default fan behavior is similar to the default assumptions in AHRI 210/240'''
   def __init__(
     self,
     airflow_rated,
@@ -31,6 +32,9 @@ class Fan:
 
   def power(self, conditions):
     return self.airflow(conditions)*self.efficacy(conditions)
+
+  def rotational_speed(self, conditions):
+    raise NotImplementedError()
 
   def write_A205(self):
     pass
@@ -59,7 +63,7 @@ class PSCFan(Fan):
 
   def airflow(self, conditions):
     i = conditions.speed_setting
-    return self.airflow_free[i] - self.airflow_reduction(conditions.external_static_pressure)
+    return max(self.airflow_free[i] - self.airflow_reduction(conditions.external_static_pressure),0.)
 
   def rotational_speed(self, conditions):
     i = conditions.speed_setting
