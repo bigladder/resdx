@@ -88,7 +88,7 @@ class DXUnit:
   def __init__(self,model = RESNETDXModel(),
                     # defaults of None are defaulted within this function based on other argument values
                     number_of_input_stages=None,
-                    net_total_cooling_capacity_rated = fr_u(3.0,'ton_of_refrigeration'),
+                    net_total_cooling_capacity_rated = fr_u(3.0,'ton_ref'),
                     gross_cooling_cop_rated = 3.72,
                     net_cooling_cop_rated = None,
                     fan_efficacy_cooling_rated = None,

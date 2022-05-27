@@ -1,6 +1,11 @@
 import pint # 0.15 or higher
 ureg = pint.UnitRegistry()
 
+ureg.define('cubic_feet_per_minute = cu_ft / min = cfm')
+ureg.define('in_H2O = inch_H2O_39F')
+ureg.define('ton_ref = ton_of_refrigeration')
+
+
 def fr_u(value,from_units):
   '''Convert from given units into base SI units for calculation'''
   return ureg.Quantity(value, from_units).to_base_units().magnitude

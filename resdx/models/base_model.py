@@ -66,16 +66,16 @@ class DXModel:
         return input
 
   def set_fan_efficacy_cooling_rated(self, input):
-    self.system.fan_efficacy_cooling_rated = self.set_default(input, [fr_u(0.25,'W/(cu_ft/min)')]*self.system.number_of_input_stages)
+    self.system.fan_efficacy_cooling_rated = self.set_default(input, [fr_u(0.25,'W/cfm')]*self.system.number_of_input_stages)
 
   def set_fan_efficacy_heating_rated(self, input):
-    self.system.fan_efficacy_heating_rated = self.set_default(input, [fr_u(0.25,'W/(cu_ft/min)')]*self.system.number_of_input_stages)
+    self.system.fan_efficacy_heating_rated = self.set_default(input, [fr_u(0.25,'W/cfm')]*self.system.number_of_input_stages)
 
   def set_flow_rated_per_cap_cooling_rated(self, input):
-    self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")]*self.system.number_of_input_stages)
+    self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [fr_u(375.0,"cfm/ton_ref")]*self.system.number_of_input_stages)
 
   def set_flow_rated_per_cap_heating_rated(self, input):
-    self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")]*self.system.number_of_input_stages) # TODO: Check assumption
+    self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [fr_u(375.0,"cfm/ton_ref")]*self.system.number_of_input_stages) # TODO: Check assumption
 
   def set_net_total_cooling_capacity_rated(self, input):
     # No default, but need to set to list (and default lower speeds)

@@ -27,7 +27,7 @@ class Title24DXModel(DXModel):
     T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Cutler curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Title 24 curves use °F
     T_idb = to_u(conditions.indoor.db,"°F") # Title 24 curves use °F
-    CFM_per_ton = to_u(conditions.std_air_vol_flow_per_capacity,"cu_ft/min/ton_of_refrigeration")
+    CFM_per_ton = to_u(conditions.std_air_vol_flow_per_capacity,"cfm/ton_ref")
     coeffs = [0.0242020,-0.0592153,0.0012651,0.0016375,0,0,0,-0.0000165,0,0.0002021,0,1.5085285]
     SHR = Title24DXModel.CA_regression(coeffs,T_iwb,T_odb,T_idb,CFM_per_ton)
     return min(1.0, SHR)
@@ -48,9 +48,9 @@ class Title24DXModel(DXModel):
   @staticmethod
   def fan_efficacy_rated(flow_per_capacity, motor_type=MotorType.PSC):
     if motor_type == Title24DXModel.MotorType.PSC:
-      power_per_capacity = fr_u(500,'(Btu/h)/ton_of_refrigeration')
+      power_per_capacity = fr_u(500,'(Btu/h)/ton_ref')
     else:
-      power_per_capacity = fr_u(283,'(Btu/h)/ton_of_refrigeration')
+      power_per_capacity = fr_u(283,'(Btu/h)/ton_ref')
     return power_per_capacity/flow_per_capacity
 
   def gross_total_cooling_capacity(self, conditions):
@@ -58,7 +58,7 @@ class Title24DXModel(DXModel):
     T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Title 24 curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Title 24 curves use °F
     T_idb = to_u(conditions.indoor.db,"°F") # Title 24 curves use °F
-    CFM_per_ton = to_u(conditions.std_air_vol_flow_per_capacity,"cu_ft/min/ton_of_refrigeration")
+    CFM_per_ton = to_u(conditions.std_air_vol_flow_per_capacity,"cfm/ton_ref")
     if shr < 1:
       coeffs = [0,0.009645900,0.002536900,0.000171500,0,0,-0.000095900,0.000008180,-0.000007550,0.000105700,-53.542300000,0.381567150]
     else: # shr == 1
@@ -73,7 +73,7 @@ class Title24DXModel(DXModel):
     T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Title 24 curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Title 24 curves use °F
     T_idb = to_u(conditions.indoor.db,"°F") # Title 24 curves use °F
-    CFM_per_ton = to_u(conditions.std_air_vol_flow_per_capacity,"cu_ft/min/ton_of_refrigeration")
+    CFM_per_ton = to_u(conditions.std_air_vol_flow_per_capacity,"cfm/ton_ref")
     cap95 = self.system.net_total_cooling_capacity_rated[conditions.compressor_speed]
     q_fan = self.system.cooling_fan_power_rated[conditions.compressor_speed]
     if T_odb < 95.0:

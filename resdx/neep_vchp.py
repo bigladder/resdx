@@ -48,10 +48,10 @@ def make_vchp_unit(
   heating_intermediate_stage_speed_ratio=0.5,
   c_d_cooling=0.25,
   c_d_heating=0.25,
-  fan_efficacy_cooling_rated=[fr_u(0.2075,'W/(cu_ft/min)')]*2,
-  fan_efficacy_heating_rated=[fr_u(0.2075,'W/(cu_ft/min)')]*2,
-  flow_rated_per_cap_cooling_rated=[fr_u(400.0,"(cu_ft/min)/ton_of_refrigeration")]*2,
-  flow_rated_per_cap_heating_rated=[fr_u(400.0,"(cu_ft/min)/ton_of_refrigeration")]*2,
+  fan_efficacy_cooling_rated=[fr_u(0.2075,'W/cfm')]*2,
+  fan_efficacy_heating_rated=[fr_u(0.2075,'W/cfm')]*2,
+  flow_rated_per_cap_cooling_rated=[fr_u(400.0,"cfm/ton_ref")]*2,
+  flow_rated_per_cap_heating_rated=[fr_u(400.0,"cfm/ton_ref")]*2,
   base_model=RESNETDXModel()):
 
   # Add "full" speed

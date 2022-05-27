@@ -235,16 +235,16 @@ class NRELDXModel(DXModel):
   # Default assumptions
   def set_flow_rated_per_cap_cooling_rated(self, input):
     if self.system.number_of_input_stages == 1:
-      self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [fr_u(394.2,"(cu_ft/min)/ton_of_refrigeration")])
+      self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [fr_u(394.2,"cfm/ton_ref")])
     elif self.system.number_of_input_stages == 2:
-      default = fr_u(344.1,"(cu_ft/min)/ton_of_refrigeration")
+      default = fr_u(344.1,"cfm/ton_ref")
       self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [default, default*0.86])
 
   def set_flow_rated_per_cap_heating_rated(self, input):
     if self.system.number_of_input_stages == 1:
-      self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [fr_u(384.1,"(cu_ft/min)/ton_of_refrigeration")])
+      self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [fr_u(384.1,"cfm/ton_ref")])
     elif self.system.number_of_input_stages == 2:
-      default = fr_u(352.2,"(cu_ft/min)/ton_of_refrigeration")
+      default = fr_u(352.2,"cfm/ton_ref")
       self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [default, default*0.8])
 
   def set_net_total_cooling_capacity_rated(self, input):

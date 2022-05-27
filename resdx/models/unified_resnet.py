@@ -46,20 +46,20 @@ class RESNETDXModel(DXModel):
   # Default assumptions
   def set_fan_efficacy_cooling_rated(self, input):
     if self.system.input_seer is None:
-      default = fr_u(0.25,'W/(cu_ft/min)')
+      default = fr_u(0.25,'W/cfm')
     else:
       default = RESNETDXModel.fan_efficacy(self.system.input_seer)
     self.system.fan_efficacy_cooling_rated = self.set_default(input, [default]*self.system.number_of_input_stages)
 
   def set_fan_efficacy_heating_rated(self, input):
     if self.system.input_hspf is None:
-      default = fr_u(0.25,'W/(cu_ft/min)')
+      default = fr_u(0.25,'W/cfm')
     else:
       default = RESNETDXModel.fan_efficacy(RESNETDXModel.estimated_seer(self.system.input_hspf))
     self.system.fan_efficacy_heating_rated = self.set_default(input, [default]*self.system.number_of_input_stages)
 
   def set_flow_rated_per_cap_cooling_rated(self, input):
-    default = fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")
+    default = fr_u(375.0,"cfm/ton_ref")
     if self.system.number_of_input_stages == 1:
       self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [default])
     elif self.system.number_of_input_stages == 2:
@@ -68,7 +68,7 @@ class RESNETDXModel(DXModel):
       self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [default]*self.system.number_of_input_stages)
 
   def set_flow_rated_per_cap_heating_rated(self, input):
-    default = fr_u(375.0,"(cu_ft/min)/ton_of_refrigeration")
+    default = fr_u(375.0,"cfm/ton_ref")
     if self.system.number_of_input_stages == 1:
       self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [default])
     elif self.system.number_of_input_stages == 2:
@@ -123,11 +123,11 @@ class RESNETDXModel(DXModel):
   @staticmethod
   def fan_efficacy(seer):
       if seer <= 14:
-          return fr_u(0.25,'W/(cu_ft/min)')
+          return fr_u(0.25,'W/cfm')
       elif seer >= 16:
-          return fr_u(0.18,'W/(cu_ft/min)')
+          return fr_u(0.18,'W/cfm')
       else:
-          return fr_u(0.25,'W/(cu_ft/min)') + (fr_u(0.18,'W/(cu_ft/min)') - fr_u(0.25,'W/(cu_ft/min)'))/2.0 * (seer - 14.0)
+          return fr_u(0.25,'W/cfm') + (fr_u(0.18,'W/cfm') - fr_u(0.25,'W/cfm'))/2.0 * (seer - 14.0)
 
   @staticmethod
   def c_d(seer):
