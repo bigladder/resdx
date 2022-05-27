@@ -23,7 +23,15 @@ class OperatingConditions:
     self.air_mass_flow = air_vol_flow*self.indoor.get_rho()
     if self.rated_air_flow_set:
       self.std_air_vol_flow = self.air_mass_flow/STANDARD_CONDITIONS.get_rho()
-      self.air_mass_flow_fraction = self.air_mass_flow/self.air_mass_flow_rated
+      self.air_mass_flow_ratio = self.air_mass_flow/self.air_mass_flow_rated
+      self.std_air_vol_flow_per_capacity = self.std_air_vol_flow/self.net_total_cooling_capacity_rated
+
+  def set_air_mass_flow_ratio(self, air_mass_flow_ratio):
+    self.air_mass_flow_ratio = air_mass_flow_ratio
+    if self.rated_air_flow_set:
+      self.air_mass_flow = self.air_mass_flow_ratio*self.air_mass_flow_rated
+      self.air_vol_flow = self.air_mass_flow/self.indoor.get_rho()
+      self.std_air_vol_flow = self.air_mass_flow/STANDARD_CONDITIONS.get_rho()
       self.std_air_vol_flow_per_capacity = self.std_air_vol_flow/self.net_total_cooling_capacity_rated
 
 class CoolingConditions(OperatingConditions):

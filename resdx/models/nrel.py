@@ -1,10 +1,12 @@
 from scipy import optimize
+import copy
+from enum import Enum
 
 from ..units import fr_u, to_u
 from ..util import calc_biquad, calc_quad
 from ..psychrometrics import psychrolib, PsychState
 from ..defrost import DefrostControl, DefrostStrategy
-from ..conditions import CoolingConditions
+from ..conditions import CoolingConditions, HeatingConditions
 
 from .base_model import DXModel
 
@@ -18,9 +20,9 @@ class NRELDXModel(DXModel):
     T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Cutler curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
     eir_FT = calc_biquad([-3.437356399, 0.136656369, -0.001049231, -0.0079378, 0.000185435, -0.0001441], T_iwb, T_odb)
-    eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.air_mass_flow_fraction)
+    eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.air_mass_flow_ratio)
     cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
-    cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.air_mass_flow_fraction)
+    cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.air_mass_flow_ratio)
     return eir_FF*cap_FF*eir_FT*cap_FT*self.system.gross_total_cooling_capacity_rated[conditions.compressor_speed]/self.system.gross_cooling_cop_rated[conditions.compressor_speed]
 
   def gross_total_cooling_capacity(self, conditions):
@@ -28,7 +30,7 @@ class NRELDXModel(DXModel):
     T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Cutler curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
     cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
-    cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.air_mass_flow_fraction)
+    cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.air_mass_flow_ratio)
     return cap_FF*cap_FT*self.system.gross_total_cooling_capacity_rated[conditions.compressor_speed]
 
   def gross_steady_state_heating_power(self, conditions):
@@ -36,9 +38,9 @@ class NRELDXModel(DXModel):
     T_idb = to_u(conditions.indoor.db,"°F") # Cutler curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
     eir_FT = calc_biquad([0.718398423,0.003498178, 0.000142202, -0.005724331, 0.00014085, -0.000215321], T_idb, T_odb)
-    eir_FF = calc_quad([2.185418751, -1.942827919, 0.757409168], conditions.air_mass_flow_fraction)
+    eir_FF = calc_quad([2.185418751, -1.942827919, 0.757409168], conditions.air_mass_flow_ratio)
     cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
-    cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.air_mass_flow_fraction)
+    cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.air_mass_flow_ratio)
     return eir_FF*cap_FF*eir_FT*cap_FT*self.system.gross_heating_capacity_rated[conditions.compressor_speed]/self.system.gross_heating_cop_rated[conditions.compressor_speed]
 
   def gross_steady_state_heating_capacity(self, conditions):
@@ -46,7 +48,7 @@ class NRELDXModel(DXModel):
     T_idb = to_u(conditions.indoor.db,"°F") # Cutler curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
     cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
-    cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.air_mass_flow_fraction)
+    cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.air_mass_flow_ratio)
     return cap_FF*cap_FT*self.system.gross_heating_capacity_rated[conditions.compressor_speed]
 
   def gross_integrated_heating_capacity(self, conditions):
@@ -127,6 +129,108 @@ class NRELDXModel(DXModel):
     w_ADP = psychrolib.GetSatHumRatio(T_ADP, conditions.indoor.p)
     h_sensible = psychrolib.GetMoistAirEnthalpy(conditions.indoor.db_C,w_ADP)
     return Q_t*(h_sensible - h_ADP)/(h_i - h_ADP)
+
+  class FunctionType(Enum):
+    CAPACITY = 1
+    POWER = 2
+
+  class ConditionsType(Enum):
+    COOLING = 1
+    HEATING = 2
+
+  '''From Domanski.'''
+  charge_coeffs = {
+    ConditionsType.COOLING: {
+      FunctionType.CAPACITY:
+        [
+          [-9.46E-01, 4.93E-02, -1.18E-03, -1.15E+00],
+          [-1.63E-01, 1.14E-02, -2.10E-04, -1.40E-01]
+        ],
+      FunctionType.POWER:
+        [
+          [-3.13E-01, 1.15E-02, 2.66E-03, -1.16E-01],
+          [2.19E-01, -5.01E-03, 9.89E-04, 2.84E-01]
+        ]
+    },
+    ConditionsType.HEATING: {
+      FunctionType.CAPACITY:
+        [
+          [-3.39E-02, 0., 2.03E-02, -2.62E+00],
+          [-2.95E-03, 0., 7.38E-04, -6.41E-03]
+        ],
+      FunctionType.POWER:
+        [
+          [6.16E-02, 0., 4.46E-03, -2.60E-01],
+          [-5.94E-02, 0., 1.59E-02, 1.89E+00]
+        ]
+    }
+  }
+
+  @staticmethod
+  def domonski_charge_factor(T_idb, T_odb, f_chg, coeffs):
+    if f_chg < 0:
+      return 1 + (coeffs[0][0] + coeffs[0][1]*T_idb + coeffs[0][2]*T_odb + coeffs[0][3]*f_chg)*f_chg
+    else:
+      return 1 + (coeffs[1][0] + coeffs[1][1]*T_idb + coeffs[1][2]*T_odb + coeffs[1][3]*f_chg)*f_chg
+
+  def resnet_grading_model(self, conditions, function_type):
+    f_chg = self.system.refrigerant_charge_deviation
+    if f_chg == 0.:
+      return 1.0
+    conditions_class = type(conditions)
+    if conditions_class == HeatingConditions:
+      conditions_type = NRELDXModel.ConditionsType.HEATING
+    else:
+      conditions_type = NRELDXModel.ConditionsType.COOLING
+
+    if conditions_type == NRELDXModel.ConditionsType.COOLING:
+      if function_type == NRELDXModel.FunctionType.CAPACITY:
+        function = self.gross_total_cooling_capacity
+      else:
+        function = self.gross_cooling_power
+    else:
+      if function_type == NRELDXModel.FunctionType.CAPACITY:
+        function = self.gross_steady_state_heating_capacity
+      else:
+        function = self.gross_steady_state_heating_power
+
+    coeffs = NRELDXModel.charge_coeffs[conditions_type][function_type]
+
+    rated_cond = self.system.make_condition(conditions_class,compressor_speed=conditions.compressor_speed)
+    rated_value = function(rated_cond)
+    f = NRELDXModel.domonski_charge_factor(conditions.indoor.db_C, conditions.outdoor.db_C, f_chg, coeffs)
+
+    # f_af_chg = X_AF,CHG. This makes the calculation of the AF,CHG fault independent of the airflow correction method used in the model.
+    cf_af_chg = 1./NRELDXModel.domonski_charge_factor(rated_cond.indoor.db_C, rated_cond.outdoor.db_C, f_chg, NRELDXModel.charge_coeffs[conditions_type][NRELDXModel.FunctionType.CAPACITY])
+    cf_af_cond = copy.deepcopy(rated_cond)
+    cf_af_cond.set_air_mass_flow_ratio(cf_af_chg)
+    f_af_chg = function(cf_af_cond)/rated_value
+
+    # f_af = X_AF. Similar story
+    f_af_comb = conditions.air_mass_flow_ratio*cf_af_chg
+    f_af_comb_cond = copy.deepcopy(rated_cond)
+    f_af_comb_cond.set_air_mass_flow_ratio(f_af_comb)
+    f_af = function(f_af_comb_cond)/rated_value
+
+    # grading model accounts for airflow sensitivity so we need to undo the normal affect
+    f_corr_cond = copy.deepcopy(rated_cond)
+    f_corr_cond.set_air_mass_flow_ratio(conditions.air_mass_flow_ratio)
+    f_corr = function(f_corr_cond)/rated_value
+
+    return f/f_af_chg*f_af/f_corr
+
+
+  def gross_total_cooling_capacity_charge_factor(self, conditions):
+    return NRELDXModel.resnet_grading_model(self, conditions, NRELDXModel.FunctionType.CAPACITY)
+
+  def gross_cooling_power_charge_factor(self, conditions):
+    return NRELDXModel.resnet_grading_model(self, conditions, NRELDXModel.FunctionType.POWER)
+
+  def gross_steady_state_heating_capacity_charge_factor(self, conditions):
+    return NRELDXModel.resnet_grading_model(self, conditions, NRELDXModel.FunctionType.CAPACITY)
+
+  def gross_steady_state_heating_power_charge_factor(self, conditions):
+    return NRELDXModel.resnet_grading_model(self, conditions, NRELDXModel.FunctionType.POWER)
 
   # Default assumptions
   def set_flow_rated_per_cap_cooling_rated(self, input):
@@ -246,3 +350,4 @@ class NRELDXModel(DXModel):
     self.system.gross_heating_power_rated = [self.system.gross_heating_capacity_rated[i]/self.system.gross_heating_cop_rated[i] for i in range(self.system.number_of_input_stages)]
     self.system.net_heating_power_rated = [self.system.gross_heating_power_rated[i] + self.system.heating_fan_power_rated[i] for i in range(self.system.number_of_input_stages)]
     self.system.net_heating_cop_rated = [self.system.net_heating_capacity_rated[i]/self.system.net_heating_power_rated[i] for i in range(self.system.number_of_input_stages)]
+
