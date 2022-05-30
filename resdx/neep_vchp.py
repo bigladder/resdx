@@ -7,6 +7,7 @@ from .units import fr_u
 from .dx_unit import DXUnit
 from scipy import interpolate
 from .models import RESNETDXModel
+from .fan import ConstantEfficacyFan
 
 class VCHPDataPoint:
   def __init__(self,drybulb,capacities,cops):
@@ -86,8 +87,10 @@ def make_vchp_unit(
   net_cooling_data.setup()
   net_heating_data.setup()
 
-  cooling_rated_fan_power = [net_cooling_data.get_capacity[i](fr_u(95.0,"°F"))*fan_efficacy_cooling_rated[i]*flow_rated_per_cap_cooling_rated[i] for i in range(net_cooling_data.number_of_stages)]
-  heating_rated_fan_power = [net_heating_data.get_capacity[i](fr_u(47.0,"°F"))*fan_efficacy_heating_rated[i]*flow_rated_per_cap_heating_rated[i] for i in range(net_heating_data.number_of_stages)]
+  net_total_cooling_capacity = [net_cooling_data.get_capacity[i](fr_u(95.0,"°F")) for i in range(net_cooling_data.number_of_stages)]
+  cooling_rated_fan_power = [net_total_cooling_capacity[i]*fan_efficacy_cooling_rated[i]*flow_rated_per_cap_cooling_rated[i] for i in range(net_cooling_data.number_of_stages)]
+  net_heating_capacity = [net_heating_data.get_capacity[i](fr_u(47.0,"°F")) for i in range(net_heating_data.number_of_stages)]
+  heating_rated_fan_power = [net_heating_capacity[i]*fan_efficacy_heating_rated[i]*flow_rated_per_cap_heating_rated[i] for i in range(net_heating_data.number_of_stages)]
 
   gross_cooling_data = copy.deepcopy(net_cooling_data)
   for point in gross_cooling_data:
@@ -109,6 +112,25 @@ def make_vchp_unit(
 
   gross_cooling_data.setup()
   gross_heating_data.setup()
+
+  # Setup fan
+  airflows = []
+  efficacies = []
+  fan_speed = 0
+  cooling_fan_speed_mapping = []
+  heating_fan_speed_mapping = []
+  for i in range(gross_cooling_data.number_of_stages):
+    airflows.append(net_total_cooling_capacity[i]*flow_rated_per_cap_cooling_rated[i])
+    efficacies.append(fan_efficacy_cooling_rated[i])
+    cooling_fan_speed_mapping.append(fan_speed)
+    fan_speed += 1
+  for i in range(gross_heating_data.number_of_stages):
+    airflows.append(net_total_cooling_capacity[i]*flow_rated_per_cap_heating_rated[i])
+    efficacies.append(fan_efficacy_heating_rated[i])
+    heating_fan_speed_mapping.append(fan_speed)
+    fan_speed += 1
+
+  fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), efficacy_design=efficacies)
 
   new_model = copy.deepcopy(base_model)
 
@@ -159,18 +181,17 @@ def make_vchp_unit(
   new_model.gross_steady_state_heating_power = types.MethodType(new_gross_steady_state_heating_power, new_model)
 
   return DXUnit(model=new_model,
-    net_total_cooling_capacity_rated = [net_cooling_data.get_capacity[i](fr_u(95.0,"°F")) for i in range(net_cooling_data.number_of_stages)],
+    net_total_cooling_capacity_rated = net_total_cooling_capacity,
     net_cooling_cop_rated = [net_cooling_data.get_cop[i](fr_u(95.0,"°F")) for i in range(net_cooling_data.number_of_stages)],
     gross_cooling_cop_rated  =  None, # Use net instead
-    fan_efficacy_cooling_rated = fan_efficacy_cooling_rated,
-    flow_rated_per_cap_cooling_rated = flow_rated_per_cap_cooling_rated,
     c_d_cooling = c_d_cooling,
-    net_heating_capacity_rated = [net_heating_data.get_capacity[i](fr_u(47.0,"°F")) for i in range(net_heating_data.number_of_stages)],
+    net_heating_capacity_rated = net_heating_capacity,
     net_heating_cop_rated = [net_heating_data.get_cop[i](fr_u(47.0,"°F")) for i in range(net_heating_data.number_of_stages)],
     gross_heating_cop_rated  =  None, # Use net instead
-    fan_efficacy_heating_rated = fan_efficacy_heating_rated,
-    flow_rated_per_cap_heating_rated = flow_rated_per_cap_heating_rated,
     c_d_heating = c_d_heating,
+    fan = fan,
+    heating_fan_speed_mapping = heating_fan_speed_mapping,
+    cooling_fan_speed_mapping = cooling_fan_speed_mapping,
     full_load_speed = 1 if net_cooling_data.number_of_stages > 3 else 0,
     intermediate_speed = net_cooling_data.number_of_stages - 2,
     base_model=base_model

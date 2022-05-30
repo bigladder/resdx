@@ -8,13 +8,9 @@ hspf = 7.7
 
 t24_unit = resdx.DXUnit(model=resdx.models.Title24DXModel(),
                         net_cooling_cop_rated=[resdx.fr_u(resdx.models.Title24DXModel.eer_rated(seer),'Btu/Wh')],
-                        fan_efficacy_cooling_rated=[resdx.fr_u(0.58,'W/cfm')],
-                        flow_rated_per_cap_cooling_rated=[resdx.fr_u(350.0,"cfm/ton_ref")],
                         c_d_cooling=0.0,
                         input_seer=seer,
                         net_heating_cop_rated=[resdx.models.Title24DXModel.cop47_rated(hspf)],
-                        flow_rated_per_cap_heating_rated=[resdx.fr_u(350.0,"cfm/ton_ref")],
-                        fan_efficacy_heating_rated=[resdx.fr_u(0.58,'W/cfm')],
                         c_d_heating=resdx.models.Title24DXModel.c_d_heating(hspf),
                         input_hspf=hspf,
                         #cap17=[resdx.fr_u(2.0,'ton_ref')],

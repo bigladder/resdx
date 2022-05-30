@@ -9,7 +9,7 @@ from .defrost import Defrost, DefrostControl
 from .units import fr_u, to_u
 from .util import find_nearest
 from .models import RESNETDXModel
-
+from .fan import Fan, FanConditions
 
 def interpolate(f, cond_1, cond_2, x):
   return f(cond_1) + (f(cond_2) - f(cond_1))/(cond_2.outdoor.db - cond_1.outdoor.db)*(x - cond_1.outdoor.db)
@@ -91,17 +91,16 @@ class DXUnit:
                     net_total_cooling_capacity_rated = fr_u(3.0,'ton_ref'),
                     gross_cooling_cop_rated = 3.72,
                     net_cooling_cop_rated = None,
-                    fan_efficacy_cooling_rated = None,
-                    flow_rated_per_cap_cooling_rated = None, # Per net total cooling capacity
                     c_d_cooling = None,
                     net_heating_capacity_rated = None,
                     gross_heating_cop_rated = 3.82,
                     net_heating_cop_rated = None,
-                    fan_efficacy_heating_rated = None,
-                    flow_rated_per_cap_heating_rated = None, # Per net total cooling capacity,
                     c_d_heating = None,
                     heating_off_temperature = fr_u(0.0,"°F"),
                     heating_on_temperature = None, # default to heating_off_temperature
+                    fan = None,
+                    heating_fan_speed_mapping = None,
+                    cooling_fan_speed_mapping = None,
                     defrost = Defrost(),
                     refrigerant_charge_deviation=0.0,
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
@@ -163,15 +162,12 @@ class DXUnit:
     # Placeholders for derived staging array values
     self.set_placeholder_arrays()
 
-    # Default staging array inputs
-    self.model.set_fan_efficacy_cooling_rated(fan_efficacy_cooling_rated)
-    self.model.set_fan_efficacy_heating_rated(fan_efficacy_heating_rated)
-    self.model.set_flow_rated_per_cap_cooling_rated(flow_rated_per_cap_cooling_rated)
-    self.model.set_flow_rated_per_cap_heating_rated(flow_rated_per_cap_heating_rated)
+    # Default fan maps
+    self.heating_fan_speed_mapping = heating_fan_speed_mapping
+    self.cooling_fan_speed_mapping = cooling_fan_speed_mapping
 
-    # Set net capacities in case lower speed values depend on gross capacities
-    self.model.set_net_total_cooling_capacity_rated(net_total_cooling_capacity_rated)
-    self.model.set_net_heating_capacity_rated(net_heating_capacity_rated)
+    # Set net capacities
+    self.model.set_net_capacities_and_fan(net_total_cooling_capacity_rated, net_heating_capacity_rated, fan)
 
     # Degradation coefficients
     self.model.set_c_d_cooling(c_d_cooling)
@@ -179,8 +175,8 @@ class DXUnit:
 
     # Derived staging array values
     for i in range(self.number_of_input_stages):
-      self.cooling_fan_power_rated[i] = self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_cooling_rated[i]*self.flow_rated_per_cap_cooling_rated[i]
-      self.heating_fan_power_rated[i] = self.net_total_cooling_capacity_rated[i]*self.fan_efficacy_heating_rated[i]*self.flow_rated_per_cap_heating_rated[i] # note: heating fan flow is intentionally based on cooling capacity
+      self.cooling_fan_power_rated[i] = self.fan.power(FanConditions(self.fan.external_static_pressure_design, self.cooling_fan_speed_mapping[i]))
+      self.heating_fan_power_rated[i] = self.fan.power(FanConditions(self.fan.external_static_pressure_design, self.heating_fan_speed_mapping[i]))
       self.gross_total_cooling_capacity_rated[i] = self.net_total_cooling_capacity_rated[i] + self.cooling_fan_power_rated[i]
       self.gross_heating_capacity_rated[i] = self.net_heating_capacity_rated[i] - self.heating_fan_power_rated[i]
 
@@ -251,13 +247,9 @@ class DXUnit:
       raise Exception(f'Unexpected array length ({len(array)}). Number of speeds is {self.number_of_input_stages}. Array items are {array}.')
 
   def check_array_lengths(self):
-    self.check_array_length(self.fan_efficacy_cooling_rated)
-    self.check_array_length(self.flow_rated_per_cap_cooling_rated)
     self.check_array_length(self.net_total_cooling_capacity_rated)
     self.check_array_length(self.gross_shr_cooling_rated)
-    self.check_array_length(self.fan_efficacy_heating_rated)
     self.check_array_length(self.gross_heating_cop_rated)
-    self.check_array_length(self.flow_rated_per_cap_heating_rated)
     self.check_array_length(self.net_heating_capacity_rated)
 
   def check_array_order(self, array):
@@ -290,17 +282,16 @@ class DXUnit:
 
     condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed)
     if condition_type == CoolingConditions:
-      condition.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed])
+      condition.set_rated_air_flow(self.fan.airflow(FanConditions(self.fan.external_static_pressure_design, self.cooling_fan_speed_mapping[compressor_speed])), self.net_total_cooling_capacity_rated[compressor_speed])
     else: # if condition_type == HeatingConditions:
-      condition.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[compressor_speed], self.net_total_cooling_capacity_rated[compressor_speed])
+      condition.set_rated_air_flow(self.fan.airflow(FanConditions(self.fan.external_static_pressure_design, self.heating_fan_speed_mapping[compressor_speed])), self.net_total_cooling_capacity_rated[compressor_speed])
     return condition
 
   ### For cooling ###
   def cooling_fan_power(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    # TODO: Change to calculated fan efficacy under current conditions (e.g., at realistic static pressure)
-    return self.fan_efficacy_cooling_rated[conditions.compressor_speed]*conditions.std_air_vol_flow
+    return self.fan.power(FanConditions(self.fan.external_static_pressure_design, self.cooling_fan_speed_mapping[conditions.compressor_speed]))
 
   def cooling_fan_heat(self, conditions):
     return self.cooling_fan_power(conditions)
@@ -482,8 +473,7 @@ class DXUnit:
   def heating_fan_power(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    # TODO: Change to calculated fan efficacy under current conditions (e.g., at realistic static pressure)
-    return self.fan_efficacy_heating_rated[conditions.compressor_speed]*conditions.std_air_vol_flow
+    return self.fan.power(FanConditions(self.fan.external_static_pressure_design, self.heating_fan_speed_mapping[conditions.compressor_speed]))
 
   def heating_fan_heat(self, conditions):
     return self.heating_fan_power(conditions)
@@ -737,7 +727,7 @@ class DXUnit:
     print(f"SEER: {self.seer()}")
     for speed in range(self.number_of_input_stages):
       conditions = CoolingConditions(compressor_speed=speed)
-      conditions.set_rated_air_flow(self.flow_rated_per_cap_cooling_rated[speed], self.net_total_cooling_capacity_rated[speed])
+      conditions.set_rated_air_flow(self.fan.airflow(FanConditions(self.fan.external_static_pressure_design, self.cooling_fan_speed_mapping[speed])), self.net_total_cooling_capacity_rated[speed])
       print(f"Net cooling power for stage {speed + 1} : {self.net_cooling_power(conditions)}")
       print(f"Net cooling capacity for stage {speed + 1} : {self.net_total_cooling_capacity(conditions)}")
       print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions)}")
@@ -748,7 +738,7 @@ class DXUnit:
     print(f"HSPF (region {region}): {self.hspf(region)}")
     for speed in range(self.number_of_input_stages):
       conditions = HeatingConditions(compressor_speed=speed)
-      conditions.set_rated_air_flow(self.flow_rated_per_cap_heating_rated[speed], self.net_total_cooling_capacity_rated[speed])
+      conditions.set_rated_air_flow(self.fan.airflow(FanConditions(self.fan.external_static_pressure_design, self.heating_fan_speed_mapping[speed])), self.net_total_cooling_capacity_rated[speed])
       print(f"Net heating power for stage {speed + 1} : {self.net_integrated_heating_power(conditions)}")
       print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions)}")
       print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")

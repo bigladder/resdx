@@ -7,6 +7,7 @@ from ..util import calc_biquad, calc_quad
 from ..psychrometrics import psychrolib, PsychState
 from ..defrost import DefrostControl, DefrostStrategy
 from ..conditions import CoolingConditions, HeatingConditions
+from ..fan import Fan
 
 from .base_model import DXModel
 
@@ -233,19 +234,29 @@ class NRELDXModel(DXModel):
     return NRELDXModel.resnet_grading_model(self, conditions, NRELDXModel.FunctionType.POWER)
 
   # Default assumptions
-  def set_flow_rated_per_cap_cooling_rated(self, input):
-    if self.system.number_of_input_stages == 1:
-      self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [fr_u(394.2,"cfm/ton_ref")])
-    elif self.system.number_of_input_stages == 2:
-      default = fr_u(344.1,"cfm/ton_ref")
-      self.system.flow_rated_per_cap_cooling_rated = self.set_default(input, [default, default*0.86])
-
-  def set_flow_rated_per_cap_heating_rated(self, input):
-    if self.system.number_of_input_stages == 1:
-      self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [fr_u(384.1,"cfm/ton_ref")])
-    elif self.system.number_of_input_stages == 2:
-      default = fr_u(352.2,"cfm/ton_ref")
-      self.system.flow_rated_per_cap_heating_rated = self.set_default(input, [default, default*0.8])
+  def set_rated_fan_characteristics(self, fan):
+    if fan is not None:
+      pass
+    else:
+      if self.system.input_seer is not None:
+        if self.system.input_seer <= 14.:
+          fan_efficacy = fr_u(0.25,'W/cfm')
+        elif self.system.input_seer >= 16.:
+          fan_efficacy = fr_u(0.18,'W/cfm')
+        else:
+          fan_efficacy = fr_u(0.25,'W/cfm') + (fr_u(0.18,'W/cfm') - fr_u(0.25,'W/cfm')) * (self.system.input_seer - 14.0) / 2.0 # W/cfm
+      else:
+        fan_efficacy = fr_u(0.25,'W/cfm')
+      self.system.fan_efficacy_cooling_rated = [fan_efficacy]*self.system.number_of_input_stages
+      self.system.fan_efficacy_heating_rated = [fan_efficacy]*self.system.number_of_input_stages
+      if self.system.number_of_input_stages == 1:
+        self.system.flow_rated_per_cap_cooling_rated = [fr_u(394.2,"cfm/ton_ref")]
+        self.system.flow_rated_per_cap_heating_rated = [fr_u(384.1,"cfm/ton_ref")]
+      elif self.system.number_of_input_stages == 2:
+        cooling_default = fr_u(344.1,"cfm/ton_ref")
+        self.system.flow_rated_per_cap_cooling_rated = [cooling_default, cooling_default*0.86]
+        heating_default = fr_u(352.2,"cfm/ton_ref")
+        self.system.flow_rated_per_cap_heating_rated = [heating_default, heating_default*0.8]
 
   def set_net_total_cooling_capacity_rated(self, input):
     # No default, but need to set to list (and default lower speeds)
@@ -255,9 +266,10 @@ class NRELDXModel(DXModel):
       if self.system.number_of_input_stages == 1:
         self.system.net_total_cooling_capacity_rated = [input]
       elif self.system.number_of_input_stages == 2:
+        cap_ratio = 0.72
         fan_power_0 = input*self.system.fan_efficacy_cooling_rated[0]*self.system.flow_rated_per_cap_cooling_rated[0]
         gross_cap_0 = input + fan_power_0
-        gross_cap_1 = gross_cap_0*0.72
+        gross_cap_1 = gross_cap_0*cap_ratio
         net_cap_1 = gross_cap_1/(1. + self.system.fan_efficacy_cooling_rated[1]*self.system.flow_rated_per_cap_cooling_rated[1])
         self.system.net_total_cooling_capacity_rated = [input, net_cap_1]
 
@@ -269,11 +281,51 @@ class NRELDXModel(DXModel):
       if self.system.number_of_input_stages == 1:
         self.system.net_heating_capacity_rated = [input]
       elif self.system.number_of_input_stages == 2:
+        cap_ratio = 0.72
         fan_power_0 = input*self.system.fan_efficacy_heating_rated[0]*self.system.flow_rated_per_cap_heating_rated[0]
         gross_cap_0 = input - fan_power_0
-        gross_cap_1 = gross_cap_0*0.72
+        gross_cap_1 = gross_cap_0*cap_ratio
         net_cap_1 = gross_cap_1/(1. - self.system.fan_efficacy_heating_rated[1]*self.system.flow_rated_per_cap_heating_rated[1])
         self.system.net_heating_capacity_rated = [input, net_cap_1]
+
+  def set_fan(self, input):
+    if input is not None:
+      # TODO: Handle default mappings?
+      self.system.fan = input
+    else:
+      airflows = []
+      efficacies = []
+      fan_speed = 0
+      if self.system.cooling_fan_speed_mapping is None:
+        set_cooling_fan_speed_map = True
+        self.system.cooling_fan_speed_mapping = []
+
+      if self.system.heating_fan_speed_mapping is None:
+        set_heating_fan_speed_map = True
+        self.system.heating_fan_speed_mapping = []
+
+      for i, cap in enumerate(self.system.net_total_cooling_capacity_rated):
+        airflows.append(cap*self.system.flow_rated_per_cap_cooling_rated[i])
+        efficacies.append(self.system.fan_efficacy_cooling_rated[i])
+        if set_cooling_fan_speed_map:
+          self.system.cooling_fan_speed_mapping.append(fan_speed)
+          fan_speed += 1
+
+      for i, cap in enumerate(self.system.net_total_cooling_capacity_rated):
+        airflows.append(cap*self.system.flow_rated_per_cap_heating_rated[i])
+        efficacies.append(self.system.fan_efficacy_cooling_rated[i])
+        if set_heating_fan_speed_map:
+          self.system.heating_fan_speed_mapping.append(fan_speed)
+          fan_speed += 1
+
+      fan = NRELFan(airflows, fr_u(0.20, "in_H2O"), efficacy_design=efficacies)
+      self.system.fan = fan
+
+  def set_net_capacities_and_fan(self, net_total_cooling_capacity_rated, net_heating_capacity_rated, fan):
+    self.set_rated_fan_characteristics(fan)
+    self.set_net_total_cooling_capacity_rated(net_total_cooling_capacity_rated)
+    self.set_net_heating_capacity_rated(net_heating_capacity_rated)
+    self.set_fan(fan)
 
   @staticmethod
   def cooling_cop_low(cooling_cop_high):
@@ -351,3 +403,24 @@ class NRELDXModel(DXModel):
     self.system.net_heating_power_rated = [self.system.gross_heating_power_rated[i] + self.system.heating_fan_power_rated[i] for i in range(self.system.number_of_input_stages)]
     self.system.net_heating_cop_rated = [self.system.net_heating_capacity_rated[i]/self.system.net_heating_power_rated[i] for i in range(self.system.number_of_input_stages)]
 
+# Fan
+
+class NRELFan(Fan):
+  def __init__(
+    self,
+    airflow_design,
+    external_static_pressure_design=fr_u(0.15, "in_H2O"),
+    efficacy_design=fr_u(0.365,'W/cfm')):
+      super().__init__(airflow_design, external_static_pressure_design, efficacy_design)
+      self.airflow_ratios = [self.airflow_design[i]/self.airflow_design[0] for i in range(self.number_of_speeds)]
+      self.power_ratios = [self.airflow_ratios[i]**3. for i in range(self.number_of_speeds)]
+      self.power_design = [self.airflow_design[0]*self.efficacy_design[0]*self.power_ratios[i] for i in range(self.number_of_speeds)]
+
+  def airflow(self, conditions):
+    return self.airflow_design[conditions.speed_setting]
+
+  def power(self, conditions):
+    return self.power_design[conditions.speed_setting]
+
+  def efficacy(self, conditions):
+    return self.power(conditions)/self.airflow(conditions)

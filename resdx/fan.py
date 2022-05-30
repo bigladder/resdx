@@ -8,27 +8,37 @@ class FanConditions:
     self.speed_setting = speed_setting
 
 class Fan:
-  '''Default fan behavior is similar to the default assumptions in AHRI 210/240'''
   def __init__(
     self,
-    airflow_rated,
-    external_static_pressure_rated,
-    efficacy_rated):
-      if type(airflow_rated) is list:
-        self.airflow_rated = airflow_rated
+    airflow_design,
+    external_static_pressure_design,
+    efficacy_design=fr_u(0.365,'W/cfm')): # AHRI 210/240 2017 default
+      if type(airflow_design) is list:
+        self.airflow_design = airflow_design
       else:
-        self.airflow_rated = [airflow_rated]
-      self.number_of_speeds = len(self.airflow_rated)
+        self.airflow_design = [airflow_design]
+      self.number_of_speeds = len(self.airflow_design)
+      self.external_static_pressure_design = external_static_pressure_design
+      if type(efficacy_design) is list:
+        self.efficacy_design = efficacy_design
+      else:
+        self.efficacy_design = [efficacy_design]*self.number_of_speeds
+
+      self.system_exponent = 0.5
+      self.system_curve_constant = self.external_static_pressure_design**(self.system_exponent)/self.airflow_design[0]
+
+    # system curve function: given flow rate, calculate pressure
+  def system_pressure(self, airflow):
+    (airflow*self.system_curve_constant)**(1./self.system_exponent)
+
+  def system_flow(self, pressure):
+    pressure**(self.system_exponent)/self.airflow_design[0]
 
   def efficacy(self, conditions):
-    min_esp_2017 = fr_u(0.2, "in_H2O")
-    min_esp_2021 = fr_u(0.50, "in_H2O")
-    weight = (conditions.external_static_pressure - min_esp_2017) / (min_esp_2021 - min_esp_2017)
-    weight = max(min(1., weight),0.)
-    return fr_u(0.365,'W/cfm')*(1. - weight) + fr_u(0.441,'W/cfm')*weight
+    raise NotImplementedError()
 
   def airflow(self, conditions):
-    return self.rated_airflow
+    raise NotImplementedError()
 
   def power(self, conditions):
     return self.airflow(conditions)*self.efficacy(conditions)
@@ -39,22 +49,29 @@ class Fan:
   def write_A205(self):
     pass
 
+class ConstantEfficacyFan(Fan):
+  def efficacy(self, conditions):
+    return self.efficacy_design[conditions.speed_setting]
+
+  def airflow(self, conditions):
+    return self.airflow_design[conditions.speed_setting]
+
 class PSCFan(Fan):
   '''Based largely on measured fan performance by Proctor Engineering'''
   def __init__(
     self,
-    airflow_rated,
-    external_static_pressure_rated=fr_u(0.15, "in_H2O"),
-    efficacy_rated=fr_u(0.365,'W/cfm')):
-      super().__init__(airflow_rated, external_static_pressure_rated, efficacy_rated)
+    airflow_design,
+    external_static_pressure_design=fr_u(0.15, "in_H2O"),
+    efficacy_design=fr_u(0.365,'W/cfm')):
+      super().__init__(airflow_design, external_static_pressure_design, efficacy_design)
       self.AIRFLOW_COEFFICIENT = fr_u(10.,'cfm')
       self.AIRFLOW_EXP_COEFFICIENT = fr_u(5.355391179,'1/in_H2O')
       self.EFFICACY_SLOPE = -0.1446674009  # Relative change in efficacy at lower flow ratios
-      airflow_reduction_rated = self.airflow_reduction(external_static_pressure_rated)
-      self.airflow_free = [self.airflow_rated[i] + airflow_reduction_rated for i in range(self.number_of_speeds)]
+      airflow_reduction_design = self.airflow_reduction(external_static_pressure_design)
+      self.airflow_free = [self.airflow_design[i] + airflow_reduction_design for i in range(self.number_of_speeds)]
       self.airflow_ratios = [self.airflow_free[i]/self.airflow_free[0] for i in range(self.number_of_speeds)]
-      self.efficacy_rated = efficacy_rated
-      self.efficacies = [efficacy_rated*(1. + self.EFFICACY_SLOPE*(self.airflow_ratios[i] - 1.)) for i in range(self.number_of_speeds)]
+      self.efficacy_design = efficacy_design
+      self.efficacies = [efficacy_design*(1. + self.EFFICACY_SLOPE*(self.airflow_ratios[i] - 1.)) for i in range(self.number_of_speeds)]
       self.block_pressure = [log(self.airflow_free[i]/self.AIRFLOW_COEFFICIENT + 1.)/self.AIRFLOW_EXP_COEFFICIENT for i in range(self.number_of_speeds)]
       self.speed_free = [fr_u(1040.,'rpm')*self.airflow_ratios[i] for i in range(self.number_of_speeds)]
 

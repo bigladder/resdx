@@ -8,6 +8,15 @@ from .base_model import DXModel
 
 class Title24DXModel(DXModel):
 
+  def __init__(self):
+      super().__init__()
+      self.allowed_kwargs += [
+        "cap17",
+        "cap35",
+        "cop35",
+        "input_cooling_efficiency_multiplier",
+        ]
+
   @staticmethod
   def CA_regression(coeffs,T_ewb,T_odb,T_edb,V_std_per_rated_cap):
     return coeffs[0]*T_edb + \
@@ -312,3 +321,22 @@ class Title24DXModel(DXModel):
     return inp17 + slope*(T_odb - 17.0) - self.system.heating_fan_power_rated[conditions.compressor_speed]
 
   # TODO: Default assumptions
+  def set_rated_fan_characteristics(self, fan):
+    if fan is not None:
+      pass
+    else:
+      # Airflows
+      flow_per_cap_default = fr_u(350.,"cfm/ton_ref")
+
+      self.system.flow_rated_per_cap_cooling_rated = [flow_per_cap_default]
+      self.system.flow_rated_per_cap_heating_rated = [flow_per_cap_default]
+      cooling_fan_efficacy = Title24DXModel.fan_efficacy_rated(flow_per_cap_default)
+      heating_fan_efficacy = cooling_fan_efficacy
+      self.system.fan_efficacy_cooling_rated = [cooling_fan_efficacy]*self.system.number_of_input_stages
+      self.system.fan_efficacy_heating_rated = [heating_fan_efficacy]*self.system.number_of_input_stages
+
+  def set_net_capacities_and_fan(self, net_total_cooling_capacity_rated, net_heating_capacity_rated, fan):
+    self.set_rated_fan_characteristics(fan)
+    self.set_net_total_cooling_capacity_rated(net_total_cooling_capacity_rated)
+    self.set_net_heating_capacity_rated(net_heating_capacity_rated)
+    self.set_fan(fan)

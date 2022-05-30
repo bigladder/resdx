@@ -6,9 +6,9 @@ FanConditions = resdx.fan.FanConditions
 
 def test_psc_fan():
   psc_fan = resdx.PSCFan(
-    airflow_rated=[fr_u(v,'cfm') for v in [1179., 1003., 740.]],
-    external_static_pressure_rated=fr_u(0., "in_H2O"),
-    efficacy_rated=fr_u(0.33,'W/cfm'))
+    airflow_design=[fr_u(v,'cfm') for v in [1179., 1003., 740.]],
+    external_static_pressure_design=fr_u(0., "in_H2O"),
+    efficacy_design=fr_u(0.33,'W/cfm'))
 
   # Open flow conditions
   assert psc_fan.airflow(FanConditions(fr_u(0., "in_H2O"),0)) == fr_u(1179.,'cfm')
