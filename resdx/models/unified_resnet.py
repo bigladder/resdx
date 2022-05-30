@@ -2,7 +2,7 @@ from .base_model import DXModel
 from .nrel import NRELDXModel
 from .title24 import Title24DXModel
 from .henderson_defrost_model import HendersonDefrostModel
-from ..units import fr_u, to_u
+from ..units import fr_u
 from ..fan import ConstantEfficacyFan
 
 class RESNETDXModel(DXModel):

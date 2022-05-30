@@ -1,4 +1,3 @@
-import sys
 from enum import Enum
 import math
 from scipy import optimize
@@ -9,7 +8,7 @@ from .defrost import Defrost, DefrostControl
 from .units import fr_u, to_u
 from .util import find_nearest
 from .models import RESNETDXModel
-from .fan import Fan, FanConditions
+from .fan import FanConditions
 
 def interpolate(f, cond_1, cond_2, x):
   return f(cond_1) + (f(cond_2) - f(cond_1))/(cond_2.outdoor.db - cond_1.outdoor.db)*(x - cond_1.outdoor.db)
