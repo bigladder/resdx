@@ -8,9 +8,9 @@ def test_psc_fan():
   design_external_static_pressure = fr_u(0.5, "in_H2O")
 
   psc_fan = resdx.PSCFan(
-    airflow_design=[fr_u(v,'cfm') for v in [1179., 1003., 740.]],
-    external_static_pressure_design=design_external_static_pressure,
-    efficacy_design=fr_u(0.33,'W/cfm'))
+    design_airflow=[fr_u(v,'cfm') for v in [1179., 1003., 740.]],
+    design_external_static_pressure=design_external_static_pressure,
+    design_efficacy=fr_u(0.33,'W/cfm'))
 
   # Open flow conditions
   assert psc_fan.rotational_speed(0, fr_u(0., "in_H2O")) == fr_u(1040.,'rpm')
@@ -34,9 +34,9 @@ def test_ecm_fan():
 
   '''Based on Fan #1 in Proctor measurements'''
   ecm_fan = resdx.ECMFlowFan(
-    airflow_design=[fr_u(v,'cfm') for v in [2405., 2200., 1987., 1760., 1537., 1310., 1169., 1099.]],
-    external_static_pressure_design=design_external_static_pressure,
-    efficacy_design=fr_u(0.3665,'W/cfm'),
+    design_airflow=[fr_u(v,'cfm') for v in [2405., 2200., 1987., 1760., 1537., 1310., 1169., 1099.]],
+    design_external_static_pressure=design_external_static_pressure,
+    design_efficacy=fr_u(0.3665,'W/cfm'),
     maximum_power=fr_u(1000,'W'))
 
   # Open flow conditions

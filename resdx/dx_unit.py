@@ -758,7 +758,7 @@ class DXUnit:
     print(f"SEER: {self.seer()}")
     for speed in range(self.number_of_input_stages):
       conditions = CoolingConditions(compressor_speed=speed)
-      conditions.set_rated_air_flow(self.fan.airflow(self.cooling_fan_speed_mapping[speed], self.fan.external_static_pressure_design), self.net_total_cooling_capacity_rated[speed])
+      conditions.set_rated_air_flow(self.fan.airflow(self.cooling_fan_speed_mapping[speed], self.fan.design_external_static_pressure), self.net_total_cooling_capacity_rated[speed])
       print(f"Net cooling power for stage {speed + 1} : {self.net_cooling_power(conditions)}")
       print(f"Net cooling capacity for stage {speed + 1} : {self.net_total_cooling_capacity(conditions)}")
       print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions)}")
@@ -769,7 +769,7 @@ class DXUnit:
     print(f"HSPF (region {region}): {self.hspf(region)}")
     for speed in range(self.number_of_input_stages):
       conditions = HeatingConditions(compressor_speed=speed)
-      conditions.set_rated_air_flow(self.fan.airflow(self.heating_fan_speed_mapping[speed], self.fan.external_static_pressure_design), self.net_total_cooling_capacity_rated[speed])
+      conditions.set_rated_air_flow(self.fan.airflow(self.heating_fan_speed_mapping[speed], self.fan.design_external_static_pressure), self.net_total_cooling_capacity_rated[speed])
       print(f"Net heating power for stage {speed + 1} : {self.net_integrated_heating_power(conditions)}")
       print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions)}")
       print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")

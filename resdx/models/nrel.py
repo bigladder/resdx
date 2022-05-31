@@ -318,7 +318,7 @@ class NRELDXModel(DXModel):
           self.system.heating_fan_speed_mapping.append(fan_speed)
           fan_speed += 1
 
-      fan = NRELFan(airflows, fr_u(0.20, "in_H2O"), efficacy_design=efficacies)
+      fan = NRELFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies)
       self.system.fan = fan
 
   def set_net_capacities_and_fan(self, net_total_cooling_capacity_rated, net_heating_capacity_rated, fan):
@@ -408,19 +408,19 @@ class NRELDXModel(DXModel):
 class NRELFan(Fan):
   def __init__(
     self,
-    airflow_design,
-    external_static_pressure_design=fr_u(0.5, "in_H2O"),
-    efficacy_design=fr_u(0.365,'W/cfm')):
-      super().__init__(airflow_design, external_static_pressure_design, efficacy_design)
-      self.airflow_ratios = [self.airflow_design[i]/self.airflow_design[0] for i in range(self.number_of_speeds)]
+    design_airflow,
+    design_external_static_pressure=fr_u(0.5, "in_H2O"),
+    design_efficacy=fr_u(0.365,'W/cfm')):
+      super().__init__(design_airflow, design_external_static_pressure, design_efficacy)
+      self.airflow_ratios = [self.design_airflow[i]/self.design_airflow[0] for i in range(self.number_of_speeds)]
       self.power_ratios = [self.airflow_ratios[i]**3. for i in range(self.number_of_speeds)]
-      self.power_design = [self.airflow_design[0]*self.efficacy_design[0]*self.power_ratios[i] for i in range(self.number_of_speeds)]
+      self.design_power = [self.design_airflow[0]*self.design_efficacy[0]*self.power_ratios[i] for i in range(self.number_of_speeds)]
 
   def airflow(self, conditions):
-    return self.airflow_design[conditions.speed_setting]
+    return self.design_airflow[conditions.speed_setting]
 
   def power(self, conditions):
-    return self.power_design[conditions.speed_setting]
+    return self.design_power[conditions.speed_setting]
 
   def efficacy(self, conditions):
     return self.power(conditions)/self.airflow(conditions)

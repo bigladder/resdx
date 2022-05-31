@@ -130,7 +130,7 @@ def make_vchp_unit(
     heating_fan_speed_mapping.append(fan_speed)
     fan_speed += 1
 
-  fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), efficacy_design=efficacies)
+  fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), design_efficacy=efficacies)
 
   new_model = copy.deepcopy(base_model)
 

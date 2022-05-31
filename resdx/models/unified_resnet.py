@@ -119,7 +119,7 @@ class RESNETDXModel(DXModel):
           self.system.heating_fan_speed_mapping.append(fan_speed)
           fan_speed += 1
 
-      fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), efficacy_design=efficacies)
+      fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies)
       self.system.fan = fan
 
   def set_net_capacities_and_fan(self, net_total_cooling_capacity_rated, net_heating_capacity_rated, fan):

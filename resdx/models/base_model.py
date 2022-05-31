@@ -91,7 +91,7 @@ class DXModel:
       air_flows = []
       for cap in self.system.net_total_cooling_capacity_rated:
         air_flows.append(cap*fr_u(375.0,"cfm/ton_ref"))
-      fan = ConstantEfficacyFan(air_flows, fr_u(0.20, "in_H2O"), efficacy_design=fr_u(0.25,'W/cfm'))
+      fan = ConstantEfficacyFan(air_flows, fr_u(0.20, "in_H2O"), design_efficacy=fr_u(0.25,'W/cfm'))
       self.system.fan = fan
 
       if self.system.heating_fan_speed_mapping is None:
