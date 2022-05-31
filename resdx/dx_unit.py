@@ -168,7 +168,7 @@ class DXUnit:
     self.model.set_net_capacities_and_fan(net_total_cooling_capacity_rated, net_heating_capacity_rated, fan)
 
     # Set rating conditions
-    self.set_rating_conditions(self.rating_standard)
+    self.set_rating_conditions()
 
     # Degradation coefficients
     self.model.set_c_d_cooling(c_d_cooling)
@@ -218,7 +218,9 @@ class DXUnit:
     self.check_array_order(self.net_total_cooling_capacity_rated)
     self.check_array_order(self.net_heating_capacity_rated)
 
-  def set_rating_conditions(self, rating_standard):
+  def set_rating_conditions(self):
+
+    self.full_flow_external_static_pressure = self.get_rated_pressure()
 
     self.A_full_cond = self.make_condition(CoolingConditions,compressor_speed=self.full_load_speed)
     self.B_full_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(82.0,"°F"),wetbulb=fr_u(65.0,"°F")),compressor_speed=self.full_load_speed)
@@ -294,18 +296,6 @@ class DXUnit:
     if outdoor is None:
       outdoor = condition_type().outdoor
 
-    if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
-      # TODO: Add Small-duct, High-velocity Systems
-      if self.net_total_cooling_capacity_rated[0] <= fr_u(29000, "Btu/hr"):
-        full_flow_external_static_pressure = fr_u(0.1, "in_H2O")
-      elif self.net_total_cooling_capacity_rated[0] <= fr_u(43000, "Btu/hr"):
-        full_flow_external_static_pressure = fr_u(0.15, "in_H2O")
-      else:
-        full_flow_external_static_pressure = fr_u(0.2, "in_H2O")
-    elif self.rating_standard == AHRIVersion.AHRI_210_240_2023:
-      # TODO: Add exceptional system types
-      full_flow_external_static_pressure = fr_u(0.5, "in_H2O")
-
     full_airflow = self.fan.airflow(self.cooling_fan_speed_mapping[0])
 
     if condition_type == CoolingConditions:
@@ -313,10 +303,28 @@ class DXUnit:
     else: # if condition_type == HeatingConditions:
       airflow = self.fan.airflow(self.heating_fan_speed_mapping[compressor_speed])
 
-    rated_flow_external_static_pressure = full_flow_external_static_pressure*(airflow/full_airflow)**2
+    rated_flow_external_static_pressure = self.full_flow_external_static_pressure*(airflow/full_airflow)**2
     condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed, rated_flow_external_static_pressure=rated_flow_external_static_pressure)
     condition.set_rated_air_flow(airflow, self.net_total_cooling_capacity_rated[compressor_speed])
     return condition
+
+  def get_rated_pressure(self):
+    if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
+      # TODO: Add Small-duct, High-velocity Systems
+      if self.net_total_cooling_capacity_rated[0] <= fr_u(29000, "Btu/hr"):
+        return fr_u(0.1, "in_H2O")
+      elif self.net_total_cooling_capacity_rated[0] <= fr_u(43000, "Btu/hr"):
+        return fr_u(0.15, "in_H2O")
+      else:
+        return fr_u(0.2, "in_H2O")
+    elif self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+      # TODO: Add exceptional system types
+      return fr_u(0.5, "in_H2O")
+
+  def set_rating_standard(self, rating_standard):
+    self.rating_standard = rating_standard
+    # Reset rating conditions to use the any differences between standards
+    self.set_rating_conditions()
 
   ### For cooling ###
   def cooling_fan_power(self, conditions=None):
