@@ -110,8 +110,8 @@ class PSCFan(Fan):
     # Solve algebraically
     pass
 
-class EMCFlowFan(Fan):
-  '''Constant flow EMC fan. Based largely on measured fan performance by Proctor Engineering'''
+class ECMFlowFan(Fan):
+  '''Constant flow ECM fan. Based largely on measured fan performance by Proctor Engineering'''
   def __init__(
     self,
     airflow_design,
@@ -175,4 +175,4 @@ class EMCFlowFan(Fan):
       external_static_pressure = self.operating_pressure(speed_setting)
     return self.unconstrained_rotational_speed(speed_setting, external_static_pressure)*(self.efficacy(speed_setting, external_static_pressure)/self.unconstrained_efficacy(speed_setting, external_static_pressure))
 
-# TODO: class EMCTorqueFan(Fan)
+# TODO: class ECMTorqueFan(Fan)
