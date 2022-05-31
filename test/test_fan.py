@@ -27,3 +27,32 @@ def test_psc_fan():
   # System curve checks
   assert psc_fan.airflow(0) == fr_u(1179.,'cfm')
   assert psc_fan.airflow(1) == approx(fr_u(1061.045,'cfm'),0.01)
+
+def test_emc_fan():
+
+  design_external_static_pressure = fr_u(0.5, "in_H2O")
+
+  '''Based on Fan #1 in Proctor measurements'''
+  emc_fan = resdx.EMCFlowFan(
+    airflow_design=[fr_u(v,'cfm') for v in [2405., 2200., 1987., 1760., 1537., 1310., 1169., 1099.]],
+    external_static_pressure_design=design_external_static_pressure,
+    efficacy_design=fr_u(0.3665,'W/cfm'),
+    maximum_power=fr_u(1000,'W'))
+
+  # Open flow conditions
+  assert emc_fan.airflow(0, fr_u(0., "in_H2O")) == fr_u(2405.,'cfm')
+
+  # Design conditions
+  assert emc_fan.rotational_speed(0, design_external_static_pressure) == fr_u(1100.,'rpm')
+
+  # Power limit
+  assert emc_fan.power(0, fr_u(0.8, "in_H2O")) == fr_u(1000.,'W')
+
+  # Simple regression check
+  assert emc_fan.power(2, fr_u(0.3, "in_H2O")) == approx(fr_u(474.119,'W'),0.01)
+
+  # System curve checks
+  assert emc_fan.airflow(0) == fr_u(2405.,'cfm')
+  assert emc_fan.airflow(1) == fr_u(2200.,'cfm')
+  assert emc_fan.power(0) == approx(fr_u(881.43,'W'),0.01)
+  assert emc_fan.power(6) == approx(fr_u(102.08,'W'),0.01)

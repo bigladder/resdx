@@ -409,7 +409,7 @@ class NRELFan(Fan):
   def __init__(
     self,
     airflow_design,
-    external_static_pressure_design=fr_u(0.15, "in_H2O"),
+    external_static_pressure_design=fr_u(0.5, "in_H2O"),
     efficacy_design=fr_u(0.365,'W/cfm')):
       super().__init__(airflow_design, external_static_pressure_design, efficacy_design)
       self.airflow_ratios = [self.airflow_design[i]/self.airflow_design[0] for i in range(self.number_of_speeds)]
