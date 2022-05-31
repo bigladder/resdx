@@ -123,10 +123,10 @@ class ECMFlowFan(Fan):
       self.maximum_power = maximum_power
       self.EFFICACY_SLOPE_ESP = fr_u(0.235,'(W/cfm)/in_H2O')  # Relative change in efficacy at different external static pressures
       self.SPEED_SLOPE_ESP = fr_u(463.5,'rpm/in_H2O')  # Relative change in rotational speed at different external static pressures
-      if self.airflow_design[0]*efficacy_design > self.maximum_power:
+      if self.airflow_design[0]*self.efficacy_design[0] > self.maximum_power:
         pass # TODO: Work backward? Error at first?
       else:
-        free_efficacy = efficacy_design - self.EFFICACY_SLOPE_ESP*external_static_pressure_design
+        free_efficacy = self.efficacy_design[0] - self.EFFICACY_SLOPE_ESP*self.external_static_pressure_design
         self.airflow_ratios = [self.airflow_design[i]/self.airflow_design[0] for i in range(self.number_of_speeds)]
         self.free_efficacies = [free_efficacy*self.normalized_free_efficacy(self.airflow_ratios[i]) for i in range(self.number_of_speeds)]
 

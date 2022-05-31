@@ -90,7 +90,7 @@ def make_vchp_unit(
   net_total_cooling_capacity = [net_cooling_data.get_capacity[i](fr_u(95.0,"°F")) for i in range(net_cooling_data.number_of_stages)]
   cooling_rated_fan_power = [net_total_cooling_capacity[i]*fan_efficacy_cooling_rated[i]*flow_rated_per_cap_cooling_rated[i] for i in range(net_cooling_data.number_of_stages)]
   net_heating_capacity = [net_heating_data.get_capacity[i](fr_u(47.0,"°F")) for i in range(net_heating_data.number_of_stages)]
-  heating_rated_fan_power = [net_heating_capacity[i]*fan_efficacy_heating_rated[i]*flow_rated_per_cap_heating_rated[i] for i in range(net_heating_data.number_of_stages)]
+  heating_rated_fan_power = [net_total_cooling_capacity[i]*fan_efficacy_heating_rated[i]*flow_rated_per_cap_heating_rated[i] for i in range(net_heating_data.number_of_stages)]
 
   gross_cooling_data = copy.deepcopy(net_cooling_data)
   for point in gross_cooling_data:
@@ -130,7 +130,7 @@ def make_vchp_unit(
     heating_fan_speed_mapping.append(fan_speed)
     fan_speed += 1
 
-  fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), efficacy_design=efficacies)
+  fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), efficacy_design=efficacies)
 
   new_model = copy.deepcopy(base_model)
 
