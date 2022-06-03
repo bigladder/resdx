@@ -94,11 +94,11 @@ class DXModel:
       fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=fr_u(0.25,'W/cfm'))
       self.system.fan = fan
 
-      if self.system.heating_fan_speed_mapping is None:
-        self.system.heating_fan_speed_mapping = list(range(fan.number_of_speeds))
+      if self.system.heating_fan_speed is None:
+        self.system.heating_fan_speed = list(range(fan.number_of_speeds))
 
-      if self.system.cooling_fan_speed_mapping is None:
-        self.system.cooling_fan_speed_mapping = list(range(fan.number_of_speeds))
+      if self.system.cooling_fan_speed is None:
+        self.system.cooling_fan_speed = list(range(fan.number_of_speeds))
 
   def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
     self.set_rated_net_total_cooling_capacity(rated_net_total_cooling_capacity)

@@ -117,17 +117,17 @@ def make_vchp_unit(
   airflows = []
   efficacies = []
   fan_speed = 0
-  cooling_fan_speed_mapping = []
-  heating_fan_speed_mapping = []
+  cooling_fan_speed = []
+  heating_fan_speed = []
   for i in range(gross_cooling_data.number_of_stages):
     airflows.append(net_total_cooling_capacity[i]*flow_rated_per_cap_cooling_rated[i])
     efficacies.append(fan_efficacy_cooling_rated[i])
-    cooling_fan_speed_mapping.append(fan_speed)
+    cooling_fan_speed.append(fan_speed)
     fan_speed += 1
   for i in range(gross_heating_data.number_of_stages):
     airflows.append(net_total_cooling_capacity[i]*flow_rated_per_cap_heating_rated[i])
     efficacies.append(fan_efficacy_heating_rated[i])
-    heating_fan_speed_mapping.append(fan_speed)
+    heating_fan_speed.append(fan_speed)
     fan_speed += 1
 
   fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), design_efficacy=efficacies)
@@ -190,8 +190,8 @@ def make_vchp_unit(
     rated_gross_heating_cop  =  None, # Use net instead
     c_d_heating = c_d_heating,
     fan = fan,
-    heating_fan_speed_mapping = heating_fan_speed_mapping,
-    cooling_fan_speed_mapping = cooling_fan_speed_mapping,
+    heating_fan_speed = heating_fan_speed,
+    cooling_fan_speed = cooling_fan_speed,
     full_load_speed = 1 if net_cooling_data.number_of_stages > 3 else 0,
     intermediate_speed = net_cooling_data.number_of_stages - 2,
     base_model=base_model

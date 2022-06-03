@@ -86,21 +86,28 @@ class DXUnit:
   def __init__(self,model = RESNETDXModel(),
                     # defaults of None are defaulted within this function based on other argument values
                     number_of_input_stages=None,
+                    # Cooling (rating = AHRI A conditions)
                     rated_net_total_cooling_capacity = fr_u(3.0,'ton_ref'),
                     rated_gross_cooling_cop = 3.72,
                     rated_net_cooling_cop = None,
+                    rated_cooling_airflow_per_rated_net_total_cooling_capacity=None,
                     c_d_cooling = None,
+                    # Heating (rating = AHRI H1 conditions)
                     rated_net_heating_capacity = None,
                     rated_gross_heating_cop = 3.82,
                     rated_net_heating_cop = None,
+                    rated_heating_airflow_per_rated_net_total_cooling_capacity=None,
                     c_d_heating = None,
                     heating_off_temperature = fr_u(0.0,"°F"),
                     heating_on_temperature = None, # default to heating_off_temperature
-                    fan = None,
-                    heating_fan_speed_mapping = None,
-                    cooling_fan_speed_mapping = None,
                     defrost = Defrost(),
+                    # Fan
+                    fan = None,
+                    heating_fan_speed = None,  # Map of cooling compressor speed to fan speed setting
+                    cooling_fan_speed = None,  # Map of heating compressor speed to fan speed setting
+                    # Faults
                     refrigerant_charge_deviation=0.0,
+                    # Ratings
                     cycling_method = CyclingMethod.BETWEEN_LOW_FULL,
                     full_load_speed = 0, # The first entry (index = 0) in arrays reflects AHRI "full" speed.
                     intermediate_speed = None,
@@ -160,11 +167,11 @@ class DXUnit:
     # Placeholders for derived staging array values
     self.set_placeholder_arrays()
 
-    # Default fan maps
-    self.heating_fan_speed_mapping = heating_fan_speed_mapping
-    self.cooling_fan_speed_mapping = cooling_fan_speed_mapping
+    # Default fan maps (if None, will be set in set_net_capacities_and_fan)
+    self.heating_fan_speed = heating_fan_speed
+    self.cooling_fan_speed = cooling_fan_speed
 
-    # Set net capacities
+    # Set net capacities and fan
     self.model.set_net_capacities_and_fan(rated_net_total_cooling_capacity, rated_net_heating_capacity, fan)
 
     # Set rating conditions
@@ -175,15 +182,15 @@ class DXUnit:
     self.model.set_c_d_heating(c_d_heating)
 
     # Derived staging array values
-    full_airflow = self.fan.airflow(self.cooling_fan_speed_mapping[0])
+    full_airflow = self.fan.airflow(self.cooling_fan_speed[0])
 
     for i in range(self.number_of_input_stages):
-      cooling_airflow = self.fan.airflow(self.cooling_fan_speed_mapping[i])
+      cooling_airflow = self.fan.airflow(self.cooling_fan_speed[i])
       rated_cooling_flow_external_static_pressure = self.A_full_cond.rated_flow_external_static_pressure*(cooling_airflow/full_airflow)**2
-      heating_airflow = self.fan.airflow(self.heating_fan_speed_mapping[i])
+      heating_airflow = self.fan.airflow(self.heating_fan_speed[i])
       rated_heating_flow_external_static_pressure = self.A_full_cond.rated_flow_external_static_pressure*(heating_airflow/full_airflow)**2
-      self.rated_cooling_fan_power[i] = self.fan.power(self.cooling_fan_speed_mapping[i], rated_cooling_flow_external_static_pressure)
-      self.rated_heating_fan_power[i] = self.fan.power(self.heating_fan_speed_mapping[i], rated_heating_flow_external_static_pressure)
+      self.rated_cooling_fan_power[i] = self.fan.power(self.cooling_fan_speed[i], rated_cooling_flow_external_static_pressure)
+      self.rated_heating_fan_power[i] = self.fan.power(self.heating_fan_speed[i], rated_heating_flow_external_static_pressure)
       self.rated_gross_total_cooling_capacity[i] = self.rated_net_total_cooling_capacity[i] + self.rated_cooling_fan_power[i]
       self.rated_gross_heating_capacity[i] = self.rated_net_heating_capacity[i] - self.rated_heating_fan_power[i]
 
@@ -296,12 +303,12 @@ class DXUnit:
     if outdoor is None:
       outdoor = condition_type().outdoor
 
-    full_airflow = self.fan.airflow(self.cooling_fan_speed_mapping[0])
+    full_airflow = self.fan.airflow(self.cooling_fan_speed[0])
 
     if condition_type == CoolingConditions:
-      airflow = self.fan.airflow(self.cooling_fan_speed_mapping[compressor_speed])
+      airflow = self.fan.airflow(self.cooling_fan_speed[compressor_speed])
     else: # if condition_type == HeatingConditions:
-      airflow = self.fan.airflow(self.heating_fan_speed_mapping[compressor_speed])
+      airflow = self.fan.airflow(self.heating_fan_speed[compressor_speed])
 
     rated_flow_external_static_pressure = self.full_flow_external_static_pressure*(airflow/full_airflow)**2
     condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed, rated_flow_external_static_pressure=rated_flow_external_static_pressure)
@@ -330,7 +337,7 @@ class DXUnit:
   def cooling_fan_power(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.fan.power(self.cooling_fan_speed_mapping[conditions.compressor_speed], conditions.external_static_pressure)
+    return self.fan.power(self.cooling_fan_speed[conditions.compressor_speed], conditions.external_static_pressure)
 
   def cooling_fan_heat(self, conditions):
     return self.cooling_fan_power(conditions)
@@ -512,7 +519,7 @@ class DXUnit:
   def heating_fan_power(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.fan.power(self.heating_fan_speed_mapping[conditions.compressor_speed], conditions.external_static_pressure)
+    return self.fan.power(self.heating_fan_speed[conditions.compressor_speed], conditions.external_static_pressure)
 
   def heating_fan_heat(self, conditions):
     return self.heating_fan_power(conditions)
@@ -766,7 +773,7 @@ class DXUnit:
     print(f"SEER: {self.seer()}")
     for speed in range(self.number_of_input_stages):
       conditions = CoolingConditions(compressor_speed=speed)
-      conditions.set_rated_airflow(self.fan.airflow(self.cooling_fan_speed_mapping[speed], self.fan.design_external_static_pressure), self.rated_net_total_cooling_capacity[speed])
+      conditions.set_rated_airflow(self.fan.airflow(self.cooling_fan_speed[speed], self.fan.design_external_static_pressure), self.rated_net_total_cooling_capacity[speed])
       print(f"Net cooling power for stage {speed + 1} : {self.net_cooling_power(conditions)}")
       print(f"Net cooling capacity for stage {speed + 1} : {self.net_total_cooling_capacity(conditions)}")
       print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions)}")
@@ -777,7 +784,7 @@ class DXUnit:
     print(f"HSPF (region {region}): {self.hspf(region)}")
     for speed in range(self.number_of_input_stages):
       conditions = HeatingConditions(compressor_speed=speed)
-      conditions.set_rated_airflow(self.fan.airflow(self.heating_fan_speed_mapping[speed], self.fan.design_external_static_pressure), self.rated_net_total_cooling_capacity[speed])
+      conditions.set_rated_airflow(self.fan.airflow(self.heating_fan_speed[speed], self.fan.design_external_static_pressure), self.rated_net_total_cooling_capacity[speed])
       print(f"Net heating power for stage {speed + 1} : {self.net_integrated_heating_power(conditions)}")
       print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions)}")
       print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")

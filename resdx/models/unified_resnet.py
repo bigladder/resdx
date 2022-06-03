@@ -97,26 +97,26 @@ class RESNETDXModel(DXModel):
       airflows = []
       efficacies = []
       fan_speed = 0
-      if self.system.cooling_fan_speed_mapping is None:
-        set_cooling_fan_speed_map = True
-        self.system.cooling_fan_speed_mapping = []
+      if self.system.cooling_fan_speed is None:
+        set_cooling_fan_speed = True
+        self.system.cooling_fan_speed = []
 
-      if self.system.heating_fan_speed_mapping is None:
-        set_heating_fan_speed_map = True
-        self.system.heating_fan_speed_mapping = []
+      if self.system.heating_fan_speed is None:
+        set_heating_fan_speed = True
+        self.system.heating_fan_speed = []
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
         airflows.append(cap*self.system.flow_rated_per_cap_cooling_rated[i])
         efficacies.append(self.system.fan_efficacy_cooling_rated[i])
-        if set_cooling_fan_speed_map:
-          self.system.cooling_fan_speed_mapping.append(fan_speed)
+        if set_cooling_fan_speed:
+          self.system.cooling_fan_speed.append(fan_speed)
           fan_speed += 1
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
         airflows.append(cap*self.system.flow_rated_per_cap_heating_rated[i])
         efficacies.append(self.system.fan_efficacy_heating_rated[i])
-        if set_heating_fan_speed_map:
-          self.system.heating_fan_speed_mapping.append(fan_speed)
+        if set_heating_fan_speed:
+          self.system.heating_fan_speed.append(fan_speed)
           fan_speed += 1
 
       fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies)
