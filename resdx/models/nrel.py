@@ -313,7 +313,7 @@ class NRELDXModel(DXModel):
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
         airflows.append(cap*self.system.flow_rated_per_cap_heating_rated[i])
-        efficacies.append(self.system.fan_efficacy_cooling_rated[i])
+        efficacies.append(self.system.fan_efficacy_heating_rated[i])
         if set_heating_fan_speed:
           self.system.heating_fan_speed.append(fan_speed)
           fan_speed += 1
@@ -411,10 +411,14 @@ class NRELFan(Fan):
     design_airflow,
     design_external_static_pressure=fr_u(0.5, "in_H2O"),
     design_efficacy=fr_u(0.365,'W/cfm')):
+      self.power_ratio = []
+      self.design_power = []
       super().__init__(design_airflow, design_external_static_pressure, design_efficacy)
-      self.airflow_ratios = [self.design_airflow[i]/self.design_airflow[0] for i in range(self.number_of_speeds)]
-      self.power_ratios = [self.airflow_ratios[i]**3. for i in range(self.number_of_speeds)]
-      self.design_power = [self.design_airflow[0]*self.design_efficacy[0]*self.power_ratios[i] for i in range(self.number_of_speeds)]
+
+  def add_speed(self, airflow):
+    super().add_speed(airflow)
+    self.power_ratio.append(self.airflow_ratio[-1]**3.)
+    self.design_power.append(self.design_airflow[0]*self.design_efficacy*self.power_ratio[-1])
 
   def airflow(self, conditions):
     return self.design_airflow[conditions.speed_setting]

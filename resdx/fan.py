@@ -8,21 +8,24 @@ class Fan:
     design_airflow,
     design_external_static_pressure,
     design_efficacy=fr_u(0.365,'W/cfm')): # AHRI 210/240 2017 default
-      if type(design_airflow) is list:
-        self.design_airflow = design_airflow
-      else:
-        self.design_airflow = [design_airflow]
-      self.number_of_speeds = len(self.design_airflow)
       self.design_external_static_pressure = design_external_static_pressure
-      if type(design_efficacy) is list:
-        self.design_efficacy = design_efficacy
+      self.design_efficacy = design_efficacy
+      self.number_of_speeds = 0
+      self.design_airflow = []
+      self.airflow_ratio = []
+      if type(design_airflow) is list:
+        for airflow in design_airflow:
+          self.add_speed(airflow)
       else:
-        self.design_efficacy = [design_efficacy]*self.number_of_speeds
-
+        self.add_speed(design_airflow)
       self.system_exponent = 0.5
       self.system_curve_constant = self.design_external_static_pressure**(self.system_exponent)/self.design_airflow[0]
 
-    # system curve function: given flow rate, calculate pressure
+  def add_speed(self, airflow, efficacy=None):
+    self.design_airflow.append(airflow)
+    self.number_of_speeds += 1
+    self.airflow_ratio.append(self.design_airflow[-1]/self.design_airflow[0])
+
   def system_pressure(self, airflow):
     return (airflow*self.system_curve_constant)**(1./self.system_exponent)
 
@@ -54,6 +57,16 @@ class Fan:
     pass
 
 class ConstantEfficacyFan(Fan):
+  def __init__(self, design_airflow, design_external_static_pressure, design_efficacy=fr_u(0.365, 'W/cfm')):
+    super().__init__(design_airflow, design_external_static_pressure, design_efficacy)
+    if type(self.design_efficacy) is not list:
+      self.design_efficacy = [self.design_efficacy]*self.number_of_speeds
+
+  def add_speed(self, airflow, efficacy=None):
+    super().add_speed(airflow)
+    if efficacy is not None:
+      self.design_efficacy.append(efficacy)
+
   def efficacy(self, speed_setting, external_static_pressure=None):
     return self.design_efficacy[speed_setting]
 
@@ -62,40 +75,49 @@ class ConstantEfficacyFan(Fan):
 
 class PSCFan(Fan):
   '''Based largely on measured fan performance by Proctor Engineering'''
+
+  AIRFLOW_COEFFICIENT = fr_u(10.,'cfm')
+  AIRFLOW_EXP_COEFFICIENT = fr_u(5.355391179,'1/in_H2O')
+  EFFICACY_SLOPE = -0.1446674009  # Relative change in efficacy at lower flow ratios
+
   def __init__(
     self,
     design_airflow,
     design_external_static_pressure=fr_u(0.5, "in_H2O"),
     design_efficacy=fr_u(0.365,'W/cfm')):
+      self.design_airflow_reduction = self.airflow_reduction(design_external_static_pressure)
+      self.free_airflow = []
+      self.free_airflow_ratio = []
+      self.speed_efficacy = []
+      self.block_pressure = []
+      self.free_speed = []
       super().__init__(design_airflow, design_external_static_pressure, design_efficacy)
-      self.AIRFLOW_COEFFICIENT = fr_u(10.,'cfm')
-      self.AIRFLOW_EXP_COEFFICIENT = fr_u(5.355391179,'1/in_H2O')
-      self.EFFICACY_SLOPE = -0.1446674009  # Relative change in efficacy at lower flow ratios
-      design_airflow_reduction = self.airflow_reduction(design_external_static_pressure)
-      self.airflow_free = [self.design_airflow[i] + design_airflow_reduction for i in range(self.number_of_speeds)]
-      self.airflow_ratios = [self.airflow_free[i]/self.airflow_free[0] for i in range(self.number_of_speeds)]
-      self.design_efficacy = design_efficacy
-      self.efficacies = [design_efficacy*(1. + self.EFFICACY_SLOPE*(self.airflow_ratios[i] - 1.)) for i in range(self.number_of_speeds)]
-      self.block_pressure = [log(self.airflow_free[i]/self.AIRFLOW_COEFFICIENT + 1.)/self.AIRFLOW_EXP_COEFFICIENT for i in range(self.number_of_speeds)]
-      self.speed_free = [fr_u(1040.,'rpm')*self.airflow_ratios[i] for i in range(self.number_of_speeds)]
+
+  def add_speed(self, airflow):
+    super().add_speed(airflow)
+    self.free_airflow.append(self.design_airflow[-1] + self.design_airflow_reduction)
+    self.free_airflow_ratio.append(self.free_airflow[-1]/self.free_airflow[0])
+    self.speed_efficacy.append(self.design_efficacy*(1. + self.EFFICACY_SLOPE*(self.free_airflow_ratio[-1] - 1.)))
+    self.block_pressure.append(log(self.free_airflow[-1]/self.AIRFLOW_COEFFICIENT + 1.)/self.AIRFLOW_EXP_COEFFICIENT)
+    self.free_speed.append(fr_u(1040.,'rpm')*self.free_airflow_ratio[-1])
 
   def efficacy(self, speed_setting, external_static_pressure=None):
-      return self.efficacies[speed_setting]
+      return self.speed_efficacy[speed_setting]
 
   def airflow(self, speed_setting, external_static_pressure=None):
     i = speed_setting
     if external_static_pressure is None:
       external_static_pressure = self.operating_pressure(speed_setting)
-    return max(self.airflow_free[i] - self.airflow_reduction(external_static_pressure),0.)
+    return max(self.free_airflow[speed_setting] - self.airflow_reduction(external_static_pressure),0.)
 
   def rotational_speed(self, speed_setting, external_static_pressure=None):
-    i = speed_setting
     if external_static_pressure is None:
       external_static_pressure = self.operating_pressure(speed_setting)
-    if external_static_pressure > self.block_pressure[i]:
+    if external_static_pressure > self.block_pressure[speed_setting]:
       return fr_u(1100.,'rpm')
     else:
-      return self.speed_free[i] + (fr_u(1100.,'rpm') - self.speed_free[i])*external_static_pressure/self.block_pressure[i]
+      i = speed_setting
+      return self.free_speed[i] + (fr_u(1100.,'rpm') - self.free_speed[i])*external_static_pressure/self.block_pressure[i]
 
   def airflow_reduction(self, external_static_pressure):
     return self.AIRFLOW_COEFFICIENT*(exp(external_static_pressure*self.AIRFLOW_EXP_COEFFICIENT)-1.)
@@ -112,23 +134,28 @@ class PSCFan(Fan):
 
 class ECMFlowFan(Fan):
   '''Constant flow ECM fan. Based largely on measured fan performance by Proctor Engineering'''
+
+  EFFICACY_SLOPE_ESP = fr_u(0.235,'(W/cfm)/in_H2O')  # Relative change in efficacy at different external static pressures
+  SPEED_SLOPE_ESP = fr_u(463.5,'rpm/in_H2O')  # Relative change in rotational speed at different external static pressures
+
   def __init__(
     self,
     design_airflow,
     design_external_static_pressure=fr_u(0.5, "in_H2O"),
     design_efficacy=fr_u(0.365,'W/cfm'),
     maximum_power=inf):
-      super().__init__(design_airflow, design_external_static_pressure, design_efficacy)
-      # Check if design flow is above power limit
+      # Check if design power is above power limit
+      design_power = (design_airflow[0] if type(design_airflow) is list else design_airflow)*design_efficacy
+      if design_power > maximum_power:
+        raise Exception(f"Design power ({design_power} W) is greater than the maximum power ({maximum_power}) W")
       self.maximum_power = maximum_power
-      self.EFFICACY_SLOPE_ESP = fr_u(0.235,'(W/cfm)/in_H2O')  # Relative change in efficacy at different external static pressures
-      self.SPEED_SLOPE_ESP = fr_u(463.5,'rpm/in_H2O')  # Relative change in rotational speed at different external static pressures
-      if self.design_airflow[0]*self.design_efficacy[0] > self.maximum_power:
-        pass # TODO: Work backward? Error at first?
-      else:
-        free_efficacy = self.design_efficacy[0] - self.EFFICACY_SLOPE_ESP*self.design_external_static_pressure
-        self.airflow_ratios = [self.design_airflow[i]/self.design_airflow[0] for i in range(self.number_of_speeds)]
-        self.free_efficacies = [free_efficacy*self.normalized_free_efficacy(self.airflow_ratios[i]) for i in range(self.number_of_speeds)]
+      self.design_free_efficacy = design_efficacy - self.EFFICACY_SLOPE_ESP*design_external_static_pressure
+      self.free_efficacy = []
+      super().__init__(design_airflow, design_external_static_pressure, design_efficacy)
+
+  def add_speed(self, airflow):
+    super().add_speed(airflow)
+    self.free_efficacy.append(self.design_free_efficacy*self.normalized_free_efficacy(self.airflow_ratio[-1]))
 
   def normalized_free_efficacy(self, flow_ratio):
     minimum_flow_ratio = 0.293/2.4 # local minima, derived mathematically
@@ -143,7 +170,7 @@ class ECMFlowFan(Fan):
     return 0.0981 - 0.293*flow_ratio + 1.2*flow_ratio**2
 
   def unconstrained_efficacy(self, speed_setting, external_static_pressure):
-    return self.free_efficacies[speed_setting] + self.EFFICACY_SLOPE_ESP*external_static_pressure
+    return self.free_efficacy[speed_setting] + self.EFFICACY_SLOPE_ESP*external_static_pressure
 
   def unconstrained_power(self, speed_setting, external_static_pressure):
     return self.design_airflow[speed_setting]*self.unconstrained_efficacy(speed_setting, external_static_pressure)
@@ -168,7 +195,7 @@ class ECMFlowFan(Fan):
     return self.power(speed_setting, external_static_pressure)/self.airflow(speed_setting, external_static_pressure)
 
   def unconstrained_rotational_speed(self, speed_setting, external_static_pressure):
-    return (fr_u(1100.,'rpm') - self.SPEED_SLOPE_ESP*(self.design_external_static_pressure - external_static_pressure))*self.airflow_ratios[speed_setting]
+    return (fr_u(1100.,'rpm') - self.SPEED_SLOPE_ESP*(self.design_external_static_pressure - external_static_pressure))*self.airflow_ratio[speed_setting]
 
   def rotational_speed(self, speed_setting, external_static_pressure=None):
     if external_static_pressure is None:

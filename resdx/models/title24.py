@@ -1,6 +1,8 @@
 from enum import Enum
 from scipy import optimize
 
+from resdx.fan import ConstantEfficacyFan
+
 from ..units import fr_u, to_u
 from ..defrost import DefrostStrategy
 
@@ -57,9 +59,9 @@ class Title24DXModel(DXModel):
   @staticmethod
   def fan_efficacy_rated(flow_per_capacity, motor_type=MotorType.PSC):
     if motor_type == Title24DXModel.MotorType.PSC:
-      power_per_capacity = fr_u(500,'(Btu/h)/ton_ref')
+      power_per_capacity = fr_u(500,'(Btu/hr)/ton_ref')
     else:
-      power_per_capacity = fr_u(283,'(Btu/h)/ton_ref')
+      power_per_capacity = fr_u(283,'(Btu/hr)/ton_ref')
     return power_per_capacity/flow_per_capacity
 
   def gross_total_cooling_capacity(self, conditions):
@@ -334,6 +336,39 @@ class Title24DXModel(DXModel):
       heating_fan_efficacy = cooling_fan_efficacy
       self.system.fan_efficacy_cooling_rated = [cooling_fan_efficacy]*self.system.number_of_input_stages
       self.system.fan_efficacy_heating_rated = [heating_fan_efficacy]*self.system.number_of_input_stages
+
+  def set_fan(self, input):
+    if input is not None:
+      # TODO: Handle default mappings?
+      self.system.fan = input
+    else:
+      airflows = []
+      efficacies = []
+      fan_speed = 0
+      if self.system.cooling_fan_speed is None:
+        set_cooling_fan_speed = True
+        self.system.cooling_fan_speed = []
+
+      if self.system.heating_fan_speed is None:
+        set_heating_fan_speed = True
+        self.system.heating_fan_speed = []
+
+      for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
+        airflows.append(cap*self.system.flow_rated_per_cap_cooling_rated[i])
+        efficacies.append(self.system.fan_efficacy_cooling_rated[i])
+        if set_cooling_fan_speed:
+          self.system.cooling_fan_speed.append(fan_speed)
+          fan_speed += 1
+
+      for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
+        airflows.append(cap*self.system.flow_rated_per_cap_heating_rated[i])
+        efficacies.append(self.system.fan_efficacy_heating_rated[i])
+        if set_heating_fan_speed:
+          self.system.heating_fan_speed.append(fan_speed)
+          fan_speed += 1
+
+      fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies)
+      self.system.fan = fan
 
   def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
     self.set_rated_fan_characteristics(fan)
