@@ -181,13 +181,13 @@ def make_vchp_unit(
   new_model.gross_steady_state_heating_power = types.MethodType(new_gross_steady_state_heating_power, new_model)
 
   return DXUnit(model=new_model,
-    net_total_cooling_capacity_rated = net_total_cooling_capacity,
-    net_cooling_cop_rated = [net_cooling_data.get_cop[i](fr_u(95.0,"°F")) for i in range(net_cooling_data.number_of_stages)],
-    gross_cooling_cop_rated  =  None, # Use net instead
+    rated_net_total_cooling_capacity = net_total_cooling_capacity,
+    rated_net_cooling_cop = [net_cooling_data.get_cop[i](fr_u(95.0,"°F")) for i in range(net_cooling_data.number_of_stages)],
+    rated_gross_cooling_cop  =  None, # Use net instead
     c_d_cooling = c_d_cooling,
-    net_heating_capacity_rated = net_heating_capacity,
-    net_heating_cop_rated = [net_heating_data.get_cop[i](fr_u(47.0,"°F")) for i in range(net_heating_data.number_of_stages)],
-    gross_heating_cop_rated  =  None, # Use net instead
+    rated_net_heating_capacity = net_heating_capacity,
+    rated_net_heating_cop = [net_heating_data.get_cop[i](fr_u(47.0,"°F")) for i in range(net_heating_data.number_of_stages)],
+    rated_gross_heating_cop  =  None, # Use net instead
     c_d_heating = c_d_heating,
     fan = fan,
     heating_fan_speed_mapping = heating_fan_speed_mapping,

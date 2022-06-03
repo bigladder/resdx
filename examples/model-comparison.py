@@ -7,10 +7,10 @@ hspf = 7.7
 # heating factor:
 
 t24_unit = resdx.DXUnit(model=resdx.models.Title24DXModel(),
-                        net_cooling_cop_rated=[resdx.fr_u(resdx.models.Title24DXModel.eer_rated(seer),'Btu/Wh')],
+                        rated_net_cooling_cop=[resdx.fr_u(resdx.models.Title24DXModel.eer_rated(seer),'Btu/Wh')],
                         c_d_cooling=0.0,
                         input_seer=seer,
-                        net_heating_cop_rated=[resdx.models.Title24DXModel.cop47_rated(hspf)],
+                        rated_net_heating_cop=[resdx.models.Title24DXModel.cop47_rated(hspf)],
                         c_d_heating=resdx.models.Title24DXModel.c_d_heating(hspf),
                         input_hspf=hspf,
                         #cap17=[resdx.fr_u(2.0,'ton_ref')],

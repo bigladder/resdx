@@ -13,8 +13,8 @@ class DefrostVerificationModel_nrel(resdx.models.ConstantDXModel): # Implemented
 
 
 test_dx_system = resdx.DXUnit(model=DefrostVerificationModel_nrel(), # These inputs should be similar to EnergyPlus model.
-                        net_heating_cop_rated=[5],
-                        net_heating_capacity_rated=[10600])
+                        rated_net_heating_cop=[5],
+                        rated_net_heating_capacity=[10600])
 
 class DefrostVerificationModel_henderson(resdx.models.ConstantDXModel):
 
@@ -25,8 +25,8 @@ class DefrostVerificationModel_henderson(resdx.models.ConstantDXModel):
     return resdx.models.HendersonDefrostModel.gross_integrated_heating_power(self, conditions)
 
 test_dx_system_henderson = resdx.DXUnit(model=DefrostVerificationModel_henderson(),
-                        net_heating_cop_rated=[5],
-                        net_heating_capacity_rated=[10600])
+                        rated_net_heating_cop=[5],
+                        rated_net_heating_capacity=[10600])
 # %%
 import matplotlib.pyplot as plt
 import seaborn as sns

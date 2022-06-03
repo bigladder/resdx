@@ -13,16 +13,16 @@ class ConstantDXModel(DXModel):
   '''This model is developed for testing purposes where the performance is constant across all conditions'''
 
   def gross_cooling_power(self, conditions):
-    return self.system.gross_total_cooling_capacity_rated[conditions.compressor_speed]/self.system.gross_cooling_cop_rated[conditions.compressor_speed]
+    return self.system.rated_gross_total_cooling_capacity[conditions.compressor_speed]/self.system.rated_gross_cooling_cop[conditions.compressor_speed]
 
   def gross_total_cooling_capacity(self, conditions):
-    return self.system.gross_total_cooling_capacity_rated[conditions.compressor_speed]
+    return self.system.rated_gross_total_cooling_capacity[conditions.compressor_speed]
 
   def gross_steady_state_heating_power(self, conditions):
-    return self.system.gross_heating_capacity_rated[conditions.compressor_speed]/self.system.gross_heating_cop_rated[conditions.compressor_speed]
+    return self.system.rated_gross_heating_capacity[conditions.compressor_speed]/self.system.rated_gross_heating_cop[conditions.compressor_speed]
 
   def gross_steady_state_heating_capacity(self, conditions):
-    return self.system.gross_heating_capacity_rated[conditions.compressor_speed]
+    return self.system.rated_gross_heating_capacity[conditions.compressor_speed]
 
   def gross_integrated_heating_capacity(self, conditions):
     return self.system.gross_steady_state_heating_capacity(conditions)

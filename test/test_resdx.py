@@ -23,25 +23,25 @@ def test_1_speed_regression():
   # Single speed, SEER 13, HSPF 8
   seer_1 = 13.
   hspf_1 = 8.
-  cop_1_c, solution_1_c = optimize.newton(lambda x : DXUnit(gross_cooling_cop_rated=x, input_seer=seer_1).seer() - seer_1, seer_1/3.33, full_output = True)
-  cop_1_h, solution_1_h = optimize.newton(lambda x : DXUnit(gross_heating_cop_rated=x, input_hspf=hspf_1).hspf() - hspf_1, hspf_1/2., full_output = True)
-  dx_unit_1_speed = DXUnit(gross_cooling_cop_rated=cop_1_c, gross_heating_cop_rated=cop_1_h, input_seer=seer_1, input_hspf=hspf_1)
+  cop_1_c, solution_1_c = optimize.newton(lambda x : DXUnit(rated_gross_cooling_cop=x, input_seer=seer_1).seer() - seer_1, seer_1/3.33, full_output = True)
+  cop_1_h, solution_1_h = optimize.newton(lambda x : DXUnit(rated_gross_heating_cop=x, input_hspf=hspf_1).hspf() - hspf_1, hspf_1/2., full_output = True)
+  dx_unit_1_speed = DXUnit(rated_gross_cooling_cop=cop_1_c, rated_gross_heating_cop=cop_1_h, input_seer=seer_1, input_hspf=hspf_1)
 
   dx_unit_1_speed.print_cooling_info()
   dx_unit_1_speed.print_heating_info()
   assert dx_unit_1_speed.seer() == approx(seer_1, 0.0001)
-  assert dx_unit_1_speed.gross_cooling_cop_rated[0] == approx(3.716, 0.001)
+  assert dx_unit_1_speed.rated_gross_cooling_cop[0] == approx(3.716, 0.001)
   assert dx_unit_1_speed.hspf() == approx(hspf_1, 0.0001)
-  assert dx_unit_1_speed.gross_heating_cop_rated[0] == approx(3.476, 0.001)
-  assert dx_unit_1_speed.net_total_cooling_capacity() == approx(dx_unit_1_speed.net_total_cooling_capacity_rated[0],0.01)
+  assert dx_unit_1_speed.rated_gross_heating_cop[0] == approx(3.476, 0.001)
+  assert dx_unit_1_speed.net_total_cooling_capacity() == approx(dx_unit_1_speed.rated_net_total_cooling_capacity[0],0.01)
 
 def test_1_speed_refrigerant_charge_regression():
   # Single speed, SEER 13, HSPF 8
   seer_1 = 13.
   hspf_1 = 8.
-  cop_1_c, solution_1_c = optimize.newton(lambda x : DXUnit(gross_cooling_cop_rated=x, input_seer=seer_1).seer() - seer_1, seer_1/3.33, full_output = True)
-  cop_1_h, solution_1_h = optimize.newton(lambda x : DXUnit(gross_heating_cop_rated=x, input_hspf=hspf_1).hspf() - hspf_1, hspf_1/2., full_output = True)
-  dx_unit_1_speed = DXUnit(gross_cooling_cop_rated=cop_1_c, gross_heating_cop_rated=cop_1_h, input_seer=seer_1, input_hspf=hspf_1, refrigerant_charge_deviation=-0.25)
+  cop_1_c, solution_1_c = optimize.newton(lambda x : DXUnit(rated_gross_cooling_cop=x, input_seer=seer_1).seer() - seer_1, seer_1/3.33, full_output = True)
+  cop_1_h, solution_1_h = optimize.newton(lambda x : DXUnit(rated_gross_heating_cop=x, input_hspf=hspf_1).hspf() - hspf_1, hspf_1/2., full_output = True)
+  dx_unit_1_speed = DXUnit(rated_gross_cooling_cop=cop_1_c, rated_gross_heating_cop=cop_1_h, input_seer=seer_1, input_hspf=hspf_1, refrigerant_charge_deviation=-0.25)
 
   dx_unit_1_speed.print_cooling_info()
   dx_unit_1_speed.print_heating_info()
@@ -52,21 +52,21 @@ def test_2_speed_regression():
   # Two speed, SEER 17, HSPF 10
   seer_2 = 17.
   hspf_2 = 10.
-  cop_2_c, solution_2_c = optimize.newton(lambda x : DXUnit(number_of_input_stages=2, gross_cooling_cop_rated=x, input_seer=seer_2).seer() - seer_2,seer_2/3.33, full_output = True)
-  cop_2_h, solution_2_h = optimize.newton(lambda x : DXUnit(number_of_input_stages=2, gross_heating_cop_rated=x, input_hspf=hspf_2).hspf() - hspf_2,hspf_2/2., full_output = True)
+  cop_2_c, solution_2_c = optimize.newton(lambda x : DXUnit(number_of_input_stages=2, rated_gross_cooling_cop=x, input_seer=seer_2).seer() - seer_2,seer_2/3.33, full_output = True)
+  cop_2_h, solution_2_h = optimize.newton(lambda x : DXUnit(number_of_input_stages=2, rated_gross_heating_cop=x, input_hspf=hspf_2).hspf() - hspf_2,hspf_2/2., full_output = True)
 
-  dx_unit_2_speed = DXUnit(number_of_input_stages=2, gross_cooling_cop_rated=cop_2_c, gross_heating_cop_rated=cop_2_h, input_seer=seer_2, input_hspf=hspf_2)
+  dx_unit_2_speed = DXUnit(number_of_input_stages=2, rated_gross_cooling_cop=cop_2_c, rated_gross_heating_cop=cop_2_h, input_seer=seer_2, input_hspf=hspf_2)
 
   dx_unit_2_speed.print_cooling_info()
 
   dx_unit_2_speed.print_heating_info()
   dx_unit_2_speed.print_heating_info(region=2)
   assert dx_unit_2_speed.seer() == approx(seer_2, 0.01)
-  assert dx_unit_2_speed.gross_cooling_cop_rated[0] == approx(4.379, 0.001)
-  assert dx_unit_2_speed.gross_cooling_cop_rated[1] == approx(4.734, 0.001)
+  assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.379, 0.001)
+  assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.734, 0.001)
   assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
-  assert dx_unit_2_speed.gross_heating_cop_rated[0] == approx(4.011, 0.001)
-  assert dx_unit_2_speed.gross_heating_cop_rated[1] == approx(4.470, 0.001)
+  assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(4.011, 0.001)
+  assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.470, 0.001)
 
 def test_vchp_regression():
   # VCHP (Fujitsu Halcyon 12) https://ashp.neep.org/#!/product/25349/7/25000///0
@@ -101,7 +101,7 @@ def test_vchp_regression():
       cops=[2.37,4.89]))
 
   vchp_unit = resdx.make_vchp_unit(cooling_data, heating_data)
-  assert vchp_unit.net_total_cooling_capacity() == approx(vchp_unit.net_total_cooling_capacity_rated[0],0.01)
+  assert vchp_unit.net_total_cooling_capacity() == approx(vchp_unit.rated_net_total_cooling_capacity[0],0.01)
   vchp_unit.print_cooling_info()
 
   vchp_unit.print_heating_info()
@@ -117,9 +117,9 @@ def test_plot():
   # Single speed, SEER 13, HSPF 8
   seer_1 = 13.
   hspf_1 = 8.
-  cop_1_c, solution_1_c = optimize.newton(lambda x : DXUnit(gross_cooling_cop_rated=x, input_seer=seer_1).seer() - seer_1, seer_1/3.33, full_output = True)
-  cop_1_h, solution_1_h = optimize.newton(lambda x : DXUnit(gross_heating_cop_rated=x, input_hspf=hspf_1).hspf() - hspf_1, hspf_1/2., full_output = True)
-  dx_unit_1_speed = DXUnit(gross_cooling_cop_rated=cop_1_c, gross_heating_cop_rated=cop_1_h, input_seer=seer_1, input_hspf=hspf_1)
+  cop_1_c, solution_1_c = optimize.newton(lambda x : DXUnit(rated_gross_cooling_cop=x, input_seer=seer_1).seer() - seer_1, seer_1/3.33, full_output = True)
+  cop_1_h, solution_1_h = optimize.newton(lambda x : DXUnit(rated_gross_heating_cop=x, input_hspf=hspf_1).hspf() - hspf_1, hspf_1/2., full_output = True)
+  dx_unit_1_speed = DXUnit(rated_gross_cooling_cop=cop_1_c, rated_gross_heating_cop=cop_1_h, input_seer=seer_1, input_hspf=hspf_1)
 
   # Plot integrated power and capacity
   T_out = np.arange(-23,76,1)

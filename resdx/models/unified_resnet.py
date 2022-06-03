@@ -71,23 +71,23 @@ class RESNETDXModel(DXModel):
         self.system.flow_rated_per_cap_cooling_rated = [cooling_default, cooling_default*0.86]
         self.system.flow_rated_per_cap_heating_rated = [heating_default, heating_default*0.8]
 
-  def set_net_total_cooling_capacity_rated(self, input):
-    NRELDXModel.set_net_total_cooling_capacity_rated(self, input)
+  def set_rated_net_total_cooling_capacity(self, input):
+    NRELDXModel.set_rated_net_total_cooling_capacity(self, input)
 
-  def set_net_heating_capacity_rated(self, input):
-    input = self.set_default(input, self.system.net_total_cooling_capacity_rated[0]*0.98 + fr_u(180.,"Btu/hr")) # From Title24
+  def set_rated_net_heating_capacity(self, input):
+    input = self.set_default(input, self.system.rated_net_total_cooling_capacity[0]*0.98 + fr_u(180.,"Btu/hr")) # From Title24
     if type(input) is list:
-      self.system.net_heating_capacity_rated = input
+      self.system.rated_net_heating_capacity = input
     else:
       # From NREL
       if self.system.number_of_input_stages == 1:
-        self.system.net_heating_capacity_rated = [input]
+        self.system.rated_net_heating_capacity = [input]
       elif self.system.number_of_input_stages == 2:
         fan_power_0 = input*self.system.fan_efficacy_heating_rated[0]*self.system.flow_rated_per_cap_heating_rated[0]
         gross_cap_0 = input - fan_power_0
         gross_cap_1 = gross_cap_0*0.72
         net_cap_1 = gross_cap_1/(1. - self.system.fan_efficacy_heating_rated[1]*self.system.flow_rated_per_cap_heating_rated[1])
-        self.system.net_heating_capacity_rated = [input, net_cap_1]
+        self.system.rated_net_heating_capacity = [input, net_cap_1]
 
   def set_fan(self, input):
     if input is not None:
@@ -105,14 +105,14 @@ class RESNETDXModel(DXModel):
         set_heating_fan_speed_map = True
         self.system.heating_fan_speed_mapping = []
 
-      for i, cap in enumerate(self.system.net_total_cooling_capacity_rated):
+      for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
         airflows.append(cap*self.system.flow_rated_per_cap_cooling_rated[i])
         efficacies.append(self.system.fan_efficacy_cooling_rated[i])
         if set_cooling_fan_speed_map:
           self.system.cooling_fan_speed_mapping.append(fan_speed)
           fan_speed += 1
 
-      for i, cap in enumerate(self.system.net_total_cooling_capacity_rated):
+      for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
         airflows.append(cap*self.system.flow_rated_per_cap_heating_rated[i])
         efficacies.append(self.system.fan_efficacy_heating_rated[i])
         if set_heating_fan_speed_map:
@@ -122,10 +122,10 @@ class RESNETDXModel(DXModel):
       fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies)
       self.system.fan = fan
 
-  def set_net_capacities_and_fan(self, net_total_cooling_capacity_rated, net_heating_capacity_rated, fan):
+  def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
     self.set_rated_fan_characteristics(fan)
-    self.set_net_total_cooling_capacity_rated(net_total_cooling_capacity_rated)
-    self.set_net_heating_capacity_rated(net_heating_capacity_rated)
+    self.set_rated_net_total_cooling_capacity(rated_net_total_cooling_capacity)
+    self.set_rated_net_heating_capacity(rated_net_heating_capacity)
     self.set_fan(fan)
 
   def set_c_d_cooling(self, input):
@@ -142,17 +142,17 @@ class RESNETDXModel(DXModel):
       default = RESNETDXModel.c_d(RESNETDXModel.estimated_seer(self.system.input_hspf))
     self.system.c_d_heating = self.set_default(input, default)
 
-  def set_net_cooling_cop_rated(self, input):
-    NRELDXModel.set_net_cooling_cop_rated(self, input)
+  def set_rated_net_cooling_cop(self, input):
+    NRELDXModel.set_rated_net_cooling_cop(self, input)
 
-  def set_gross_cooling_cop_rated(self, input):
-    NRELDXModel.set_gross_cooling_cop_rated(self, input)
+  def set_rated_gross_cooling_cop(self, input):
+    NRELDXModel.set_rated_gross_cooling_cop(self, input)
 
-  def set_net_heating_cop_rated(self, input):
-    NRELDXModel.set_net_heating_cop_rated(self, input)
+  def set_rated_net_heating_cop(self, input):
+    NRELDXModel.set_rated_net_heating_cop(self, input)
 
-  def set_gross_heating_cop_rated(self, input):
-    NRELDXModel.set_gross_heating_cop_rated(self, input)
+  def set_rated_gross_heating_cop(self, input):
+    NRELDXModel.set_rated_gross_heating_cop(self, input)
 
   @staticmethod
   def fan_efficacy(seer):

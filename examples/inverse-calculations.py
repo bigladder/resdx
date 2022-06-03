@@ -26,7 +26,7 @@ hspf_range = np.arange(5,16,0.5)
 #%% Cooling inverse calculations with constraints (single speed)
 cops_from_seer = []
 for seer in seer_range:
-    root_fn = lambda x : resdx.DXUnit(gross_cooling_cop_rated=x, input_seer=seer).seer() - seer
+    root_fn = lambda x : resdx.DXUnit(rated_gross_cooling_cop=x, input_seer=seer).seer() - seer
     cop, solution = optimize.newton(root_fn,seer/3.33, full_output = True)
     #print(f"seer = {seer:.1f}, cop = {cop:.2f}, fan_eff = {resdx.to_u(fan_efficacy(seer),'W/cfm'):.3f}, C_d = {c_d(seer):.3f}, converged = {solution.converged}, iter = {solution.iterations}")
     cops_from_seer.append(cop)
@@ -38,7 +38,7 @@ cops_from_seer = []
 
 for seer in seer_range:
     root_fn = lambda x : resdx.DXUnit(
-        number_of_input_stages = 2, gross_cooling_cop_rated=x, input_seer=seer).seer() - seer
+        number_of_input_stages = 2, rated_gross_cooling_cop=x, input_seer=seer).seer() - seer
     cop, solution = optimize.newton(root_fn,seer/3.33, full_output = True)
     #print(f"seer = {seer:.1f}, cop = {cop:.2f}, fan_eff = {resdx.to_u(fan_efficacy(seer),'W/cfm'):.3f}, C_d = {c_d(seer):.3f}, converged = {solution.converged}, iter = {solution.iterations}")
     cops_from_seer.append(cop)
@@ -48,7 +48,7 @@ plot(seer_range, cops_from_seer, "SEER", "Gross COP (at A conditions)","cooling-
 #%% Heating inverse calculations (single speed)
 cops_from_hspf = []
 for hspf in hspf_range:
-    root_fn = lambda x : resdx.DXUnit(gross_heating_cop_rated=x, input_hspf=hspf).hspf() - hspf
+    root_fn = lambda x : resdx.DXUnit(rated_gross_heating_cop=x, input_hspf=hspf).hspf() - hspf
     cop, solution = optimize.newton(root_fn,hspf/2.0, full_output = True)
     #print(f"hspf = {hspf:.1f}, cop = {cop:.2f}, fan_eff = {resdx.to_u(fan_efficacy(estimated_seer(hspf)),'W/cfm'):.3f}, C_d = {c_d(estimated_seer(hspf)):.3f},converged = {solution.converged}, iter = {solution.iterations}")
     cops_from_hspf.append(cop)
@@ -59,7 +59,7 @@ plot(hspf_range, cops_from_hspf, "HSPF", "Gross COP (at H1 conditions)","heating
 cops_from_hspf = []
 for hspf in hspf_range:
     root_fn = lambda x : resdx.DXUnit(
-        number_of_input_stages=2, gross_heating_cop_rated=x, input_hspf=hspf).hspf() - hspf
+        number_of_input_stages=2, rated_gross_heating_cop=x, input_hspf=hspf).hspf() - hspf
     cop, solution = optimize.newton(root_fn,hspf/2.0, full_output = True)
     #print(f"hspf = {hspf:.1f}, cop = {cop:.2f}, fan_eff = {resdx.to_u(fan_efficacy(estimated_seer(hspf)),'W/cfm'):.3f}, C_d = {c_d(estimated_seer(hspf)):.3f},converged = {solution.converged}, iter = {solution.iterations}")
     cops_from_hspf.append(cop)

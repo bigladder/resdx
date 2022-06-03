@@ -21,36 +21,36 @@ class NRELDXModel(DXModel):
     T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Cutler curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
     eir_FT = calc_biquad([-3.437356399, 0.136656369, -0.001049231, -0.0079378, 0.000185435, -0.0001441], T_iwb, T_odb)
-    eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.air_mass_flow_ratio)
+    eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.mass_airflow_ratio)
     cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
-    cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.air_mass_flow_ratio)
-    return eir_FF*cap_FF*eir_FT*cap_FT*self.system.gross_total_cooling_capacity_rated[conditions.compressor_speed]/self.system.gross_cooling_cop_rated[conditions.compressor_speed]
+    cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_airflow_ratio)
+    return eir_FF*cap_FF*eir_FT*cap_FT*self.system.rated_gross_total_cooling_capacity[conditions.compressor_speed]/self.system.rated_gross_cooling_cop[conditions.compressor_speed]
 
   def gross_total_cooling_capacity(self, conditions):
     '''From Cutler et al.'''
     T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Cutler curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
     cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
-    cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.air_mass_flow_ratio)
-    return cap_FF*cap_FT*self.system.gross_total_cooling_capacity_rated[conditions.compressor_speed]
+    cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_airflow_ratio)
+    return cap_FF*cap_FT*self.system.rated_gross_total_cooling_capacity[conditions.compressor_speed]
 
   def gross_steady_state_heating_power(self, conditions):
     '''From Cutler et al.'''
     T_idb = to_u(conditions.indoor.db,"°F") # Cutler curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
     eir_FT = calc_biquad([0.718398423,0.003498178, 0.000142202, -0.005724331, 0.00014085, -0.000215321], T_idb, T_odb)
-    eir_FF = calc_quad([2.185418751, -1.942827919, 0.757409168], conditions.air_mass_flow_ratio)
+    eir_FF = calc_quad([2.185418751, -1.942827919, 0.757409168], conditions.mass_airflow_ratio)
     cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
-    cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.air_mass_flow_ratio)
-    return eir_FF*cap_FF*eir_FT*cap_FT*self.system.gross_heating_capacity_rated[conditions.compressor_speed]/self.system.gross_heating_cop_rated[conditions.compressor_speed]
+    cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_airflow_ratio)
+    return eir_FF*cap_FF*eir_FT*cap_FT*self.system.rated_gross_heating_capacity[conditions.compressor_speed]/self.system.rated_gross_heating_cop[conditions.compressor_speed]
 
   def gross_steady_state_heating_capacity(self, conditions):
     '''From Cutler et al.'''
     T_idb = to_u(conditions.indoor.db,"°F") # Cutler curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
     cap_FT = calc_biquad([0.566333415, -0.000744164, -0.0000103, 0.009414634, 0.0000506, -0.00000675], T_idb, T_odb)
-    cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.air_mass_flow_ratio)
-    return cap_FF*cap_FT*self.system.gross_heating_capacity_rated[conditions.compressor_speed]
+    cap_FF = calc_quad([0.694045465, 0.474207981, -0.168253446], conditions.mass_airflow_ratio)
+    return cap_FF*cap_FT*self.system.rated_gross_heating_capacity[conditions.compressor_speed]
 
   def gross_integrated_heating_capacity(self, conditions):
     '''EPRI algorithm as described in EnergyPlus documentation'''
@@ -62,7 +62,7 @@ class NRELDXModel(DXModel):
           heating_capacity_multiplier = 0.875*(1 - t_defrost)
 
       if self.system.defrost.strategy == DefrostStrategy.REVERSE_CYCLE:
-          Q_defrost_indoor_u = 0.01*(7.222 - to_u(conditions.outdoor.db,"°C"))*(self.system.gross_heating_capacity_rated[conditions.compressor_speed]/1.01667)
+          Q_defrost_indoor_u = 0.01*(7.222 - to_u(conditions.outdoor.db,"°C"))*(self.system.rated_gross_heating_capacity[conditions.compressor_speed]/1.01667)
       else:
           Q_defrost_indoor_u = 0
 
@@ -99,7 +99,7 @@ class NRELDXModel(DXModel):
         #T_odb = conditions.outdoor.db_C
         # defEIRfT = calc_biquad([0.1528, 0, 0, 0, 0, 0], T_iwb, T_odb) # Assumption from BEopt 0.1528 = 1/gross_cop_cooling(60F)
         defEIRfT = 1/NRELDXModel.get_cooling_cop60(conditions)  # Assume defrost EIR is constant (maybe it could/should change with indoor conditions?)
-        P_defrost = defEIRfT*(self.system.gross_heating_capacity_rated[conditions.compressor_speed]/1.01667)
+        P_defrost = defEIRfT*(self.system.rated_gross_heating_capacity[conditions.compressor_speed]/1.01667)
       else:
         P_defrost = self.system.defrost.resistive_power
 
@@ -123,7 +123,7 @@ class NRELDXModel(DXModel):
     '''EnergyPlus algorithm'''
     Q_t = self.system.gross_total_cooling_capacity(conditions)
     h_i = conditions.indoor.get_h()
-    m_dot = conditions.air_mass_flow
+    m_dot = conditions.mass_airflow
     h_ADP = h_i - Q_t/(m_dot*(1 - self.system.bypass_factor(conditions)))
     root_fn = lambda T_ADP : psychrolib.GetSatAirEnthalpy(T_ADP, conditions.indoor.p) - h_ADP
     T_ADP = optimize.newton(root_fn, conditions.indoor.db_C)
@@ -204,18 +204,18 @@ class NRELDXModel(DXModel):
     # f_af_chg = X_AF,CHG. This makes the calculation of the AF,CHG fault independent of the airflow correction method used in the model.
     cf_af_chg = 1./NRELDXModel.domonski_charge_factor(rated_cond.indoor.db_C, rated_cond.outdoor.db_C, f_chg, NRELDXModel.charge_coeffs[conditions_type][NRELDXModel.FunctionType.CAPACITY])
     cf_af_cond = copy.deepcopy(rated_cond)
-    cf_af_cond.set_air_mass_flow_ratio(cf_af_chg)
+    cf_af_cond.set_mass_airflow_ratio(cf_af_chg)
     f_af_chg = function(cf_af_cond)/rated_value
 
     # f_af = X_AF. Similar story
-    f_af_comb = conditions.air_mass_flow_ratio*cf_af_chg
+    f_af_comb = conditions.mass_airflow_ratio*cf_af_chg
     f_af_comb_cond = copy.deepcopy(rated_cond)
-    f_af_comb_cond.set_air_mass_flow_ratio(f_af_comb)
+    f_af_comb_cond.set_mass_airflow_ratio(f_af_comb)
     f_af = function(f_af_comb_cond)/rated_value
 
     # grading model accounts for airflow sensitivity so we need to undo the normal affect
     f_corr_cond = copy.deepcopy(rated_cond)
-    f_corr_cond.set_air_mass_flow_ratio(conditions.air_mass_flow_ratio)
+    f_corr_cond.set_mass_airflow_ratio(conditions.mass_airflow_ratio)
     f_corr = function(f_corr_cond)/rated_value
 
     return f/f_af_chg*f_af/f_corr
@@ -258,35 +258,35 @@ class NRELDXModel(DXModel):
         heating_default = fr_u(352.2,"cfm/ton_ref")
         self.system.flow_rated_per_cap_heating_rated = [heating_default, heating_default*0.8]
 
-  def set_net_total_cooling_capacity_rated(self, input):
+  def set_rated_net_total_cooling_capacity(self, input):
     # No default, but need to set to list (and default lower speeds)
     if type(input) is list:
-      self.system.net_total_cooling_capacity_rated = input
+      self.system.rated_net_total_cooling_capacity = input
     else:
       if self.system.number_of_input_stages == 1:
-        self.system.net_total_cooling_capacity_rated = [input]
+        self.system.rated_net_total_cooling_capacity = [input]
       elif self.system.number_of_input_stages == 2:
         cap_ratio = 0.72
         fan_power_0 = input*self.system.fan_efficacy_cooling_rated[0]*self.system.flow_rated_per_cap_cooling_rated[0]
         gross_cap_0 = input + fan_power_0
         gross_cap_1 = gross_cap_0*cap_ratio
         net_cap_1 = gross_cap_1/(1. + self.system.fan_efficacy_cooling_rated[1]*self.system.flow_rated_per_cap_cooling_rated[1])
-        self.system.net_total_cooling_capacity_rated = [input, net_cap_1]
+        self.system.rated_net_total_cooling_capacity = [input, net_cap_1]
 
-  def set_net_heating_capacity_rated(self, input):
-    input = self.set_default(input, self.system.net_total_cooling_capacity_rated[0])
+  def set_rated_net_heating_capacity(self, input):
+    input = self.set_default(input, self.system.rated_net_total_cooling_capacity[0])
     if type(input) is list:
-      self.system.net_heating_capacity_rated = input
+      self.system.rated_net_heating_capacity = input
     else:
       if self.system.number_of_input_stages == 1:
-        self.system.net_heating_capacity_rated = [input]
+        self.system.rated_net_heating_capacity = [input]
       elif self.system.number_of_input_stages == 2:
         cap_ratio = 0.72
         fan_power_0 = input*self.system.fan_efficacy_heating_rated[0]*self.system.flow_rated_per_cap_heating_rated[0]
         gross_cap_0 = input - fan_power_0
         gross_cap_1 = gross_cap_0*cap_ratio
         net_cap_1 = gross_cap_1/(1. - self.system.fan_efficacy_heating_rated[1]*self.system.flow_rated_per_cap_heating_rated[1])
-        self.system.net_heating_capacity_rated = [input, net_cap_1]
+        self.system.rated_net_heating_capacity = [input, net_cap_1]
 
   def set_fan(self, input):
     if input is not None:
@@ -304,14 +304,14 @@ class NRELDXModel(DXModel):
         set_heating_fan_speed_map = True
         self.system.heating_fan_speed_mapping = []
 
-      for i, cap in enumerate(self.system.net_total_cooling_capacity_rated):
+      for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
         airflows.append(cap*self.system.flow_rated_per_cap_cooling_rated[i])
         efficacies.append(self.system.fan_efficacy_cooling_rated[i])
         if set_cooling_fan_speed_map:
           self.system.cooling_fan_speed_mapping.append(fan_speed)
           fan_speed += 1
 
-      for i, cap in enumerate(self.system.net_total_cooling_capacity_rated):
+      for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
         airflows.append(cap*self.system.flow_rated_per_cap_heating_rated[i])
         efficacies.append(self.system.fan_efficacy_cooling_rated[i])
         if set_heating_fan_speed_map:
@@ -321,10 +321,10 @@ class NRELDXModel(DXModel):
       fan = NRELFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies)
       self.system.fan = fan
 
-  def set_net_capacities_and_fan(self, net_total_cooling_capacity_rated, net_heating_capacity_rated, fan):
+  def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
     self.set_rated_fan_characteristics(fan)
-    self.set_net_total_cooling_capacity_rated(net_total_cooling_capacity_rated)
-    self.set_net_heating_capacity_rated(net_heating_capacity_rated)
+    self.set_rated_net_total_cooling_capacity(rated_net_total_cooling_capacity)
+    self.set_rated_net_heating_capacity(rated_net_heating_capacity)
     self.set_fan(fan)
 
   @staticmethod
@@ -339,69 +339,69 @@ class NRELDXModel(DXModel):
     eir_low = 0.6241 * (eir_high) + 0.0681
     return 1./eir_low
 
-  def set_net_cooling_cop_rated(self, input):
+  def set_rated_net_cooling_cop(self, input):
     # No default, but need to set to list (and default lower speeds)
     if type(input) is list:
-      self.system.net_cooling_cop_rated = input
-      self.system.net_cooling_power_rated = [self.system.net_total_cooling_capacity_rated[i]/self.system.net_cooling_cop_rated[i] for i in range(self.system.number_of_input_stages)]
-      self.system.gross_cooling_power_rated = [self.system.net_cooling_power_rated[i] - self.system.cooling_fan_power_rated[i] for i in range(self.system.number_of_input_stages)]
-      self.system.gross_cooling_cop_rated = [self.system.gross_total_cooling_capacity_rated[i]/self.system.gross_cooling_power_rated[i] for i in range(self.system.number_of_input_stages)]
+      self.system.rated_net_cooling_cop = input
+      self.system.rated_net_cooling_power = [self.system.rated_net_total_cooling_capacity[i]/self.system.rated_net_cooling_cop[i] for i in range(self.system.number_of_input_stages)]
+      self.system.rated_gross_cooling_power = [self.system.rated_net_cooling_power[i] - self.system.rated_cooling_fan_power[i] for i in range(self.system.number_of_input_stages)]
+      self.system.rated_gross_cooling_cop = [self.system.rated_gross_total_cooling_capacity[i]/self.system.rated_gross_cooling_power[i] for i in range(self.system.number_of_input_stages)]
     else:
-      self.system.net_cooling_cop_rated[0] = input
-      self.system.net_cooling_power_rated[0] = self.system.net_total_cooling_capacity_rated[0]/self.system.net_cooling_cop_rated[0]
-      self.system.gross_cooling_power_rated[0] = self.system.net_cooling_power_rated[0] - self.system.cooling_fan_power_rated[0]
-      self.system.gross_cooling_cop_rated[0] = self.system.gross_total_cooling_capacity_rated[0]/self.system.gross_cooling_power_rated[0]
+      self.system.rated_net_cooling_cop[0] = input
+      self.system.rated_net_cooling_power[0] = self.system.rated_net_total_cooling_capacity[0]/self.system.rated_net_cooling_cop[0]
+      self.system.rated_gross_cooling_power[0] = self.system.rated_net_cooling_power[0] - self.system.rated_cooling_fan_power[0]
+      self.system.rated_gross_cooling_cop[0] = self.system.rated_gross_total_cooling_capacity[0]/self.system.rated_gross_cooling_power[0]
 
       if self.system.number_of_input_stages == 2:
-        self.system.gross_cooling_cop_rated[1] = NRELDXModel.cooling_cop_low(self.system.gross_cooling_cop_rated[0])
-        self.system.gross_cooling_power_rated[1] = self.system.gross_total_cooling_capacity_rated[1]/self.system.gross_cooling_cop_rated[1]
-        self.system.net_cooling_power_rated[1] = self.system.gross_cooling_power_rated[1] + self.system.cooling_fan_power_rated[1]
-        self.system.net_cooling_cop_rated[1] = self.system.net_total_cooling_capacity_rated[1]/self.system.net_cooling_power_rated[1]
+        self.system.rated_gross_cooling_cop[1] = NRELDXModel.cooling_cop_low(self.system.rated_gross_cooling_cop[0])
+        self.system.rated_gross_cooling_power[1] = self.system.rated_gross_total_cooling_capacity[1]/self.system.rated_gross_cooling_cop[1]
+        self.system.rated_net_cooling_power[1] = self.system.rated_gross_cooling_power[1] + self.system.rated_cooling_fan_power[1]
+        self.system.rated_net_cooling_cop[1] = self.system.rated_net_total_cooling_capacity[1]/self.system.rated_net_cooling_power[1]
 
-  def set_gross_cooling_cop_rated(self, input):
+  def set_rated_gross_cooling_cop(self, input):
     # No default, but need to set to list (and default lower speeds)
     if type(input) is list:
-      self.system.gross_cooling_cop_rated = input
+      self.system.rated_gross_cooling_cop = input
     else:
-      self.system.gross_cooling_cop_rated[0] = input
+      self.system.rated_gross_cooling_cop[0] = input
       if self.system.number_of_input_stages == 2:
-        self.system.gross_cooling_cop_rated[1] = NRELDXModel.cooling_cop_low(self.system.gross_cooling_cop_rated[0])
+        self.system.rated_gross_cooling_cop[1] = NRELDXModel.cooling_cop_low(self.system.rated_gross_cooling_cop[0])
 
-    self.system.gross_cooling_power_rated = [self.system.gross_total_cooling_capacity_rated[i]/self.system.gross_cooling_cop_rated[i] for i in range(self.system.number_of_input_stages)]
-    self.system.net_cooling_power_rated = [self.system.gross_cooling_power_rated[i] + self.system.cooling_fan_power_rated[i] for i in range(self.system.number_of_input_stages)]
-    self.system.net_cooling_cop_rated = [self.system.net_total_cooling_capacity_rated[i]/self.system.net_cooling_power_rated[i] for i in range(self.system.number_of_input_stages)]
+    self.system.rated_gross_cooling_power = [self.system.rated_gross_total_cooling_capacity[i]/self.system.rated_gross_cooling_cop[i] for i in range(self.system.number_of_input_stages)]
+    self.system.rated_net_cooling_power = [self.system.rated_gross_cooling_power[i] + self.system.rated_cooling_fan_power[i] for i in range(self.system.number_of_input_stages)]
+    self.system.rated_net_cooling_cop = [self.system.rated_net_total_cooling_capacity[i]/self.system.rated_net_cooling_power[i] for i in range(self.system.number_of_input_stages)]
 
-  def set_net_heating_cop_rated(self, input):
+  def set_rated_net_heating_cop(self, input):
     # No default, but need to set to list (and default lower speeds)
     if type(input) is list:
-      self.system.net_heating_cop_rated = input
-      self.system.net_heating_power_rated = [self.system.net_heating_capacity_rated[i]/self.system.net_heating_cop_rated[i] for i in range(self.system.number_of_input_stages)]
-      self.system.gross_heating_power_rated = [self.system.net_heating_power_rated[i] - self.system.heating_fan_power_rated[i] for i in range(self.system.number_of_input_stages)]
-      self.system.gross_heating_cop_rated = [self.system.gross_heating_capacity_rated[i]/self.system.gross_heating_power_rated[i] for i in range(self.system.number_of_input_stages)]
+      self.system.rated_net_heating_cop = input
+      self.system.rated_net_heating_power = [self.system.rated_net_heating_capacity[i]/self.system.rated_net_heating_cop[i] for i in range(self.system.number_of_input_stages)]
+      self.system.rated_gross_heating_power = [self.system.rated_net_heating_power[i] - self.system.rated_heating_fan_power[i] for i in range(self.system.number_of_input_stages)]
+      self.system.rated_gross_heating_cop = [self.system.rated_gross_heating_capacity[i]/self.system.rated_gross_heating_power[i] for i in range(self.system.number_of_input_stages)]
     else:
-      self.system.net_heating_cop_rated[0] = input
-      self.system.net_heating_power_rated[0] = self.system.net_heating_capacity_rated[0]/self.system.net_heating_cop_rated[0]
-      self.system.gross_heating_power_rated[0] = self.system.net_heating_power_rated[0] - self.system.heating_fan_power_rated[0]
-      self.system.gross_heating_cop_rated[0] = self.system.gross_heating_capacity_rated[0]/self.system.gross_heating_power_rated[0]
+      self.system.rated_net_heating_cop[0] = input
+      self.system.rated_net_heating_power[0] = self.system.rated_net_heating_capacity[0]/self.system.rated_net_heating_cop[0]
+      self.system.rated_gross_heating_power[0] = self.system.rated_net_heating_power[0] - self.system.rated_heating_fan_power[0]
+      self.system.rated_gross_heating_cop[0] = self.system.rated_gross_heating_capacity[0]/self.system.rated_gross_heating_power[0]
 
       if self.system.number_of_input_stages == 2:
-        self.system.gross_heating_cop_rated[1] = NRELDXModel.heating_cop_low(self.system.gross_heating_cop_rated[0])
-        self.system.gross_heating_power_rated[1] = self.system.gross_heating_capacity_rated[1]/self.system.gross_heating_cop_rated[1]
-        self.system.net_heating_power_rated[1] = self.system.gross_heating_power_rated[1] + self.system.heating_fan_power_rated[1]
-        self.system.net_heating_cop_rated[1] = self.system.net_heating_capacity_rated[1]/self.system.net_heating_power_rated[1]
+        self.system.rated_gross_heating_cop[1] = NRELDXModel.heating_cop_low(self.system.rated_gross_heating_cop[0])
+        self.system.rated_gross_heating_power[1] = self.system.rated_gross_heating_capacity[1]/self.system.rated_gross_heating_cop[1]
+        self.system.rated_net_heating_power[1] = self.system.rated_gross_heating_power[1] + self.system.rated_heating_fan_power[1]
+        self.system.rated_net_heating_cop[1] = self.system.rated_net_heating_capacity[1]/self.system.rated_net_heating_power[1]
 
-  def set_gross_heating_cop_rated(self, input):
+  def set_rated_gross_heating_cop(self, input):
     # No default, but need to set to list (and default lower speeds)
     if type(input) is list:
-      self.system.gross_heating_cop_rated = input
+      self.system.rated_gross_heating_cop = input
     else:
-      self.system.gross_heating_cop_rated[0] = input
+      self.system.rated_gross_heating_cop[0] = input
       if self.system.number_of_input_stages == 2:
-        self.system.gross_heating_cop_rated[1] = NRELDXModel.heating_cop_low(self.system.gross_heating_cop_rated[0])
+        self.system.rated_gross_heating_cop[1] = NRELDXModel.heating_cop_low(self.system.rated_gross_heating_cop[0])
 
-    self.system.gross_heating_power_rated = [self.system.gross_heating_capacity_rated[i]/self.system.gross_heating_cop_rated[i] for i in range(self.system.number_of_input_stages)]
-    self.system.net_heating_power_rated = [self.system.gross_heating_power_rated[i] + self.system.heating_fan_power_rated[i] for i in range(self.system.number_of_input_stages)]
-    self.system.net_heating_cop_rated = [self.system.net_heating_capacity_rated[i]/self.system.net_heating_power_rated[i] for i in range(self.system.number_of_input_stages)]
+    self.system.rated_gross_heating_power = [self.system.rated_gross_heating_capacity[i]/self.system.rated_gross_heating_cop[i] for i in range(self.system.number_of_input_stages)]
+    self.system.rated_net_heating_power = [self.system.rated_gross_heating_power[i] + self.system.rated_heating_fan_power[i] for i in range(self.system.number_of_input_stages)]
+    self.system.rated_net_heating_cop = [self.system.rated_net_heating_capacity[i]/self.system.rated_net_heating_power[i] for i in range(self.system.number_of_input_stages)]
 
 # Fan
 
