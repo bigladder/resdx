@@ -90,13 +90,13 @@ class DXUnit:
                     rated_net_total_cooling_capacity = fr_u(3.0,'ton_ref'),
                     rated_gross_cooling_cop = 3.72,
                     rated_net_cooling_cop = None,
-                    rated_cooling_airflow_per_rated_net_total_cooling_capacity=None,
+                    rated_cooling_airflow_per_rated_net_cooling_capacity=None,
                     c_d_cooling = None,
                     # Heating (rating = AHRI H1 conditions)
                     rated_net_heating_capacity = None,
                     rated_gross_heating_cop = 3.82,
                     rated_net_heating_cop = None,
-                    rated_heating_airflow_per_rated_net_total_cooling_capacity=None,
+                    rated_heating_airflow_per_rated_net_cooling_capacity=None,
                     c_d_heating = None,
                     heating_off_temperature = fr_u(0.0,"°F"),
                     heating_on_temperature = None, # default to heating_off_temperature
@@ -170,6 +170,8 @@ class DXUnit:
     # Default fan maps (if None, will be set in set_net_capacities_and_fan)
     self.heating_fan_speed = heating_fan_speed
     self.cooling_fan_speed = cooling_fan_speed
+    self.rated_cooling_airflow_per_rated_net_cooling_capacity = rated_cooling_airflow_per_rated_net_cooling_capacity
+    self.rated_heating_airflow_per_rated_net_cooling_capacity = rated_heating_airflow_per_rated_net_cooling_capacity
 
     # Set net capacities and fan
     self.model.set_net_capacities_and_fan(rated_net_total_cooling_capacity, rated_net_heating_capacity, fan)

@@ -12,7 +12,7 @@ class Fan:
       self.design_efficacy = design_efficacy
       self.number_of_speeds = 0
       self.design_airflow = []
-      self.airflow_ratio = []
+      self.design_airflow_ratio = []
       if type(design_airflow) is list:
         for airflow in design_airflow:
           self.add_speed(airflow)
@@ -21,10 +21,10 @@ class Fan:
       self.system_exponent = 0.5
       self.system_curve_constant = self.design_external_static_pressure**(self.system_exponent)/self.design_airflow[0]
 
-  def add_speed(self, airflow, efficacy=None):
+  def add_speed(self, airflow):
     self.design_airflow.append(airflow)
     self.number_of_speeds += 1
-    self.airflow_ratio.append(self.design_airflow[-1]/self.design_airflow[0])
+    self.design_airflow_ratio.append(self.design_airflow[-1]/self.design_airflow[0])
 
   def system_pressure(self, airflow):
     return (airflow*self.system_curve_constant)**(1./self.system_exponent)
@@ -155,7 +155,7 @@ class ECMFlowFan(Fan):
 
   def add_speed(self, airflow):
     super().add_speed(airflow)
-    self.free_efficacy.append(self.design_free_efficacy*self.normalized_free_efficacy(self.airflow_ratio[-1]))
+    self.free_efficacy.append(self.design_free_efficacy*self.normalized_free_efficacy(self.design_airflow_ratio[-1]))
 
   def normalized_free_efficacy(self, flow_ratio):
     minimum_flow_ratio = 0.293/2.4 # local minima, derived mathematically
@@ -195,7 +195,7 @@ class ECMFlowFan(Fan):
     return self.power(speed_setting, external_static_pressure)/self.airflow(speed_setting, external_static_pressure)
 
   def unconstrained_rotational_speed(self, speed_setting, external_static_pressure):
-    return (fr_u(1100.,'rpm') - self.SPEED_SLOPE_ESP*(self.design_external_static_pressure - external_static_pressure))*self.airflow_ratio[speed_setting]
+    return (fr_u(1100.,'rpm') - self.SPEED_SLOPE_ESP*(self.design_external_static_pressure - external_static_pressure))*self.design_airflow_ratio[speed_setting]
 
   def rotational_speed(self, speed_setting, external_static_pressure=None):
     if external_static_pressure is None:

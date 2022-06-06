@@ -330,12 +330,12 @@ class Title24DXModel(DXModel):
       # Airflows
       flow_per_cap_default = fr_u(350.,"cfm/ton_ref")
 
-      self.system.flow_rated_per_cap_cooling_rated = [flow_per_cap_default]
-      self.system.flow_rated_per_cap_heating_rated = [flow_per_cap_default]
+      self.system.rated_cooling_airflow_per_rated_net_cooling_capacity = [flow_per_cap_default]
+      self.system.rated_heating_airflow_per_rated_net_cooling_capacity = [flow_per_cap_default]
       cooling_fan_efficacy = Title24DXModel.fan_efficacy_rated(flow_per_cap_default)
       heating_fan_efficacy = cooling_fan_efficacy
-      self.system.fan_efficacy_cooling_rated = [cooling_fan_efficacy]*self.system.number_of_input_stages
-      self.system.fan_efficacy_heating_rated = [heating_fan_efficacy]*self.system.number_of_input_stages
+      self.system.rated_cooling_fan_efficacy = [cooling_fan_efficacy]*self.system.number_of_input_stages
+      self.system.rated_heating_fan_efficacy = [heating_fan_efficacy]*self.system.number_of_input_stages
 
   def set_fan(self, input):
     if input is not None:
@@ -354,15 +354,15 @@ class Title24DXModel(DXModel):
         self.system.heating_fan_speed = []
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
-        airflows.append(cap*self.system.flow_rated_per_cap_cooling_rated[i])
-        efficacies.append(self.system.fan_efficacy_cooling_rated[i])
+        airflows.append(cap*self.system.rated_cooling_airflow_per_rated_net_cooling_capacity[i])
+        efficacies.append(self.system.rated_cooling_fan_efficacy[i])
         if set_cooling_fan_speed:
           self.system.cooling_fan_speed.append(fan_speed)
           fan_speed += 1
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
-        airflows.append(cap*self.system.flow_rated_per_cap_heating_rated[i])
-        efficacies.append(self.system.fan_efficacy_heating_rated[i])
+        airflows.append(cap*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[i])
+        efficacies.append(self.system.rated_heating_fan_efficacy[i])
         if set_heating_fan_speed:
           self.system.heating_fan_speed.append(fan_speed)
           fan_speed += 1

@@ -57,19 +57,19 @@ class RESNETDXModel(DXModel):
         heating_fan_efficacy = RESNETDXModel.fan_efficacy(RESNETDXModel.estimated_seer(self.system.input_hspf))
       else:
         heating_fan_efficacy = fr_u(0.25,'W/cfm')
-      self.system.fan_efficacy_cooling_rated = [cooling_fan_efficacy]*self.system.number_of_input_stages
-      self.system.fan_efficacy_heating_rated = [heating_fan_efficacy]*self.system.number_of_input_stages
+      self.system.rated_cooling_fan_efficacy = [cooling_fan_efficacy]*self.system.number_of_input_stages
+      self.system.rated_heating_fan_efficacy = [heating_fan_efficacy]*self.system.number_of_input_stages
 
       # Airflows
       cooling_default = fr_u(375.,"cfm/ton_ref")
       heating_default = fr_u(375.,"cfm/ton_ref")
 
       if self.system.number_of_input_stages == 1:
-        self.system.flow_rated_per_cap_cooling_rated = [cooling_default]
-        self.system.flow_rated_per_cap_heating_rated = [heating_default]
+        self.system.rated_cooling_airflow_per_rated_net_cooling_capacity = [cooling_default]
+        self.system.rated_heating_airflow_per_rated_net_cooling_capacity = [heating_default]
       elif self.system.number_of_input_stages == 2:
-        self.system.flow_rated_per_cap_cooling_rated = [cooling_default, cooling_default*0.86]
-        self.system.flow_rated_per_cap_heating_rated = [heating_default, heating_default*0.8]
+        self.system.rated_cooling_airflow_per_rated_net_cooling_capacity = [cooling_default, cooling_default*0.86]
+        self.system.rated_heating_airflow_per_rated_net_cooling_capacity = [heating_default, heating_default*0.8]
 
   def set_rated_net_total_cooling_capacity(self, input):
     NRELDXModel.set_rated_net_total_cooling_capacity(self, input)
@@ -83,10 +83,10 @@ class RESNETDXModel(DXModel):
       if self.system.number_of_input_stages == 1:
         self.system.rated_net_heating_capacity = [input]
       elif self.system.number_of_input_stages == 2:
-        fan_power_0 = input*self.system.fan_efficacy_heating_rated[0]*self.system.flow_rated_per_cap_heating_rated[0]
+        fan_power_0 = input*self.system.rated_heating_fan_efficacy[0]*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[0]
         gross_cap_0 = input - fan_power_0
         gross_cap_1 = gross_cap_0*0.72
-        net_cap_1 = gross_cap_1/(1. - self.system.fan_efficacy_heating_rated[1]*self.system.flow_rated_per_cap_heating_rated[1])
+        net_cap_1 = gross_cap_1/(1. - self.system.rated_heating_fan_efficacy[1]*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[1])
         self.system.rated_net_heating_capacity = [input, net_cap_1]
 
   def set_fan(self, input):
@@ -106,15 +106,15 @@ class RESNETDXModel(DXModel):
         self.system.heating_fan_speed = []
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
-        airflows.append(cap*self.system.flow_rated_per_cap_cooling_rated[i])
-        efficacies.append(self.system.fan_efficacy_cooling_rated[i])
+        airflows.append(cap*self.system.rated_cooling_airflow_per_rated_net_cooling_capacity[i])
+        efficacies.append(self.system.rated_cooling_fan_efficacy[i])
         if set_cooling_fan_speed:
           self.system.cooling_fan_speed.append(fan_speed)
           fan_speed += 1
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
-        airflows.append(cap*self.system.flow_rated_per_cap_heating_rated[i])
-        efficacies.append(self.system.fan_efficacy_heating_rated[i])
+        airflows.append(cap*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[i])
+        efficacies.append(self.system.rated_heating_fan_efficacy[i])
         if set_heating_fan_speed:
           self.system.heating_fan_speed.append(fan_speed)
           fan_speed += 1
