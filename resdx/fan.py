@@ -118,10 +118,11 @@ class ConstantEfficacyFan(Fan):
 
 class PSCFan(Fan):
   '''Based largely on measured fan performance by Proctor Engineering'''
+  '''Model needs more data to refine and further generalize'''
 
   AIRFLOW_COEFFICIENT = fr_u(10.,'cfm')
-  AIRFLOW_EXP_COEFFICIENT = fr_u(5.355391179,'1/in_H2O')
-  EFFICACY_SLOPE = -0.1446674009  # Relative change in efficacy at lower flow ratios
+  AIRFLOW_EXP_COEFFICIENT = fr_u(5.35,'1/in_H2O')
+  EFFICACY_SLOPE = 0.3  # Relative change in efficacy at lower flow ratios (data is fairly inconsistent on this value)
 
   def __init__(
     self,
