@@ -65,12 +65,13 @@ class RESNETDXModel(DXModel):
     # setup fan
     self.system.rated_full_flow_external_static_pressure = self.system.get_rated_pressure()
 
+    # Rated flow rates per net capacity
+    self.system.rated_cooling_airflow_per_rated_net_capacity = self.set_default(self.system.rated_cooling_airflow_per_rated_net_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
+    self.system.rated_heating_airflow_per_rated_net_capacity = self.set_default(self.system.rated_heating_airflow_per_rated_net_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
+
     if fan is not None:
       self.system.fan = fan
     else:
-      # Rated flow rates per net capacity
-      self.system.rated_cooling_airflow_per_rated_net_capacity = self.set_default(self.system.rated_cooling_airflow_per_rated_net_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
-      self.system.rated_heating_airflow_per_rated_net_capacity = self.set_default(self.system.rated_heating_airflow_per_rated_net_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
       self.system.cooling_fan_speed = []
       self.system.heating_fan_speed = []
 

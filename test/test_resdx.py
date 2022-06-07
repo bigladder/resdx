@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import optimize
 
+from resdx.dx_unit import AHRIVersion
+
 sns.set()
 
 import numpy as np
@@ -47,6 +49,17 @@ def test_1_speed_refrigerant_charge_regression():
   dx_unit_1_speed.print_heating_info()
   assert dx_unit_1_speed.seer() == approx(11.16, 0.01)
   assert dx_unit_1_speed.hspf() == approx(7.18, 0.01)
+
+def test_1_speed_2023_regression():
+  # Single speed, SEER 13, HSPF 8
+  seer_1 = 13.
+  hspf_1 = 8.
+  dx_unit_1_speed = DXUnit(rated_gross_cooling_cop=4.11, rated_gross_heating_cop=3.63, rating_standard=AHRIVersion.AHRI_210_240_2023, input_seer=seer_1, input_hspf=hspf_1)
+
+  dx_unit_1_speed.print_cooling_info()
+  dx_unit_1_speed.print_heating_info()
+  assert dx_unit_1_speed.seer() == approx(13.252, 0.001) # SEER2
+  assert dx_unit_1_speed.hspf() == approx(7.065, 0.001)  # HSPF2
 
 def test_2_speed_regression():
   # Two speed, SEER 17, HSPF 10
