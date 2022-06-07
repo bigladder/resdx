@@ -26,6 +26,11 @@ class Fan:
     self.number_of_speeds += 1
     self.design_airflow_ratio.append(self.design_airflow[-1]/self.design_airflow[0])
 
+  def remove_speed(self, speed_setting):
+    self.design_airflow.pop(speed_setting)
+    self.number_of_speeds -= 1
+    self.design_airflow_ratio.pop(speed_setting)
+
   def system_pressure(self, airflow):
     return (airflow*self.system_curve_constant)**(1./self.system_exponent)
 
@@ -53,6 +58,40 @@ class Fan:
     p, solution = optimize.brentq(lambda x : self.airflow(speed_setting, x) - fx(x), 0., 2.*self.design_external_static_pressure, full_output = True)
     return p
 
+  def check_power(self, airflow, external_static_pressure=None):
+    self.add_speed(airflow)
+    new_speed_setting = self.number_of_speeds - 1
+    power = self.power(new_speed_setting, external_static_pressure)
+    self.remove_speed(new_speed_setting)
+    return power
+
+  def find_rated_fan_speed(
+    self,
+    gross_capacity,
+    rated_flow_per_rated_net_capacity,
+    guess_airflow=None,
+    rated_full_flow_external_static_pressure=None,
+    cooling=True):
+    '''Given a gross capacity, and the rated flow per rated net capacity, find the speed and flow rate that gives consistent results'''
+    '''Q_gross +/- Q_fan = Q_net'''
+    if guess_airflow is None:
+      guess_airflow = gross_capacity*rated_flow_per_rated_net_capacity
+
+    if rated_full_flow_external_static_pressure is not None:
+      full_airflow = self.airflow(0, rated_full_flow_external_static_pressure)
+      pressure_function = lambda x : rated_full_flow_external_static_pressure*(x/full_airflow)**2
+    else:
+      pressure_function = lambda x : None
+
+    if cooling:
+      net_capacity_function = lambda x : gross_capacity - self.check_power(x, pressure_function(x))
+    else:
+      net_capacity_function = lambda x : gross_capacity + self.check_power(x, pressure_function(x))
+
+    root_fn = lambda x : net_capacity_function(x) - x/rated_flow_per_rated_net_capacity
+    f, solution = optimize.newton(root_fn, guess_airflow, full_output = True)
+    self.add_speed(f)
+
   def write_A205(self):
     pass
 
@@ -66,6 +105,10 @@ class ConstantEfficacyFan(Fan):
     super().add_speed(airflow)
     if efficacy is not None:
       self.design_efficacy.append(efficacy)
+
+  def remove_speed(self, speed_setting):
+    super().remove_speed(speed_setting)
+    self.design_efficacy.pop(speed_setting)
 
   def efficacy(self, speed_setting, external_static_pressure=None):
     return self.design_efficacy[speed_setting]
@@ -100,6 +143,14 @@ class PSCFan(Fan):
     self.speed_efficacy.append(self.design_efficacy*(1. + self.EFFICACY_SLOPE*(self.free_airflow_ratio[-1] - 1.)))
     self.block_pressure.append(log(self.free_airflow[-1]/self.AIRFLOW_COEFFICIENT + 1.)/self.AIRFLOW_EXP_COEFFICIENT)
     self.free_speed.append(fr_u(1040.,'rpm')*self.free_airflow_ratio[-1])
+
+  def remove_speed(self, speed_setting):
+    super().remove_speed(speed_setting)
+    self.free_airflow.pop(speed_setting)
+    self.free_airflow_ratio.pop(speed_setting)
+    self.speed_efficacy.pop(speed_setting)
+    self.block_pressure.pop(speed_setting)
+    self.free_speed.pop(speed_setting)
 
   def efficacy(self, speed_setting, external_static_pressure=None):
       return self.speed_efficacy[speed_setting]
@@ -156,6 +207,10 @@ class ECMFlowFan(Fan):
   def add_speed(self, airflow):
     super().add_speed(airflow)
     self.free_efficacy.append(self.design_free_efficacy*self.normalized_free_efficacy(self.design_airflow_ratio[-1]))
+
+  def remove_speed(self, speed_setting):
+    super().remove_speed(speed_setting)
+    self.free_efficacy.pop(speed_setting)
 
   def normalized_free_efficacy(self, flow_ratio):
     minimum_flow_ratio = 0.293/2.4 # local minima, derived mathematically

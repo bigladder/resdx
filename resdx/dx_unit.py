@@ -229,7 +229,7 @@ class DXUnit:
 
   def set_rating_conditions(self):
 
-    self.full_flow_external_static_pressure = self.get_rated_pressure()
+    self.rated_full_flow_external_static_pressure = self.get_rated_pressure()
 
     self.A_full_cond = self.make_condition(CoolingConditions,compressor_speed=self.full_load_speed)
     self.B_full_cond = self.make_condition(CoolingConditions,outdoor=PsychState(drybulb=fr_u(82.0,"°F"),wetbulb=fr_u(65.0,"°F")),compressor_speed=self.full_load_speed)
@@ -312,7 +312,7 @@ class DXUnit:
     else: # if condition_type == HeatingConditions:
       airflow = self.fan.airflow(self.heating_fan_speed[compressor_speed])
 
-    rated_flow_external_static_pressure = self.full_flow_external_static_pressure*(airflow/full_airflow)**2
+    rated_flow_external_static_pressure = self.rated_full_flow_external_static_pressure*(airflow/full_airflow)**2
     condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed, rated_flow_external_static_pressure=rated_flow_external_static_pressure)
     condition.set_rated_airflow(airflow, self.rated_net_total_cooling_capacity[compressor_speed])
     return condition

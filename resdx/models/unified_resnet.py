@@ -3,7 +3,7 @@ from .nrel import NRELDXModel
 from .title24 import Title24DXModel
 from .henderson_defrost_model import HendersonDefrostModel
 from ..units import fr_u
-from ..fan import ConstantEfficacyFan
+from ..fan import ConstantEfficacyFan, ECMFlowFan, PSCFan
 
 class RESNETDXModel(DXModel):
 
@@ -44,89 +44,83 @@ class RESNETDXModel(DXModel):
   def gross_steady_state_heating_power_charge_factor(self, conditions):
     return NRELDXModel.gross_steady_state_heating_power_charge_factor(self, conditions)
 
-  # Default assumptions
-  def set_rated_fan_characteristics(self, fan):
-    if fan is not None:
-      pass
-    else:
-      if self.system.input_seer is not None:
-        cooling_fan_efficacy = RESNETDXModel.fan_efficacy(self.system.input_seer)
-      else:
-        cooling_fan_efficacy = fr_u(0.25,'W/cfm')
-      if self.system.input_hspf is not None:
-        heating_fan_efficacy = RESNETDXModel.fan_efficacy(RESNETDXModel.estimated_seer(self.system.input_hspf))
-      else:
-        heating_fan_efficacy = fr_u(0.25,'W/cfm')
-      self.system.rated_cooling_fan_efficacy = [cooling_fan_efficacy]*self.system.number_of_input_stages
-      self.system.rated_heating_fan_efficacy = [heating_fan_efficacy]*self.system.number_of_input_stages
-
-      # Airflows
-      cooling_default = fr_u(375.,"cfm/ton_ref")
-      heating_default = fr_u(375.,"cfm/ton_ref")
-
-      if self.system.number_of_input_stages == 1:
-        self.system.rated_cooling_airflow_per_rated_net_cooling_capacity = [cooling_default]
-        self.system.rated_heating_airflow_per_rated_net_cooling_capacity = [heating_default]
-      elif self.system.number_of_input_stages == 2:
-        self.system.rated_cooling_airflow_per_rated_net_cooling_capacity = [cooling_default, cooling_default*0.86]
-        self.system.rated_heating_airflow_per_rated_net_cooling_capacity = [heating_default, heating_default*0.8]
-
-  def set_rated_net_total_cooling_capacity(self, input):
-    NRELDXModel.set_rated_net_total_cooling_capacity(self, input)
-
-  def set_rated_net_heating_capacity(self, input):
-    input = self.set_default(input, self.system.rated_net_total_cooling_capacity[0]*0.98 + fr_u(180.,"Btu/hr")) # From Title24
-    if type(input) is list:
-      self.system.rated_net_heating_capacity = input
-    else:
-      # From NREL
-      if self.system.number_of_input_stages == 1:
-        self.system.rated_net_heating_capacity = [input]
-      elif self.system.number_of_input_stages == 2:
-        fan_power_0 = input*self.system.rated_heating_fan_efficacy[0]*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[0]
-        gross_cap_0 = input - fan_power_0
-        gross_cap_1 = gross_cap_0*0.72
-        net_cap_1 = gross_cap_1/(1. - self.system.rated_heating_fan_efficacy[1]*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[1])
-        self.system.rated_net_heating_capacity = [input, net_cap_1]
-
-  def set_fan(self, input):
-    if input is not None:
-      # TODO: Handle default mappings?
-      self.system.fan = input
-    else:
-      airflows = []
-      efficacies = []
-      fan_speed = 0
-      if self.system.cooling_fan_speed is None:
-        set_cooling_fan_speed = True
-        self.system.cooling_fan_speed = []
-
-      if self.system.heating_fan_speed is None:
-        set_heating_fan_speed = True
-        self.system.heating_fan_speed = []
-
-      for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
-        airflows.append(cap*self.system.rated_cooling_airflow_per_rated_net_cooling_capacity[i])
-        efficacies.append(self.system.rated_cooling_fan_efficacy[i])
-        if set_cooling_fan_speed:
-          self.system.cooling_fan_speed.append(fan_speed)
-          fan_speed += 1
-
-      for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
-        airflows.append(cap*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[i])
-        efficacies.append(self.system.rated_heating_fan_efficacy[i])
-        if set_heating_fan_speed:
-          self.system.heating_fan_speed.append(fan_speed)
-          fan_speed += 1
-
-      fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies)
-      self.system.fan = fan
-
   def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
-    self.set_rated_fan_characteristics(fan)
-    self.set_rated_net_total_cooling_capacity(rated_net_total_cooling_capacity)
-    self.set_rated_net_heating_capacity(rated_net_heating_capacity)
-    self.set_fan(fan)
+    # Set high speed capacities
+
+    ## Cooling (high speed net total cooling capacity is required)
+    if type(rated_net_total_cooling_capacity) is list:
+      self.system.rated_net_total_cooling_capacity = rated_net_total_cooling_capacity
+    else:
+      # Even if the system has more than one speed, the first speed will be the input
+      self.system.rated_net_total_cooling_capacity = [rated_net_total_cooling_capacity]
+
+    ## Heating
+    rated_net_heating_capacity = self.set_default(rated_net_heating_capacity, self.system.rated_net_total_cooling_capacity[0]*0.98 + fr_u(180.,"Btu/hr")) # From Title24
+    if type(rated_net_heating_capacity) is list:
+      self.system.rated_net_heating_capacity = rated_net_heating_capacity
+    else:
+      # Even if the system has more than one speed, the first speed will be the input
+      self.system.rated_net_heating_capacity = [rated_net_heating_capacity]
+
+    # setup fan
+    self.system.rated_full_flow_external_static_pressure = self.system.get_rated_pressure()
+
+    if fan is None:
+      # Rated flow rates per net capacity
+      self.system.rated_cooling_airflow_per_rated_net_cooling_capacity = self.set_default(self.system.rated_cooling_airflow_per_rated_net_cooling_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
+      self.system.rated_heating_airflow_per_rated_net_cooling_capacity = self.set_default(self.system.rated_heating_airflow_per_rated_net_cooling_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
+      self.system.cooling_fan_speed = []
+      self.system.heating_fan_speed = []
+
+      design_airflow = self.system.rated_net_total_cooling_capacity[0]*self.system.rated_cooling_airflow_per_rated_net_cooling_capacity[0]
+      design_external_static_pressure = fr_u(0.5, "in_H2O")
+      if self.system.number_of_input_stages > 1:
+        self.system.fan = ECMFlowFan(design_airflow, design_external_static_pressure, design_efficacy=fr_u(0.3, 'W/cfm'))
+      else:
+        self.system.fan = PSCFan(design_airflow, design_external_static_pressure, design_efficacy=fr_u(0.365, 'W/cfm'))
+
+      self.system.cooling_fan_speed.append(self.system.fan.number_of_speeds - 1)
+
+      self.system.fan.add_speed(self.system.rated_net_heating_capacity[0]*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[0])
+      self.system.heating_fan_speed.append(self.system.fan.number_of_speeds - 1)
+
+      # if net cooling capacities are provided for other speeds, add corresponding fan speeds
+      for i, net_capacity in enumerate(self.system.rated_net_total_cooling_capacity[1:]):
+        i += 1 # Since we're starting at the second item
+        self.system.fan.add_speed(net_capacity*self.system.rated_cooling_airflow_per_rated_net_cooling_capacity[i])
+        self.system.cooling_fan_speed.append(self.system.fan.number_of_speeds - 1)
+
+      # if net cooling capacities are provided for other speeds, add corresponding fan speeds
+      for i, net_capacity in enumerate(self.system.rated_net_heating_capacity[1:]):
+        i += 1 # Since we're starting at the second item
+        self.system.fan.add_speed(net_capacity*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[i])
+        self.system.heating_fan_speed.append(self.system.fan.number_of_speeds - 1)
+
+    # setup lower speed net capacities if they aren't provided
+    if len(self.system.rated_net_total_cooling_capacity) < self.system.number_of_input_stages:
+      if self.system.number_of_input_stages == 2:
+        # Cooling
+        cooling_capacity_ratio = 0.72
+        cooling_airflow = self.system.fan.airflow(self.system.cooling_fan_speed[0])
+        cooling_fan_power_0 = self.system.fan.power(self.system.cooling_fan_speed[0],self.system.rated_full_flow_external_static_pressure)
+        cooling_gross_capacity_0 = self.system.rated_net_total_cooling_capacity[0] + cooling_fan_power_0
+        cooling_gross_capacity_1 = cooling_gross_capacity_0*cooling_capacity_ratio
+        guess_airflow = self.system.fan.design_airflow[self.system.cooling_fan_speed[0]]*cooling_capacity_ratio
+        self.system.fan.find_rated_fan_speed(cooling_gross_capacity_1, self.system.rated_heating_airflow_per_rated_net_cooling_capacity[1], guess_airflow, self.system.rated_full_flow_external_static_pressure)
+        self.system.cooling_fan_speed.append(self.system.fan.number_of_speeds - 1)
+
+        # Heating
+        heating_capacity_ratio = 0.72
+        heating_airflow_ratio = self.system.fan.power(self.system.heating_fan_speed[0])/cooling_airflow
+        rated_heating_external_static_pressure = self.system.rated_full_flow_external_static_pressure*heating_airflow_ratio**2
+        heating_fan_power_0 = self.system.fan.power(self.system.heating_fan_speed[0],rated_heating_external_static_pressure)
+        heating_gross_capacity_0 = self.system.rated_net_heating_capacity[0] - heating_fan_power_0
+        heating_gross_capacity_1 = heating_gross_capacity_0*heating_capacity_ratio
+        guess_airflow = self.system.fan.design_airflow[self.system.heating_fan_speed[0]]*heating_capacity_ratio
+        self.system.fan.find_rated_fan_speed(heating_gross_capacity_1, self.system.rated_heating_airflow_per_rated_net_cooling_capacity[1], guess_airflow, self.system.rated_full_flow_external_static_pressure)
+        self.system.heating_fan_speed.append(self.system.fan.number_of_speeds - 1)
+      else:
+        raise Exception(f"No default rated net total cooling capacities for systems with more than two speeds")
 
   def set_c_d_cooling(self, input):
     if self.system.input_seer is None:

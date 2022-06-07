@@ -420,6 +420,11 @@ class NRELFan(Fan):
     self.power_ratio.append(self.design_airflow_ratio[-1]**3.)
     self.design_power.append(self.design_airflow[0]*self.design_efficacy*self.power_ratio[-1])
 
+  def remove_speed(self, speed_setting):
+    super().remove_speed(speed_setting)
+    self.power_ratio.pop(speed_setting)
+    self.design_power.pop(speed_setting)
+
   def airflow(self, conditions):
     return self.design_airflow[conditions.speed_setting]
 
