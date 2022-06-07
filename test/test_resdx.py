@@ -30,9 +30,9 @@ def test_1_speed_regression():
   dx_unit_1_speed.print_cooling_info()
   dx_unit_1_speed.print_heating_info()
   assert dx_unit_1_speed.seer() == approx(seer_1, 0.0001)
-  assert dx_unit_1_speed.rated_gross_cooling_cop[0] == approx(3.716, 0.001)
+  assert dx_unit_1_speed.rated_gross_cooling_cop[0] == approx(4.11, 0.001)
   assert dx_unit_1_speed.hspf() == approx(hspf_1, 0.0001)
-  assert dx_unit_1_speed.rated_gross_heating_cop[0] == approx(3.476, 0.001)
+  assert dx_unit_1_speed.rated_gross_heating_cop[0] == approx(3.63, 0.001)
   assert dx_unit_1_speed.net_total_cooling_capacity() == approx(dx_unit_1_speed.rated_net_total_cooling_capacity[0],0.01)
 
 def test_1_speed_refrigerant_charge_regression():
@@ -62,11 +62,11 @@ def test_2_speed_regression():
   dx_unit_2_speed.print_heating_info()
   dx_unit_2_speed.print_heating_info(region=2)
   assert dx_unit_2_speed.seer() == approx(seer_2, 0.01)
-  assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.379, 0.001)
-  assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.734, 0.001)
+  assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.297, 0.001)
+  assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.649, 0.001)
   assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
-  assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(4.011, 0.001)
-  assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.470, 0.001)
+  assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(3.96, 0.001)
+  assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.432, 0.001)
 
 def test_vchp_regression():
   # VCHP (Fujitsu Halcyon 12) https://ashp.neep.org/#!/product/25349/7/25000///0
@@ -109,8 +109,8 @@ def test_vchp_regression():
 
   assert vchp_unit.seer() == approx(20.292, 0.01)
   assert vchp_unit.eer() == approx(9.38338, 0.01)
-  assert vchp_unit.hspf() == approx(20.81, 0.01)
-  assert vchp_unit.hspf(region=2) == approx(22.8153, 0.01)
+  assert vchp_unit.hspf() == approx(20.03, 0.01)
+  assert vchp_unit.hspf(region=2) == approx(22.00, 0.01)
 
 
 def test_plot():

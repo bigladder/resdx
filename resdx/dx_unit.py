@@ -90,13 +90,13 @@ class DXUnit:
                     rated_net_total_cooling_capacity = fr_u(3.0,'ton_ref'),
                     rated_gross_cooling_cop = 3.72,
                     rated_net_cooling_cop = None,
-                    rated_cooling_airflow_per_rated_net_cooling_capacity=None,
+                    rated_cooling_airflow_per_rated_net_capacity=None,
                     c_d_cooling = None,
                     # Heating (rating = AHRI H1 conditions)
                     rated_net_heating_capacity = None,
                     rated_gross_heating_cop = 3.82,
                     rated_net_heating_cop = None,
-                    rated_heating_airflow_per_rated_net_cooling_capacity=None,
+                    rated_heating_airflow_per_rated_net_capacity=None,
                     c_d_heating = None,
                     heating_off_temperature = fr_u(0.0,"°F"),
                     heating_on_temperature = None, # default to heating_off_temperature
@@ -170,8 +170,8 @@ class DXUnit:
     # Default fan maps (if None, will be set in set_net_capacities_and_fan)
     self.heating_fan_speed = heating_fan_speed
     self.cooling_fan_speed = cooling_fan_speed
-    self.rated_cooling_airflow_per_rated_net_cooling_capacity = rated_cooling_airflow_per_rated_net_cooling_capacity
-    self.rated_heating_airflow_per_rated_net_cooling_capacity = rated_heating_airflow_per_rated_net_cooling_capacity
+    self.rated_cooling_airflow_per_rated_net_capacity = rated_cooling_airflow_per_rated_net_capacity
+    self.rated_heating_airflow_per_rated_net_capacity = rated_heating_airflow_per_rated_net_capacity
 
     # Set net capacities and fan
     self.model.set_net_capacities_and_fan(rated_net_total_cooling_capacity, rated_net_heating_capacity, fan)
@@ -309,12 +309,14 @@ class DXUnit:
 
     if condition_type == CoolingConditions:
       airflow = self.fan.airflow(self.cooling_fan_speed[compressor_speed])
+      rated_net_capacity = self.rated_net_total_cooling_capacity[compressor_speed]
     else: # if condition_type == HeatingConditions:
       airflow = self.fan.airflow(self.heating_fan_speed[compressor_speed])
+      rated_net_capacity = self.rated_net_heating_capacity[compressor_speed]
 
     rated_flow_external_static_pressure = self.rated_full_flow_external_static_pressure*(airflow/full_airflow)**2
     condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed, rated_flow_external_static_pressure=rated_flow_external_static_pressure)
-    condition.set_rated_airflow(airflow, self.rated_net_total_cooling_capacity[compressor_speed])
+    condition.set_rated_airflow(airflow, rated_net_capacity)
     return condition
 
   def get_rated_pressure(self):
@@ -786,7 +788,7 @@ class DXUnit:
     print(f"HSPF (region {region}): {self.hspf(region)}")
     for speed in range(self.number_of_input_stages):
       conditions = HeatingConditions(compressor_speed=speed)
-      conditions.set_rated_airflow(self.fan.airflow(self.heating_fan_speed[speed], self.fan.design_external_static_pressure), self.rated_net_total_cooling_capacity[speed])
+      conditions.set_rated_airflow(self.fan.airflow(self.heating_fan_speed[speed], self.fan.design_external_static_pressure), self.rated_net_heating_capacity[speed])
       print(f"Net heating power for stage {speed + 1} : {self.net_integrated_heating_power(conditions)}")
       print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions)}")
       print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")

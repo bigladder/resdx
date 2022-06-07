@@ -65,14 +65,16 @@ class RESNETDXModel(DXModel):
     # setup fan
     self.system.rated_full_flow_external_static_pressure = self.system.get_rated_pressure()
 
-    if fan is None:
+    if fan is not None:
+      self.system.fan = fan
+    else:
       # Rated flow rates per net capacity
-      self.system.rated_cooling_airflow_per_rated_net_cooling_capacity = self.set_default(self.system.rated_cooling_airflow_per_rated_net_cooling_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
-      self.system.rated_heating_airflow_per_rated_net_cooling_capacity = self.set_default(self.system.rated_heating_airflow_per_rated_net_cooling_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
+      self.system.rated_cooling_airflow_per_rated_net_capacity = self.set_default(self.system.rated_cooling_airflow_per_rated_net_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
+      self.system.rated_heating_airflow_per_rated_net_capacity = self.set_default(self.system.rated_heating_airflow_per_rated_net_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
       self.system.cooling_fan_speed = []
       self.system.heating_fan_speed = []
 
-      design_airflow = self.system.rated_net_total_cooling_capacity[0]*self.system.rated_cooling_airflow_per_rated_net_cooling_capacity[0]
+      design_airflow = self.system.rated_net_total_cooling_capacity[0]*self.system.rated_cooling_airflow_per_rated_net_capacity[0]
       design_external_static_pressure = fr_u(0.5, "in_H2O")
       if self.system.number_of_input_stages > 1:
         self.system.fan = ECMFlowFan(design_airflow, design_external_static_pressure, design_efficacy=fr_u(0.3, 'W/cfm'))
@@ -81,19 +83,19 @@ class RESNETDXModel(DXModel):
 
       self.system.cooling_fan_speed.append(self.system.fan.number_of_speeds - 1)
 
-      self.system.fan.add_speed(self.system.rated_net_heating_capacity[0]*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[0])
+      self.system.fan.add_speed(self.system.rated_net_heating_capacity[0]*self.system.rated_heating_airflow_per_rated_net_capacity[0])
       self.system.heating_fan_speed.append(self.system.fan.number_of_speeds - 1)
 
       # if net cooling capacities are provided for other speeds, add corresponding fan speeds
       for i, net_capacity in enumerate(self.system.rated_net_total_cooling_capacity[1:]):
         i += 1 # Since we're starting at the second item
-        self.system.fan.add_speed(net_capacity*self.system.rated_cooling_airflow_per_rated_net_cooling_capacity[i])
+        self.system.fan.add_speed(net_capacity*self.system.rated_cooling_airflow_per_rated_net_capacity[i])
         self.system.cooling_fan_speed.append(self.system.fan.number_of_speeds - 1)
 
       # if net cooling capacities are provided for other speeds, add corresponding fan speeds
       for i, net_capacity in enumerate(self.system.rated_net_heating_capacity[1:]):
         i += 1 # Since we're starting at the second item
-        self.system.fan.add_speed(net_capacity*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[i])
+        self.system.fan.add_speed(net_capacity*self.system.rated_heating_airflow_per_rated_net_capacity[i])
         self.system.heating_fan_speed.append(self.system.fan.number_of_speeds - 1)
 
     # setup lower speed net capacities if they aren't provided
@@ -101,24 +103,34 @@ class RESNETDXModel(DXModel):
       if self.system.number_of_input_stages == 2:
         # Cooling
         cooling_capacity_ratio = 0.72
-        cooling_airflow = self.system.fan.airflow(self.system.cooling_fan_speed[0])
+        cooling_airflow_0 = self.system.fan.airflow(self.system.cooling_fan_speed[0])
         cooling_fan_power_0 = self.system.fan.power(self.system.cooling_fan_speed[0],self.system.rated_full_flow_external_static_pressure)
         cooling_gross_capacity_0 = self.system.rated_net_total_cooling_capacity[0] + cooling_fan_power_0
         cooling_gross_capacity_1 = cooling_gross_capacity_0*cooling_capacity_ratio
         guess_airflow = self.system.fan.design_airflow[self.system.cooling_fan_speed[0]]*cooling_capacity_ratio
-        self.system.fan.find_rated_fan_speed(cooling_gross_capacity_1, self.system.rated_heating_airflow_per_rated_net_cooling_capacity[1], guess_airflow, self.system.rated_full_flow_external_static_pressure)
+        self.system.fan.find_rated_fan_speed(cooling_gross_capacity_1, self.system.rated_heating_airflow_per_rated_net_capacity[1], guess_airflow, self.system.rated_full_flow_external_static_pressure)
         self.system.cooling_fan_speed.append(self.system.fan.number_of_speeds - 1)
+        cooling_airflow_1 = self.system.fan.airflow(self.system.cooling_fan_speed[1])
+        cooling_airflow_ratio_1 = cooling_airflow_1/cooling_airflow_0
+        cooling_external_static_pressure_1 = self.system.rated_full_flow_external_static_pressure*cooling_airflow_ratio_1**2
+        cooling_fan_power_1 = self.system.fan.power(self.system.cooling_fan_speed[1],cooling_external_static_pressure_1)
+        self.system.rated_net_total_cooling_capacity.append(cooling_gross_capacity_1 + cooling_fan_power_1)
 
         # Heating
         heating_capacity_ratio = 0.72
-        heating_airflow_ratio = self.system.fan.power(self.system.heating_fan_speed[0])/cooling_airflow
-        rated_heating_external_static_pressure = self.system.rated_full_flow_external_static_pressure*heating_airflow_ratio**2
+        heating_airflow_ratio_0 = self.system.fan.airflow(self.system.heating_fan_speed[0])/cooling_airflow_0
+        rated_heating_external_static_pressure = self.system.rated_full_flow_external_static_pressure*heating_airflow_ratio_0**2
         heating_fan_power_0 = self.system.fan.power(self.system.heating_fan_speed[0],rated_heating_external_static_pressure)
         heating_gross_capacity_0 = self.system.rated_net_heating_capacity[0] - heating_fan_power_0
         heating_gross_capacity_1 = heating_gross_capacity_0*heating_capacity_ratio
         guess_airflow = self.system.fan.design_airflow[self.system.heating_fan_speed[0]]*heating_capacity_ratio
-        self.system.fan.find_rated_fan_speed(heating_gross_capacity_1, self.system.rated_heating_airflow_per_rated_net_cooling_capacity[1], guess_airflow, self.system.rated_full_flow_external_static_pressure)
+        self.system.fan.find_rated_fan_speed(heating_gross_capacity_1, self.system.rated_heating_airflow_per_rated_net_capacity[1], guess_airflow, self.system.rated_full_flow_external_static_pressure)
         self.system.heating_fan_speed.append(self.system.fan.number_of_speeds - 1)
+        heating_airflow_1 = self.system.fan.airflow(self.system.heating_fan_speed[1])
+        heating_airflow_ratio_1 = heating_airflow_1/cooling_airflow_0
+        heating_external_static_pressure_1 = self.system.rated_full_flow_external_static_pressure*heating_airflow_ratio_1**2
+        heating_fan_power_1 = self.system.fan.power(self.system.heating_fan_speed[1],heating_external_static_pressure_1)
+        self.system.rated_net_heating_capacity.append(heating_gross_capacity_1 + heating_fan_power_1)
       else:
         raise Exception(f"No default rated net total cooling capacities for systems with more than two speeds")
 

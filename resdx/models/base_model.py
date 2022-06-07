@@ -89,16 +89,18 @@ class DXModel:
       self.system.fan = input
     else:
       airflows = []
-      for cap in self.system.rated_net_total_cooling_capacity:
-        airflows.append(cap*fr_u(375.0,"cfm/ton_ref"))
-      fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=fr_u(0.25,'W/cfm'))
+      self.system.cooling_fan_speed = []
+      self.system.heating_fan_speed = []
+      for net_capacity in self.system.rated_net_total_cooling_capacity:
+        airflows.append(net_capacity*fr_u(375.0,"cfm/ton_ref"))
+        self.system.cooling_fan_speed.append(len(airflows) - 1)
+
+      for net_capacity in self.system.rated_net_heating_capacity:
+        airflows.append(net_capacity*fr_u(375.0,"cfm/ton_ref"))
+        self.system.heating_fan_speed.append(len(airflows) - 1)
+
+      fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), design_efficacy=fr_u(0.365,'W/cfm'))
       self.system.fan = fan
-
-      if self.system.heating_fan_speed is None:
-        self.system.heating_fan_speed = list(range(fan.number_of_speeds))
-
-      if self.system.cooling_fan_speed is None:
-        self.system.cooling_fan_speed = list(range(fan.number_of_speeds))
 
   def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
     self.set_rated_net_total_cooling_capacity(rated_net_total_cooling_capacity)

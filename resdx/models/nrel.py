@@ -250,13 +250,13 @@ class NRELDXModel(DXModel):
       self.system.rated_cooling_fan_efficacy = [fan_efficacy]*self.system.number_of_input_stages
       self.system.rated_heating_fan_efficacy = [fan_efficacy]*self.system.number_of_input_stages
       if self.system.number_of_input_stages == 1:
-        self.system.rated_cooling_airflow_per_rated_net_cooling_capacity = [fr_u(394.2,"cfm/ton_ref")]
-        self.system.rated_heating_airflow_per_rated_net_cooling_capacity = [fr_u(384.1,"cfm/ton_ref")]
+        self.system.rated_cooling_airflow_per_rated_net_capacity = [fr_u(394.2,"cfm/ton_ref")]
+        self.system.rated_heating_airflow_per_rated_net_capacity = [fr_u(384.1,"cfm/ton_ref")]
       elif self.system.number_of_input_stages == 2:
         cooling_default = fr_u(344.1,"cfm/ton_ref")
-        self.system.rated_cooling_airflow_per_rated_net_cooling_capacity = [cooling_default, cooling_default*0.86]
+        self.system.rated_cooling_airflow_per_rated_net_capacity = [cooling_default, cooling_default*0.86]
         heating_default = fr_u(352.2,"cfm/ton_ref")
-        self.system.rated_heating_airflow_per_rated_net_cooling_capacity = [heating_default, heating_default*0.8]
+        self.system.rated_heating_airflow_per_rated_net_capacity = [heating_default, heating_default*0.8]
 
   def set_rated_net_total_cooling_capacity(self, input):
     # No default, but need to set to list (and default lower speeds)
@@ -267,10 +267,10 @@ class NRELDXModel(DXModel):
         self.system.rated_net_total_cooling_capacity = [input]
       elif self.system.number_of_input_stages == 2:
         cap_ratio = 0.72
-        fan_power_0 = input*self.system.rated_cooling_fan_efficacy[0]*self.system.rated_cooling_airflow_per_rated_net_cooling_capacity[0]
+        fan_power_0 = input*self.system.rated_cooling_fan_efficacy[0]*self.system.rated_cooling_airflow_per_rated_net_capacity[0]
         gross_cap_0 = input + fan_power_0
         gross_cap_1 = gross_cap_0*cap_ratio
-        net_cap_1 = gross_cap_1/(1. + self.system.rated_cooling_fan_efficacy[1]*self.system.rated_cooling_airflow_per_rated_net_cooling_capacity[1])
+        net_cap_1 = gross_cap_1/(1. + self.system.rated_cooling_fan_efficacy[1]*self.system.rated_cooling_airflow_per_rated_net_capacity[1])
         self.system.rated_net_total_cooling_capacity = [input, net_cap_1]
 
   def set_rated_net_heating_capacity(self, input):
@@ -282,10 +282,10 @@ class NRELDXModel(DXModel):
         self.system.rated_net_heating_capacity = [input]
       elif self.system.number_of_input_stages == 2:
         cap_ratio = 0.72
-        fan_power_0 = input*self.system.rated_heating_fan_efficacy[0]*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[0]
+        fan_power_0 = input*self.system.rated_heating_fan_efficacy[0]*self.system.rated_heating_airflow_per_rated_net_capacity[0]
         gross_cap_0 = input - fan_power_0
         gross_cap_1 = gross_cap_0*cap_ratio
-        net_cap_1 = gross_cap_1/(1. - self.system.rated_heating_fan_efficacy[1]*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[1])
+        net_cap_1 = gross_cap_1/(1. - self.system.rated_heating_fan_efficacy[1]*self.system.rated_heating_airflow_per_rated_net_capacity[1])
         self.system.rated_net_heating_capacity = [input, net_cap_1]
 
   def set_fan(self, input):
@@ -305,14 +305,14 @@ class NRELDXModel(DXModel):
         self.system.heating_fan_speed = []
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
-        airflows.append(cap*self.system.rated_cooling_airflow_per_rated_net_cooling_capacity[i])
+        airflows.append(cap*self.system.rated_cooling_airflow_per_rated_net_capacity[i])
         efficacies.append(self.system.rated_cooling_fan_efficacy[i])
         if set_cooling_fan_speed:
           self.system.cooling_fan_speed.append(fan_speed)
           fan_speed += 1
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
-        airflows.append(cap*self.system.rated_heating_airflow_per_rated_net_cooling_capacity[i])
+        airflows.append(cap*self.system.rated_heating_airflow_per_rated_net_capacity[i])
         efficacies.append(self.system.rated_heating_fan_efficacy[i])
         if set_heating_fan_speed:
           self.system.heating_fan_speed.append(fan_speed)

@@ -12,8 +12,8 @@ class OperatingConditions:
     self.rated_airflow_set = False
     self.rated_flow_external_static_pressure = rated_flow_external_static_pressure
 
-  def set_rated_airflow(self, rated_volumetric_airflow, rated_net_total_cooling_capacity):
-    self.rated_net_total_cooling_capacity = rated_net_total_cooling_capacity
+  def set_rated_airflow(self, rated_volumetric_airflow, rated_net_capacity):
+    self.rated_net_capacity = rated_net_capacity
     self.rated_standard_volumetric_airflow = rated_volumetric_airflow
     self.rated_volumetric_airflow = self.rated_standard_volumetric_airflow*STANDARD_CONDITIONS.get_rho()/self.indoor.get_rho()
     self.rated_mass_airflow = self.rated_volumetric_airflow*self.indoor.get_rho()
@@ -26,7 +26,7 @@ class OperatingConditions:
     if self.rated_airflow_set:
       self.standard_volumetric_airflow = self.mass_airflow/STANDARD_CONDITIONS.get_rho()
       self.mass_airflow_ratio = self.mass_airflow/self.rated_mass_airflow
-      self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow/self.rated_net_total_cooling_capacity
+      self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow/self.rated_net_capacity
       if self.rated_flow_external_static_pressure is not None:
         self.external_static_pressure = self.rated_flow_external_static_pressure*(self.mass_airflow_ratio)**2.
 
@@ -38,7 +38,7 @@ class OperatingConditions:
       self.mass_airflow = self.mass_airflow_ratio*self.rated_mass_airflow
       self.volumetric_airflow = self.mass_airflow/self.indoor.get_rho()
       self.standard_volumetric_airflow = self.mass_airflow/STANDARD_CONDITIONS.get_rho()
-      self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow/self.rated_net_total_cooling_capacity
+      self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow/self.rated_net_capacity
 
 class CoolingConditions(OperatingConditions):
   def __init__(self,outdoor=PsychState(drybulb=fr_u(95.0,"°F"),wetbulb=fr_u(75.0,"°F")),
