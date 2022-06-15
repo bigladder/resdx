@@ -21,7 +21,7 @@ class Fan:
       self.system_exponent = 0.5
       self.system_curve_constant = self.design_external_static_pressure**(self.system_exponent)/self.design_airflow[0]
 
-  def add_speed(self, airflow):
+  def add_speed(self, airflow, external_static_pressure=None):
     self.design_airflow.append(airflow)
     self.number_of_speeds += 1
     self.design_airflow_ratio.append(self.design_airflow[-1]/self.design_airflow[0])
@@ -90,7 +90,8 @@ class Fan:
 
     root_fn = lambda x : net_capacity_function(x) - x/rated_flow_per_rated_net_capacity
     f, solution = optimize.newton(root_fn, guess_airflow, full_output = True)
-    self.add_speed(f)
+    self.add_speed(f, pressure_function(f))
+    return f
 
   def write_A205(self):
     pass
@@ -101,8 +102,8 @@ class ConstantEfficacyFan(Fan):
     if type(self.design_efficacy) is not list:
       self.design_efficacy = [self.design_efficacy]*self.number_of_speeds
 
-  def add_speed(self, airflow, efficacy=None):
-    super().add_speed(airflow)
+  def add_speed(self, airflow, efficacy=None, external_static_pressure=None):
+    super().add_speed(airflow, external_static_pressure)
     if efficacy is not None:
       self.design_efficacy.append(efficacy)
 
@@ -137,8 +138,12 @@ class PSCFan(Fan):
       self.free_speed = []
       super().__init__(design_airflow, design_external_static_pressure, design_efficacy)
 
-  def add_speed(self, airflow):
-    super().add_speed(airflow)
+  def add_speed(self, airflow, external_static_pressure=None):
+    if external_static_pressure is not None:
+      design_airflow = airflow + (self.design_airflow_reduction - self.airflow_reduction(external_static_pressure))
+    else:
+      design_airflow = airflow
+    super().add_speed(design_airflow)
     self.free_airflow.append(self.design_airflow[-1] + self.design_airflow_reduction)
     self.free_airflow_ratio.append(self.free_airflow[-1]/self.free_airflow[0])
     self.speed_efficacy.append(self.design_efficacy*(1. + self.EFFICACY_SLOPE*(self.free_airflow_ratio[-1] - 1.)))
@@ -205,8 +210,8 @@ class ECMFlowFan(Fan):
       self.free_efficacy = []
       super().__init__(design_airflow, design_external_static_pressure, design_efficacy)
 
-  def add_speed(self, airflow):
-    super().add_speed(airflow)
+  def add_speed(self, airflow, external_static_pressure=None):
+    super().add_speed(airflow, external_static_pressure)
     self.free_efficacy.append(self.design_free_efficacy*self.normalized_free_efficacy(self.design_airflow_ratio[-1]))
 
   def remove_speed(self, speed_setting):

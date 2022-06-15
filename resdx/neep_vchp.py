@@ -192,6 +192,8 @@ def make_vchp_unit(
     fan = fan,
     heating_fan_speed = heating_fan_speed,
     cooling_fan_speed = cooling_fan_speed,
+    rated_heating_fan_speed = heating_fan_speed,
+    rated_cooling_fan_speed = cooling_fan_speed,
     full_load_speed = 1 if net_cooling_data.number_of_stages > 3 else 0,
     intermediate_speed = net_cooling_data.number_of_stages - 2,
     base_model=base_model

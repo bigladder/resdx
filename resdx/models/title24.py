@@ -348,16 +348,19 @@ class Title24DXModel(DXModel):
       if self.system.cooling_fan_speed is None:
         set_cooling_fan_speed = True
         self.system.cooling_fan_speed = []
+        self.system.rated_cooling_fan_speed = []
 
       if self.system.heating_fan_speed is None:
         set_heating_fan_speed = True
         self.system.heating_fan_speed = []
+        self.system.rated_heating_fan_speed = []
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
         airflows.append(cap*self.system.rated_cooling_airflow_per_rated_net_capacity[i])
         efficacies.append(self.system.rated_cooling_fan_efficacy[i])
         if set_cooling_fan_speed:
           self.system.cooling_fan_speed.append(fan_speed)
+          self.system.rated_cooling_fan_speed.append(fan_speed)
           fan_speed += 1
 
       for i, cap in enumerate(self.system.rated_net_total_cooling_capacity):
@@ -365,6 +368,7 @@ class Title24DXModel(DXModel):
         efficacies.append(self.system.rated_heating_fan_efficacy[i])
         if set_heating_fan_speed:
           self.system.heating_fan_speed.append(fan_speed)
+          self.system.rated_heating_fan_speed.append(fan_speed)
           fan_speed += 1
 
       fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies)

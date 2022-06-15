@@ -91,13 +91,20 @@ class DXModel:
       airflows = []
       self.system.cooling_fan_speed = []
       self.system.heating_fan_speed = []
+      self.system.rated_cooling_fan_speed = []
+      self.system.rated_heating_fan_speed = []
       for net_capacity in self.system.rated_net_total_cooling_capacity:
         airflows.append(net_capacity*fr_u(375.0,"cfm/ton_ref"))
         self.system.cooling_fan_speed.append(len(airflows) - 1)
+        self.system.rated_cooling_fan_speed.append(len(airflows) - 1)
 
       for net_capacity in self.system.rated_net_heating_capacity:
         airflows.append(net_capacity*fr_u(375.0,"cfm/ton_ref"))
         self.system.heating_fan_speed.append(len(airflows) - 1)
+        self.system.rated_heating_fan_speed.append(len(airflows) - 1)
+
+      self.system.rated_cooling_fan_speed = self.system.cooling_fan_speed
+      self.system.rated_heating_fan_speed = self.system.heating_fan_speed
 
       fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), design_efficacy=fr_u(0.365,'W/cfm'))
       self.system.fan = fan
