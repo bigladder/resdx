@@ -186,15 +186,9 @@ class DXUnit:
 
     self.rated_full_flow_external_static_pressure = self.get_rated_full_flow_rated_pressure()
 
-    # Derived staging array values
+    # Derived gross capacities
     for i in range(self.number_of_input_stages):
-      self.rated_cooling_airflow[i] = self.fan.airflow(self.rated_cooling_fan_speed[i])
-      self.rated_cooling_flow_external_static_pressure[i] = self.calculate_rated_pressure(self.rated_cooling_airflow[i])
-      self.rated_cooling_fan_power[i] = self.fan.power(self.rated_cooling_fan_speed[i], self.rated_cooling_flow_external_static_pressure[i])
       self.rated_gross_total_cooling_capacity[i] = self.rated_net_total_cooling_capacity[i] + self.rated_cooling_fan_power[i]
-      self.rated_heating_airflow[i] = self.fan.airflow(self.rated_heating_fan_speed[i])
-      self.rated_heating_flow_external_static_pressure[i] = self.calculate_rated_pressure(self.rated_heating_airflow[i])
-      self.rated_heating_fan_power[i] = self.fan.power(self.rated_heating_fan_speed[i], self.rated_heating_flow_external_static_pressure[i])
       self.rated_gross_heating_capacity[i] = self.rated_net_heating_capacity[i] - self.rated_heating_fan_power[i]
 
     # Set rating conditions
@@ -304,9 +298,9 @@ class DXUnit:
     self.rated_gross_heating_cop = [None]*self.number_of_input_stages
 
     self.rated_cooling_airflow = [None]*self.number_of_input_stages
-    self.rated_cooling_flow_external_static_pressure = [None]*self.number_of_input_stages
+    self.rated_cooling_external_static_pressure = [None]*self.number_of_input_stages
     self.rated_heating_airflow = [None]*self.number_of_input_stages
-    self.rated_heating_flow_external_static_pressure = [None]*self.number_of_input_stages
+    self.rated_heating_external_static_pressure = [None]*self.number_of_input_stages
 
 
   def make_condition(self, condition_type, compressor_speed=0, indoor=None, outdoor=None):
@@ -318,12 +312,14 @@ class DXUnit:
     if condition_type == CoolingConditions:
       rated_net_capacity = self.rated_net_total_cooling_capacity[compressor_speed]
       rated_airflow = self.rated_cooling_airflow[compressor_speed]
+      rated_fan_speed = self.rated_cooling_fan_speed[compressor_speed]
     else: # if condition_type == HeatingConditions:
       rated_net_capacity = self.rated_net_heating_capacity[compressor_speed]
       rated_airflow = self.rated_heating_airflow[compressor_speed]
+      rated_fan_speed = self.rated_heating_fan_speed[compressor_speed]
 
     rated_flow_external_static_pressure = self.calculate_rated_pressure(rated_airflow)
-    condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed, rated_flow_external_static_pressure=rated_flow_external_static_pressure)
+    condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed, fan_speed=rated_fan_speed, rated_flow_external_static_pressure=rated_flow_external_static_pressure)
     condition.set_rated_airflow(rated_airflow, rated_net_capacity)
     return condition
 
@@ -352,7 +348,7 @@ class DXUnit:
   def cooling_fan_power(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.fan.power(self.cooling_fan_speed[conditions.compressor_speed], conditions.external_static_pressure)
+    return self.fan.power(conditions.fan_speed, conditions.external_static_pressure)
 
   def cooling_fan_heat(self, conditions):
     return self.cooling_fan_power(conditions)
@@ -534,7 +530,7 @@ class DXUnit:
   def heating_fan_power(self, conditions=None):
     if conditions is None:
       conditions = self.H1_full_cond
-    return self.fan.power(self.heating_fan_speed[conditions.compressor_speed], conditions.external_static_pressure)
+    return self.fan.power(conditions.fan_speed, conditions.external_static_pressure)
 
   def heating_fan_heat(self, conditions):
     return self.heating_fan_power(conditions)

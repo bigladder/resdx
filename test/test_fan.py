@@ -28,6 +28,9 @@ def test_psc_fan():
   assert psc_fan.airflow(0) == fr_u(1179.,'cfm')
   assert psc_fan.airflow(1) == approx(fr_u(1061.045,'cfm'),0.01)
 
+  psc_fan.add_speed(psc_fan.design_airflow[0], fr_u(0.15, 'in_H2O'))
+  assert psc_fan.airflow(psc_fan.number_of_speeds - 1, fr_u(0.15, 'in_H2O')) == psc_fan.design_airflow[0]
+
 def test_ecm_fan():
 
   design_external_static_pressure = fr_u(0.5, "in_H2O")

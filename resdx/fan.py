@@ -140,7 +140,7 @@ class PSCFan(Fan):
 
   def add_speed(self, airflow, external_static_pressure=None):
     if external_static_pressure is not None:
-      design_airflow = airflow + (self.design_airflow_reduction - self.airflow_reduction(external_static_pressure))
+      design_airflow = airflow - (self.design_airflow_reduction - self.airflow_reduction(external_static_pressure))
     else:
       design_airflow = airflow
     super().add_speed(design_airflow)

@@ -30,7 +30,7 @@ class NRELDXModel(DXModel):
     '''From Cutler et al.'''
     T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Cutler curves use °F
     T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
-    cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
+    cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)  # Note: Equals 0.9915 at rating conditions (not 1.0)
     cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_airflow_ratio)
     return cap_FF*cap_FT*self.system.rated_gross_total_cooling_capacity[conditions.compressor_speed]
 

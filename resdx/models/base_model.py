@@ -93,20 +93,26 @@ class DXModel:
       self.system.heating_fan_speed = []
       self.system.rated_cooling_fan_speed = []
       self.system.rated_heating_fan_speed = []
-      for net_capacity in self.system.rated_net_total_cooling_capacity:
-        airflows.append(net_capacity*fr_u(375.0,"cfm/ton_ref"))
+
+      design_efficacy = fr_u(0.365,'W/cfm')
+      for i, net_capacity in enumerate(self.system.rated_net_total_cooling_capacity):
+        self.system.rated_cooling_airflow[i] = net_capacity*fr_u(375.0,"cfm/ton_ref")
+        airflows.append(self.system.rated_cooling_airflow[i])
+        self.system.rated_cooling_fan_power[i] = self.system.rated_cooling_airflow[i]*design_efficacy
         self.system.cooling_fan_speed.append(len(airflows) - 1)
         self.system.rated_cooling_fan_speed.append(len(airflows) - 1)
 
-      for net_capacity in self.system.rated_net_heating_capacity:
-        airflows.append(net_capacity*fr_u(375.0,"cfm/ton_ref"))
+      for i, net_capacity in enumerate(self.system.rated_net_heating_capacity):
+        self.system.rated_heating_airflow[i] = net_capacity*fr_u(375.0,"cfm/ton_ref")
+        airflows.append(self.system.rated_heating_airflow[i])
+        self.system.rated_heating_fan_power[i] = self.system.rated_heating_airflow[i]*design_efficacy
         self.system.heating_fan_speed.append(len(airflows) - 1)
         self.system.rated_heating_fan_speed.append(len(airflows) - 1)
 
       self.system.rated_cooling_fan_speed = self.system.cooling_fan_speed
       self.system.rated_heating_fan_speed = self.system.heating_fan_speed
 
-      fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), design_efficacy=fr_u(0.365,'W/cfm'))
+      fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), design_efficacy=design_efficacy)
       self.system.fan = fan
 
   def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
