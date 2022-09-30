@@ -25,8 +25,18 @@ class OperatingConditions:
   def set_airflow(self, volumetric_airflow):
     self.volumetric_airflow = volumetric_airflow
     self.mass_airflow = volumetric_airflow*self.indoor.get_rho()
+    self.standard_volumetric_airflow = self.mass_airflow/STANDARD_CONDITIONS.get_rho()
     if self.rated_airflow_set:
-      self.standard_volumetric_airflow = self.mass_airflow/STANDARD_CONDITIONS.get_rho()
+      self.mass_airflow_ratio = self.mass_airflow/self.rated_mass_airflow
+      self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow/self.rated_net_capacity
+      if self.rated_flow_external_static_pressure is not None:
+        self.external_static_pressure = self.rated_flow_external_static_pressure*(self.mass_airflow_ratio)**2.
+
+  def set_standard_airflow(self, volumetric_airflow):
+    self.standard_volumetric_airflow = volumetric_airflow
+    self.volumetric_airflow = self.standard_volumetric_airflow*STANDARD_CONDITIONS.get_rho()/self.indoor.get_rho()
+    self.mass_airflow = self.volumetric_airflow*self.indoor.get_rho()
+    if self.rated_airflow_set:
       self.mass_airflow_ratio = self.mass_airflow/self.rated_mass_airflow
       self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow/self.rated_net_capacity
       if self.rated_flow_external_static_pressure is not None:
@@ -41,6 +51,10 @@ class OperatingConditions:
       self.volumetric_airflow = self.mass_airflow/self.indoor.get_rho()
       self.standard_volumetric_airflow = self.mass_airflow/STANDARD_CONDITIONS.get_rho()
       self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow/self.rated_net_capacity
+
+  def set_new_fan_speed(self, fan_speed, airflow):
+    self.fan_speed = fan_speed
+    self.set_standard_airflow(airflow)
 
 class CoolingConditions(OperatingConditions):
   def __init__(self,outdoor=PsychState(drybulb=fr_u(95.0,"°F"),wetbulb=fr_u(75.0,"°F")),

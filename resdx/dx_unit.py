@@ -83,7 +83,7 @@ class DXUnit:
 
   standard_design_heating_requirements = [(fr_u(5000,"Btu/hr")+i*fr_u(5000,"Btu/hr")) for i in range(0,8)] + [(fr_u(50000,"Btu/hr")+i*fr_u(10000,"Btu/hr")) for i in range(0,9)]
 
-  def __init__(self,model = RESNETDXModel(),
+  def __init__(self,model=None,
                     # defaults of None are defaulted within this function based on other argument values
                     number_of_input_stages=None,
                     # Cooling (rating = AHRI A conditions)
@@ -100,7 +100,7 @@ class DXUnit:
                     c_d_heating = None,
                     heating_off_temperature = fr_u(0.0,"°F"),
                     heating_on_temperature = None, # default to heating_off_temperature
-                    defrost = Defrost(),
+                    defrost=None,
                     # Fan
                     fan = None,
                     heating_fan_speed = None,  # Map of cooling compressor speed to fan speed setting
@@ -124,13 +124,22 @@ class DXUnit:
     # Initialize direct values
     self.kwargs = kwargs
 
-    self.model = model
+    if model is None:
+      self.model = RESNETDXModel()
+    else:
+      self.model = model
+
     self.model.set_system(self)
 
     self.input_seer = input_seer
     self.input_hspf = input_hspf
     self.cycling_method = cycling_method
-    self.defrost = defrost
+
+    if defrost is None:
+      self.defrost = Defrost()
+    else:
+      self.defrost = defrost
+
     self.rating_standard = rating_standard
     self.heating_off_temperature = heating_off_temperature
     self.refrigerant_charge_deviation = refrigerant_charge_deviation
@@ -159,7 +168,10 @@ class DXUnit:
     else:
       self.intermediate_speed = intermediate_speed
 
-    self.low_speed = self.number_of_input_stages - 1
+    if self.number_of_input_stages > 1:
+      self.low_speed = self.number_of_input_stages - 1
+    else:
+      self.low_speed = None
 
     if staging_type is None:
       self.staging_type = StagingType(min(self.number_of_input_stages,3))
@@ -265,6 +277,52 @@ class DXUnit:
       self.rated_gross_shr_cooling += [self.model.gross_shr(self.A_low_cond)]
       self.calculate_rated_bypass_factor(self.A_low_cond)
 
+  def reset_rated_flow_rates(self, rated_cooling_airflow_per_rated_net_capacity, rated_heating_airflow_per_rated_net_capacity):
+    # Make new fan settings
+    if type(rated_cooling_airflow_per_rated_net_capacity) is not list:
+      rated_cooling_airflow_per_rated_net_capacity = [rated_cooling_airflow_per_rated_net_capacity]*self.number_of_input_stages
+
+    if type(rated_heating_airflow_per_rated_net_capacity) is not list:
+      rated_heating_airflow_per_rated_net_capacity = [rated_heating_airflow_per_rated_net_capacity]*self.number_of_input_stages
+
+    full_airflow = self.rated_net_total_cooling_capacity[0]*rated_cooling_airflow_per_rated_net_capacity[0]
+    for i, airflow_per_capacity in enumerate(rated_cooling_airflow_per_rated_net_capacity):
+      airflow = self.rated_net_total_cooling_capacity[i]*airflow_per_capacity
+      pressure = self.calculate_rated_pressure(airflow, full_airflow)
+      self.fan.add_speed(airflow, pressure)
+      new_fan_speed = self.fan.number_of_speeds - 1
+
+      if i == self.full_load_speed:
+        self.A_full_cond.set_new_fan_speed(new_fan_speed, airflow)
+        self.B_full_cond.set_new_fan_speed(new_fan_speed, airflow)
+      if i == self.intermediate_speed:
+        self.A_int_cond.set_new_fan_speed(new_fan_speed, airflow)
+        self.E_int_cond.set_new_fan_speed(new_fan_speed, airflow)
+      if i == self.low_speed:
+        self.A_low_cond.set_new_fan_speed(new_fan_speed, airflow)
+        self.B_low_cond.set_new_fan_speed(new_fan_speed, airflow)
+        self.F_low_cond.set_new_fan_speed(new_fan_speed, airflow)
+
+    full_airflow = self.rated_net_heating_capacity[0]*rated_heating_airflow_per_rated_net_capacity[0]
+    for i, airflow_per_capacity in enumerate(rated_heating_airflow_per_rated_net_capacity):
+      airflow = self.rated_net_heating_capacity[i]*airflow_per_capacity
+      pressure = self.calculate_rated_pressure(airflow, full_airflow)
+      self.fan.add_speed(airflow, pressure)
+      new_fan_speed = self.fan.number_of_speeds - 1
+
+      if i == self.full_load_speed:
+        self.H1_full_cond.set_new_fan_speed(new_fan_speed, airflow)
+        self.H2_full_cond.set_new_fan_speed(new_fan_speed, airflow)
+        self.H3_full_cond.set_new_fan_speed(new_fan_speed, airflow)
+        self.H4_full_cond.set_new_fan_speed(new_fan_speed, airflow)
+      if i == self.intermediate_speed:
+        self.H2_int_cond.set_new_fan_speed(new_fan_speed, airflow)
+      if i == self.low_speed:
+        self.H0_low_cond.set_new_fan_speed(new_fan_speed, airflow)
+        self.H1_low_cond.set_new_fan_speed(new_fan_speed, airflow)
+        self.H2_low_cond.set_new_fan_speed(new_fan_speed, airflow)
+        self.H3_low_cond.set_new_fan_speed(new_fan_speed, airflow)
+
   def check_array_length(self, array):
     if (len(array) != self.number_of_input_stages):
       raise Exception(f'Unexpected array length ({len(array)}). Number of speeds is {self.number_of_input_stages}. Array items are {array}.')
@@ -312,13 +370,15 @@ class DXUnit:
     if condition_type == CoolingConditions:
       rated_net_capacity = self.rated_net_total_cooling_capacity[compressor_speed]
       rated_airflow = self.rated_cooling_airflow[compressor_speed]
+      rated_full_airflow = self.rated_cooling_airflow[0]
       rated_fan_speed = self.rated_cooling_fan_speed[compressor_speed]
     else: # if condition_type == HeatingConditions:
       rated_net_capacity = self.rated_net_heating_capacity[compressor_speed]
       rated_airflow = self.rated_heating_airflow[compressor_speed]
+      rated_full_airflow = self.rated_heating_airflow[0]
       rated_fan_speed = self.rated_heating_fan_speed[compressor_speed]
 
-    rated_flow_external_static_pressure = self.calculate_rated_pressure(rated_airflow)
+    rated_flow_external_static_pressure = self.calculate_rated_pressure(rated_airflow, rated_full_airflow)
     condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed, fan_speed=rated_fan_speed, rated_flow_external_static_pressure=rated_flow_external_static_pressure)
     condition.set_rated_airflow(rated_airflow, rated_net_capacity)
     return condition
@@ -336,8 +396,8 @@ class DXUnit:
       # TODO: Add exceptional system types
       return fr_u(0.5, "in_H2O")
 
-  def calculate_rated_pressure(self, rated_airflow):
-    return self.rated_full_flow_external_static_pressure*(rated_airflow/self.rated_cooling_airflow[0])**2
+  def calculate_rated_pressure(self, rated_airflow, rated_full_airflow):
+    return self.rated_full_flow_external_static_pressure*(rated_airflow/rated_full_airflow)**2
 
   def set_rating_standard(self, rating_standard):
     self.rating_standard = rating_standard
