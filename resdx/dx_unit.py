@@ -102,7 +102,7 @@ class DXUnit:
 
   cooling_distribution = CoolingDistribution()
 
-  standard_design_heating_requirements = [(fr_u(5000,"Btu/hr")+i*fr_u(5000,"Btu/hr")) for i in range(0,8)] + [(fr_u(50000,"Btu/hr")+i*fr_u(10000,"Btu/hr")) for i in range(0,9)]
+  standard_design_heating_requirements = [(fr_u(5000,"Btu/h")+i*fr_u(5000,"Btu/h")) for i in range(0,8)] + [(fr_u(50000,"Btu/h")+i*fr_u(10000,"Btu/h")) for i in range(0,9)]
 
   def __init__(self,model=None,
                     # defaults of None are defaulted within this function based on other argument values
@@ -413,9 +413,9 @@ class DXUnit:
   def get_rated_full_flow_rated_pressure(self):
     if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
       # TODO: Add Small-duct, High-velocity Systems
-      if self.rated_net_total_cooling_capacity[0] <= fr_u(29000, "Btu/hr"):
+      if self.rated_net_total_cooling_capacity[0] <= fr_u(29000, "Btu/h"):
         return fr_u(0.1, "in_H2O")
-      elif self.rated_net_total_cooling_capacity[0] <= fr_u(43000, "Btu/hr"):
+      elif self.rated_net_total_cooling_capacity[0] <= fr_u(43000, "Btu/h"):
         return fr_u(0.15, "in_H2O")
       else:
         return fr_u(0.2, "in_H2O")
@@ -895,7 +895,7 @@ class DXUnit:
 
     # RS0004 DX Coil
 
-    coil_capacity = to_u(self.gross_total_cooling_capacity(),'kBtu/hr')
+    coil_capacity = to_u(self.gross_total_cooling_capacity(),'kBtu/h')
     coil_cop = self.gross_cooling_cop()
     coil_shr = self.gross_shr()
 
@@ -903,7 +903,7 @@ class DXUnit:
       "data_model": "ASHRAE_205",
       "schema": "RS0004",
       "schema_version": "1.0.0",
-      "description": f"{coil_capacity:.1f} kBtu/hr, {coil_cop:.2f} COP, {coil_shr:.2f} SHR cooling coil",
+      "description": f"{coil_capacity:.1f} kBtu/h, {coil_cop:.2f} COP, {coil_shr:.2f} SHR cooling coil",
       "id": unique_id,
       "data_timestamp": f"{timestamp}Z",
       "data_version": 1,

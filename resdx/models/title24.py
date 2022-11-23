@@ -59,9 +59,9 @@ class Title24DXModel(DXModel):
   @staticmethod
   def fan_efficacy_rated(flow_per_capacity, motor_type=MotorType.PSC):
     if motor_type == Title24DXModel.MotorType.PSC:
-      power_per_capacity = fr_u(500,'(Btu/hr)/ton_ref')
+      power_per_capacity = fr_u(500,'(Btu/h)/ton_ref')
     else:
-      power_per_capacity = fr_u(283,'(Btu/hr)/ton_ref')
+      power_per_capacity = fr_u(283,'(Btu/h)/ton_ref')
     return power_per_capacity/flow_per_capacity
 
   def gross_total_cooling_capacity(self, conditions):

@@ -55,7 +55,7 @@ class RESNETDXModel(DXModel):
       self.system.rated_net_total_cooling_capacity = [rated_net_total_cooling_capacity]
 
     ## Heating
-    rated_net_heating_capacity = self.set_default(rated_net_heating_capacity, self.system.rated_net_total_cooling_capacity[0]*0.98 + fr_u(180.,"Btu/hr")) # From Title24
+    rated_net_heating_capacity = self.set_default(rated_net_heating_capacity, self.system.rated_net_total_cooling_capacity[0]*0.98 + fr_u(180.,"Btu/h")) # From Title24
     if type(rated_net_heating_capacity) is list:
       self.system.rated_net_heating_capacity = rated_net_heating_capacity
     else:

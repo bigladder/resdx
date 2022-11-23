@@ -13,7 +13,7 @@ dx_unit = resdx.DXUnit(number_of_input_stages=2, rated_gross_cooling_cop=cop_c, 
 
 size = resdx.to_u(dx_unit.rated_net_total_cooling_capacity[0],'ton_ref')
 
-dx_unit.metadata.description = f"{dx_unit.number_of_input_stages} speed, {size:.1f} ton, {seer2:.1f} SEER2 Air Conditioner"
+dx_unit.metadata.description = f"{dx_unit.number_of_input_stages} speed, {size:.1f} ton, {seer2:.1f} SEER2 air conditioner"
 
 representation = dx_unit.generate_205_representation()
 

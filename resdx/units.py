@@ -1,5 +1,19 @@
+import importlib.resources as pkg_resources
 import pint # 0.15 or higher
-ureg = pint.UnitRegistry()
+
+# See https://github.com/hgrecco/pint/issues/719#issuecomment-998872301
+# Edit constants template to stop using h to represent planck_constant
+constants_template = pkg_resources.read_text(pint, 'constants_en.txt').replace("= h  ", "     ").replace(" h ", " planck_constant ")
+
+# Edit units template to use h to represent hour instead of planck_constant
+units_template = pkg_resources.read_text(pint, 'default_en.txt').replace("@import constants_en.txt", "").replace(" h ", " planck_constant ").replace("hour = 60 * minute = hr", "hour = 60 * minute = h = hr")
+
+# Join templates as iterable object
+full_template = constants_template.split("\n") + units_template.split("\n")
+
+# Set up UnitRegistry with abbreviated scientific format
+ureg = pint.UnitRegistry(full_template)
+ureg.default_format = "~P"  # short pretty
 
 ureg.define('cubic_feet_per_minute = cu_ft / min = cfm')
 ureg.define('in_H2O = inch_H2O_39F')

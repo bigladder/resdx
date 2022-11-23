@@ -106,29 +106,29 @@ def test_vchp_regression():
   cooling_data.append(
     resdx.VCHPDataPoint(
       drybulb=fr_u(95.0,"°F"),
-      capacities=[fr_u(13600,"Btu/hr"),fr_u(3100,"Btu/hr")],
+      capacities=[fr_u(13600,"Btu/h"),fr_u(3100,"Btu/h")],
       cops=[2.75,7.57]))
   cooling_data.append(
     resdx.VCHPDataPoint(
       drybulb=fr_u(82.0,"°F"),
-      capacities=[fr_u(15276,"Btu/hr"),fr_u(3437,"Btu/hr")],
+      capacities=[fr_u(15276,"Btu/h"),fr_u(3437,"Btu/h")],
       cops=[3.2,8.39]))
 
   heating_data = resdx.VCHPDataPoints()
   heating_data.append(
     resdx.VCHPDataPoint(
       drybulb=fr_u(47.0,"°F"),
-      capacities=[fr_u(19400,"Btu/hr"),fr_u(3100,"Btu/hr")],
+      capacities=[fr_u(19400,"Btu/h"),fr_u(3100,"Btu/h")],
       cops=[3.09,6.49]))
   heating_data.append(
     resdx.VCHPDataPoint(
       drybulb=fr_u(17.0,"°F"),
-      capacities=[fr_u(17600,"Btu/hr"),fr_u(2824,"Btu/hr")],
+      capacities=[fr_u(17600,"Btu/h"),fr_u(2824,"Btu/h")],
       cops=[2.62,5.52]))
   heating_data.append(
     resdx.VCHPDataPoint(
       drybulb=fr_u(5.0,"°F"),
-      capacities=[fr_u(16710,"Btu/hr"),fr_u(2671,"Btu/hr")],
+      capacities=[fr_u(16710,"Btu/h"),fr_u(2671,"Btu/h")],
       cops=[2.37,4.89]))
 
   vchp_unit = resdx.make_vchp_unit(cooling_data, heating_data)
