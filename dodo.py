@@ -23,6 +23,7 @@ def task_examples():
       (create_folder, [OUTPUT_PATH]),
       'python examples/model-comparison.py',
       'python examples/model-verification.py',
-      'python examples/inverse-calculations.py'],
+      'python examples/inverse-calculations.py',
+      'python examples/generate-205.py'],
     'clean': True
   }

@@ -1,25 +1,49 @@
-from .units import fr_u
+from .units import fr_u, to_u, convert
 from math import exp, log, inf
 from scipy import optimize # Used for finding system/fan curve intersection
+from numpy import linspace, array
+import uuid
+import datetime
+from random import Random
 
-class Fan:
+class FanMetadata:
   def __init__(
     self,
-    design_airflow,
-    design_external_static_pressure,
-    design_efficacy=fr_u(0.365,'W/cfm')): # AHRI 210/240 2017 default
-      self.design_external_static_pressure = design_external_static_pressure
-      self.design_efficacy = design_efficacy
-      self.number_of_speeds = 0
-      self.design_airflow = []
-      self.design_airflow_ratio = []
-      if type(design_airflow) is list:
-        for airflow in design_airflow:
-          self.add_speed(airflow)
-      else:
-        self.add_speed(design_airflow)
-      self.system_exponent = 0.5
-      self.system_curve_constant = self.design_external_static_pressure**(self.system_exponent)/self.design_airflow[0]
+    description="",
+    data_source="https://github.com/bigladder/resdx",
+    notes="",
+    uuid_seed=None
+    ):
+
+    self.description = description
+    self.data_source = data_source
+    self.notes = notes
+    self.uuid_seed = uuid_seed
+
+class Fan:
+  def __init__(self,
+               design_airflow,
+               design_external_static_pressure,
+               design_efficacy=fr_u(0.365,'W/cfm'), # AHRI 210/240 2017 default
+               metadata=None):
+    self.design_external_static_pressure = design_external_static_pressure
+    self.design_efficacy = design_efficacy
+    self.number_of_speeds = 0
+    self.design_airflow = []
+    self.design_airflow_ratio = []
+
+    if metadata is None:
+      self.metadata = FanMetadata()
+    else:
+      self.metadata = metadata
+
+    if type(design_airflow) is list:
+      for airflow in design_airflow:
+        self.add_speed(airflow)
+    else:
+      self.add_speed(design_airflow)
+    self.system_exponent = 0.5
+    self.system_curve_constant = self.design_external_static_pressure**(self.system_exponent)/self.design_airflow[0]
 
   def add_speed(self, airflow, external_static_pressure=None):
     self.design_airflow.append(airflow)
@@ -93,8 +117,139 @@ class Fan:
     self.add_speed(f, pressure_function(f))
     return f
 
-  def write_A205(self):
-    pass
+  def get_speed_order_map(self):
+    airflow_list = array([self.airflow(speed, 0.) for speed in range(self.number_of_speeds)])
+    return airflow_list.argsort()
+
+  def generate_205_representation(self):
+    timestamp = datetime.datetime.now().isoformat("T","minutes")
+    rnd = Random()
+    if self.metadata.uuid_seed is None:
+      self.metadata.uuid_seed = hash(self)
+    rnd.seed(self.metadata.uuid_seed)
+    unique_id = str(uuid.UUID(int=rnd.getrandbits(128), version=4))
+
+    speed_order_map = self.get_speed_order_map()
+    max_speed = speed_order_map[-1]
+
+    if type(self) is ECMFlowFan:
+      if self.maximum_power is inf:
+        # Assumption
+        max_power = self.power(speed_setting=max_speed,external_static_pressure=fr_u(1.2,"in_H2O"))*1.2
+      else:
+        max_power = self.maximum_power
+    else:
+      # Assumption
+      max_power = self.power(speed_setting=max_speed,external_static_pressure=0.)*1.2
+
+    # RS0005 Motor
+    rnd.seed(unique_id)
+
+    metadata_motor = {
+      "data_model": "ASHRAE_205",
+      "schema": "RS0005",
+      "schema_version": "1.0.0",
+      "description": f"Placeholder motor representation (performance characterized in parent RS0003 fan assembly)",
+      "id": str(uuid.UUID(int=rnd.getrandbits(128), version=4)),
+      "data_timestamp": f"{timestamp}Z",
+      "data_version": 1,
+      "data_source": self.metadata.data_source,
+      "disclaimer": "This data is synthetic and does not represent any physical products.",
+    }
+
+    performance_motor = {
+      "maximum_power": max_power,
+      "standby_power": 0.,
+      "number_of_poles": 6,
+    }
+
+    design_airflow = self.design_airflow[0] if type(self.design_airflow) is list else self.design_airflow
+    design_efficacy = self.design_efficacy[0] if type(self.design_efficacy) is list else self.design_efficacy
+    design_external_static_pressure = self.design_external_static_pressure[0] if type(self.design_external_static_pressure) is list else self.design_external_static_pressure
+
+    if len(self.metadata.description) == 0:
+      airflow_cfm = to_u(design_airflow,'cfm')
+      efficacy_w_cfm = to_u(design_efficacy,'W/cfm')
+      pressure_in_h2o = to_u(design_external_static_pressure,'in_H2O')
+      if type(self) is PSCFan:
+        fan_description = "Permanent Split Capacitor (PSC) fan"
+      elif type(self) is ECMFlowFan:
+        fan_description = f"Electronically Commutated Motor (ECM) fan"
+      else:
+        fan_description = "fan"
+      self.metadata.description = f"{airflow_cfm:.0f} cfm {fan_description} ({efficacy_w_cfm:.3f} W/cfm @ {pressure_in_h2o:.2f} in. H2O)"
+
+    metadata = {
+      "data_model": "ASHRAE_205",
+      "schema": "RS0003",
+      "schema_version": "1.0.0",
+      "description": self.metadata.description,
+      "id": unique_id,
+      "data_timestamp": f"{timestamp}Z",
+      "data_version": 1,
+      "data_source": self.metadata.data_source,
+      "disclaimer": "This data is synthetic and does not represent any physical products."
+    }
+
+    if len(self.metadata.notes) > 0:
+      metadata["notes"] = self.metadata.notes
+
+    # Create conditions
+    speed_number = list(range(1,self.number_of_speeds + 1))
+
+    if type(self) is PSCFan:
+      max_static_pressure = self.block_pressure[max_speed]
+    else:
+      max_static_pressure = fr_u(1.2, "in_H2O")
+    static_pressure_difference = linspace(fr_u(0., "in_H2O"), max_static_pressure, 6).tolist()
+
+    grid_variables = {
+      "speed_number": speed_number,
+      "static_pressure_difference": static_pressure_difference
+    }
+
+    standard_air_volumetric_flow_rate = []
+    shaft_power = []
+    impeller_rotational_speed = []
+
+    for speed in speed_number:
+      for esp in static_pressure_difference:
+        # Get speed number from ordered number
+        positional_speed_number = speed_order_map[speed - 1]
+        shaft_power.append(self.power(speed_setting=positional_speed_number,external_static_pressure=esp))
+        standard_air_volumetric_flow_rate.append(self.airflow(speed_setting=positional_speed_number,external_static_pressure=esp))
+        impeller_rotational_speed.append(to_u(self.rotational_speed(speed_setting=positional_speed_number,external_static_pressure=esp),"rps"))
+
+    performance_map = {
+      "grid_variables": grid_variables,
+      "lookup_variables": {
+        "shaft_power": shaft_power,
+        "standard_air_volumetric_flow_rate": standard_air_volumetric_flow_rate,
+        "impeller_rotational_speed": impeller_rotational_speed
+      }
+    }
+
+    performance = {
+      "nominal_standard_air_volumetric_flow_rate": self.airflow(speed_setting=max_speed,external_static_pressure=self.design_external_static_pressure),
+      "is_enclosed": True,
+      "assembly_components": [
+        {
+          "component_type": "COIL",
+          "wet_pressure_difference": 75. #Pa
+        }],
+        "heat_loss_fraction": 1.,
+        "maximum_impeller_rotational_speed": convert(1500.,"rpm","rps"),
+        "minimum_impeller_rotational_speed": 0.,
+        "operation_speed_control_type": "DISCRETE",
+        "installation_speed_control_type": "FIXED",
+        "motor_representation": {"metadata": metadata_motor, "performance": performance_motor},
+        "performance_map": performance_map
+
+    }
+
+    representation = {"metadata": metadata, "performance": performance}
+
+    return representation
 
 class ConstantEfficacyFan(Fan):
   def __init__(self, design_airflow, design_external_static_pressure, design_efficacy=fr_u(0.365, 'W/cfm')):

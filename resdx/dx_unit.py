@@ -2,12 +2,17 @@ from enum import Enum
 import math
 from scipy import optimize
 
-from .psychrometrics import PsychState, psychrolib
+from .psychrometrics import PsychState, psychrolib, STANDARD_CONDITIONS
 from .conditions import HeatingConditions, CoolingConditions
 from .defrost import Defrost, DefrostControl
 from .units import fr_u, to_u
-from .util import find_nearest
+from .util import find_nearest, limit_check
 from .models import RESNETDXModel
+from numpy import linspace
+import uuid
+import datetime
+from random import Random
+
 
 def interpolate(f, cond_1, cond_2, x):
   return f(cond_1) + (f(cond_2) - f(cond_1))/(cond_2.outdoor.db - cond_1.outdoor.db)*(x - cond_1.outdoor.db)
@@ -58,6 +63,22 @@ class CoolingDistribution:
 
   def __init__(self):
     self.number_of_bins = len(self.fractional_hours)
+
+class DXUnitMetadata:
+  def __init__(
+    self,
+    description="",
+    data_source="https://github.com/bigladder/resdx",
+    notes="",
+    compressor_type="",
+    uuid_seed=None
+    ):
+
+    self.description = description
+    self.data_source = data_source
+    self.notes = notes
+    self.compressor_type = compressor_type
+    self.uuid_seed = uuid_seed
 
 class DXUnit:
 
@@ -119,6 +140,7 @@ class DXUnit:
                     # Used for comparisons and to inform some defaults
                     input_seer = None,
                     input_hspf = None,
+                    metadata = None,
                     **kwargs):  # Additional inputs used for specific models
 
     # Initialize direct values
@@ -128,6 +150,11 @@ class DXUnit:
       self.model = RESNETDXModel()
     else:
       self.model = model
+
+    if metadata is None:
+      self.metadata = DXUnitMetadata()
+    else:
+      self.metadata = metadata
 
     self.model.set_system(self)
 
@@ -858,6 +885,135 @@ class DXUnit:
       print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions)}")
       print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")
 
-  def write_A205(self):
-    '''TODO: Write ASHRAE 205 file!!!'''
-    return
+  def generate_205_representation(self):
+    timestamp = datetime.datetime.now().isoformat("T","minutes")
+    rnd = Random()
+    if self.metadata.uuid_seed is None:
+      self.metadata.uuid_seed = hash(self)
+    rnd.seed(self.metadata.uuid_seed)
+    unique_id = str(uuid.UUID(int=rnd.getrandbits(128), version=4))
+
+    # RS0004 DX Coil
+
+    coil_capacity = to_u(self.gross_total_cooling_capacity(),'kBtu/h')
+    coil_cop = self.gross_cooling_cop()
+    coil_shr = self.gross_shr()
+
+    metadata_dx = {
+      "data_model": "ASHRAE_205",
+      "schema": "RS0004",
+      "schema_version": "1.0.0",
+      "description": f"{coil_capacity:.0f} kBtu/h, {coil_cop:.2f} COP, {coil_shr:.2f} SHR cooling coil",
+      "id": unique_id,
+      "data_timestamp": f"{timestamp}Z",
+      "data_version": 1,
+      "data_source": self.metadata.data_source,
+      "disclaimer": "This data is synthetic and does not represent any physical products.",
+    }
+
+    #if self.metadata.compressor_type is not None:
+    #  description_dx = {
+    #    "product_information"
+    #  }
+
+    # Create conditions
+    number_of_points = 4
+    outdoor_coil_entering_dry_bulb_temperatures = linspace(fr_u(55., "°F"), fr_u(125., "°F"), number_of_points).tolist()
+    indoor_coil_entering_relative_humidities = linspace(0., 1., number_of_points).tolist()
+    indoor_coil_entering_dry_bulb_temperatures = linspace(fr_u(65., "°F"), fr_u(90., "°F"), number_of_points).tolist()
+    indoor_coil_air_mass_flow_rates = linspace(
+      fr_u(280., "cfm/ton_ref")*self.rated_net_total_cooling_capacity[-1]*STANDARD_CONDITIONS.get_rho(),
+      fr_u(500., "cfm/ton_ref")*self.rated_net_total_cooling_capacity[0]*STANDARD_CONDITIONS.get_rho(),
+      number_of_points).tolist()
+    compressor_sequence_numbers = list(range(1,self.number_of_input_stages + 1))
+    ambient_absolute_air_pressures = linspace(fr_u(57226.508,"Pa"), fr_u(106868.78,"Pa"), number_of_points).tolist() # Corresponds to highest and lowest populated elevations
+
+    grid_variables = {
+      "outdoor_coil_entering_dry_bulb_temperature": outdoor_coil_entering_dry_bulb_temperatures,
+      "indoor_coil_entering_relative_humidity": indoor_coil_entering_relative_humidities,
+      "indoor_coil_entering_dry_bulb_temperature": indoor_coil_entering_dry_bulb_temperatures,
+      "indoor_coil_air_mass_flow_rate": indoor_coil_air_mass_flow_rates,
+      "compressor_sequence_number": compressor_sequence_numbers,
+      "ambient_absolute_air_pressure": ambient_absolute_air_pressures
+    }
+
+    gross_total_capacities = []
+    gross_sensible_capacities = []
+    gross_powers = []
+
+    for tdb_o in outdoor_coil_entering_dry_bulb_temperatures:
+      for rh_o in indoor_coil_entering_relative_humidities:
+        for tdb_i in indoor_coil_entering_dry_bulb_temperatures:
+          for m_dot in indoor_coil_air_mass_flow_rates:
+            for speed in [self.number_of_input_stages - n for n in compressor_sequence_numbers]:
+              for p in ambient_absolute_air_pressures:
+                conditions = self.make_condition(CoolingConditions,
+                  outdoor=PsychState(drybulb=tdb_o, rel_hum=0.4, pressure=p),
+                  indoor=PsychState(drybulb=tdb_i, rel_hum=rh_o, pressure=p),
+                  compressor_speed=speed)
+                conditions.set_mass_airflow(m_dot)
+
+                gross_total_capacities.append(self.gross_total_cooling_capacity(conditions))
+                gross_sensible_capacities.append(self.gross_sensible_cooling_capacity(conditions))
+                gross_powers.append(self.gross_cooling_power(conditions))
+
+    performance_map_cooling = {
+      "grid_variables": grid_variables,
+      "lookup_variables": {
+        "gross_total_capacity": gross_total_capacities,
+        "gross_sensible_capacity": gross_sensible_capacities,
+        "gross_power": gross_powers
+      }
+    }
+
+
+    performance_dx = {
+      "compressor_speed_control_type": "DISCRETE" if self.number_of_input_stages < 3 else "CONTINUOUS",
+      "cycling_degradation_coefficient": self.c_d_cooling,
+      "performance_map_cooling": performance_map_cooling,
+      "performance_map_standby": {
+        "grid_variables": {
+          "outdoor_coil_environment_dry_bulb_temperature": [fr_u(20.0, "°C")],
+        },
+        "lookup_variables": {
+          "gross_power": [0.], # TODO: Add crankcase power
+        }
+      }
+    }
+
+    representation_dx = {"metadata": metadata_dx, "performance": performance_dx}
+
+    # RS0003 Fan Assembly
+    representation_fan = self.fan.generate_205_representation()
+
+    # RS0002 Unitary
+    uuid_seed_rs0002 = hash((unique_id,representation_fan["metadata"]["id"]))
+    rnd.seed(uuid_seed_rs0002)
+    unique_id_rs0002 = str(uuid.UUID(int=rnd.getrandbits(128), version=4))
+
+    metadata = {
+      "data_model": "ASHRAE_205",
+      "schema": "RS0002",
+      "schema_version": "1.0.0",
+      "description": self.metadata.description,
+      "id": unique_id_rs0002,
+      "data_timestamp": f"{timestamp}Z",
+      "data_version": 1,
+      "data_source": self.metadata.data_source,
+      "disclaimer": "This data is synthetic and does not represent any physical products."
+    }
+
+    if len(self.metadata.notes) > 0:
+      metadata["notes"] = self.metadata.notes
+
+    performance = {
+      "standby_power": 0.,
+      "indoor_fan_representation": representation_fan,
+      "fan_position": "DRAW_THROUGH",
+      "dx_system_representation": representation_dx
+    }
+
+
+    representation = {"metadata": metadata, "performance": performance}
+
+    return representation
