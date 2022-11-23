@@ -895,7 +895,7 @@ class DXUnit:
 
     # RS0004 DX Coil
 
-    coil_capacity = to_u(self.gross_total_cooling_capacity(),'kBtu/h')
+    coil_capacity = to_u(self.gross_total_cooling_capacity(),'kBtu/hr')
     coil_cop = self.gross_cooling_cop()
     coil_shr = self.gross_shr()
 
@@ -903,7 +903,7 @@ class DXUnit:
       "data_model": "ASHRAE_205",
       "schema": "RS0004",
       "schema_version": "1.0.0",
-      "description": f"{coil_capacity:.0f} kBtu/h, {coil_cop:.2f} COP, {coil_shr:.2f} SHR cooling coil",
+      "description": f"{coil_capacity:.1f} kBtu/hr, {coil_cop:.2f} COP, {coil_shr:.2f} SHR cooling coil",
       "id": unique_id,
       "data_timestamp": f"{timestamp}Z",
       "data_version": 1,

@@ -11,7 +11,7 @@ cop_c, solution_c = optimize.newton(lambda x : resdx.DXUnit(number_of_input_stag
 cop_h, solution_h = optimize.newton(lambda x : resdx.DXUnit(number_of_input_stages=2, rated_gross_heating_cop=x, input_hspf=hspf2, rating_standard=resdx.AHRIVersion.AHRI_210_240_2023).hspf() - hspf2, hspf2/2., full_output = True)
 dx_unit = resdx.DXUnit(number_of_input_stages=2, rated_gross_cooling_cop=cop_c, rated_gross_heating_cop=cop_h, input_seer=seer2, input_hspf=hspf2)
 
-size = resdx.to_u(dx_unit.rated_gross_total_cooling_capacity[0],'ton_ref')
+size = resdx.to_u(dx_unit.rated_net_total_cooling_capacity[0],'ton_ref')
 
 dx_unit.metadata.description = f"{dx_unit.number_of_input_stages} speed, {size:.1f} ton, {seer2:.1f} SEER2 Air Conditioner"
 

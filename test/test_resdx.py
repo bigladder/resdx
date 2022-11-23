@@ -91,6 +91,7 @@ def test_2_speed_regression():
 
   dx_unit_2_speed.print_heating_info()
   dx_unit_2_speed.print_heating_info(region=2)
+  assert dx_unit_2_speed.gross_total_cooling_capacity() == approx(dx_unit_2_speed.rated_gross_total_cooling_capacity[0],0.01)
   assert dx_unit_2_speed.seer() == approx(seer_2, 0.01)
   assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.328, 0.001)
   assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.681, 0.001)
