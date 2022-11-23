@@ -2,8 +2,6 @@
 import resdx
 import numpy as np
 from scipy import optimize
-from scipy.optimize import fsolve
-import random
 import matplotlib.pyplot as plt
 import seaborn as sns
 

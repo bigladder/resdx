@@ -407,7 +407,7 @@ class DXUnit:
 
     rated_flow_external_static_pressure = self.calculate_rated_pressure(rated_airflow, rated_full_airflow)
     condition = condition_type(indoor=indoor, outdoor=outdoor, compressor_speed=compressor_speed, fan_speed=rated_fan_speed, rated_flow_external_static_pressure=rated_flow_external_static_pressure)
-    condition.set_rated_airflow(rated_airflow, rated_net_capacity)
+    condition.set_rated_volumetric_airflow(rated_airflow, rated_net_capacity)
     return condition
 
   def get_rated_full_flow_rated_pressure(self):
@@ -443,20 +443,20 @@ class DXUnit:
   def gross_total_cooling_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.model.gross_total_cooling_capacity(conditions)*self.model.gross_total_cooling_capacity_charge_factor(conditions)
+    return limit_check(self.model.gross_total_cooling_capacity(conditions)*self.model.gross_total_cooling_capacity_charge_factor(conditions),min=0.)
 
   def gross_sensible_cooling_capacity(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.model.gross_sensible_cooling_capacity(conditions)
+    return limit_check(self.model.gross_sensible_cooling_capacity(conditions),min=0.)
 
   def gross_shr(self, conditions=None):
-    return self.gross_sensible_cooling_capacity(conditions)/self.gross_total_cooling_capacity(conditions)
+    return limit_check(self.gross_sensible_cooling_capacity(conditions)/self.gross_total_cooling_capacity(conditions),min=0.,max=1.)
 
   def gross_cooling_power(self, conditions=None):
     if conditions is None:
       conditions = self.A_full_cond
-    return self.model.gross_cooling_power(conditions)*self.model.gross_cooling_power_charge_factor(conditions)
+    return limit_check(self.model.gross_cooling_power(conditions)*self.model.gross_cooling_power_charge_factor(conditions),min=0.)
 
   def net_total_cooling_capacity(self, conditions=None):
     return self.gross_total_cooling_capacity(conditions) - self.cooling_fan_heat(conditions)

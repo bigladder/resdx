@@ -18,13 +18,13 @@ class NRELDXModel(DXModel):
 
   def gross_cooling_power(self, conditions):
     '''From Cutler et al.'''
-    T_iwb = to_u(conditions.indoor.get_wb(),"°F") # Cutler curves use °F
-    T_odb = to_u(conditions.outdoor.db,"°F") # Cutler curves use °F
+    T_iwb = bracket(to_u(conditions.indoor.get_wb(),"°F"),min=57.,max=72.) # Cutler curves use °F
+    T_odb = bracket(to_u(conditions.outdoor.db,"°F"),min=75.) # Cutler curves use °F
     eir_FT = calc_biquad([-3.437356399, 0.136656369, -0.001049231, -0.0079378, 0.000185435, -0.0001441], T_iwb, T_odb)
     eir_FF = calc_quad([1.143487507, -0.13943972, -0.004047787], conditions.mass_airflow_ratio)
     cap_FT = calc_biquad([3.68637657, -0.098352478, 0.000956357, 0.005838141, -0.0000127, -0.000131702], T_iwb, T_odb)
     cap_FF = calc_quad([0.718664047, 0.41797409, -0.136638137], conditions.mass_airflow_ratio)
-    return eir_FF*cap_FF*eir_FT*cap_FT*self.system.rated_gross_total_cooling_capacity[conditions.compressor_speed]/self.system.rated_gross_cooling_cop[conditions.compressor_speed]
+    return limit_check(eir_FF*cap_FF*eir_FT*cap_FT*self.system.rated_gross_total_cooling_capacity[conditions.compressor_speed]/self.system.rated_gross_cooling_cop[conditions.compressor_speed],min=0.)
 
   def gross_total_cooling_capacity(self, conditions):
     '''From Cutler et al.'''
