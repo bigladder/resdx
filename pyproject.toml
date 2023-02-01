@@ -6,7 +6,7 @@ authors = ["Big Ladder Software"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-Pint = "^0.17"
+koozie = "^1.1.0"
 PsychroLib = "^2.5.0"
 matplotlib = "^3.3.4"
 scipy = "^1.6.3"

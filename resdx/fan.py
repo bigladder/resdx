@@ -1,4 +1,4 @@
-from .units import fr_u, to_u, convert
+from koozie import fr_u, to_u, convert
 from math import exp, log, inf
 from scipy import optimize # Used for finding system/fan curve intersection
 from numpy import linspace, array

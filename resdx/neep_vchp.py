@@ -3,7 +3,7 @@ import types
 
 from resdx.conditions import CoolingConditions, HeatingConditions
 from resdx.psychrometrics import PsychState
-from .units import fr_u
+from koozie import fr_u
 from .dx_unit import DXUnit
 from scipy import interpolate
 from .models import RESNETDXModel

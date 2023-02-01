@@ -1,4 +1,5 @@
 import resdx
+from koozie import fr_u
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -14,7 +15,6 @@ from pytest import approx
 
 
 DXUnit = resdx.DXUnit
-fr_u = resdx.units.fr_u
 PsychState = resdx.psychrometrics.PsychState
 HeatingConditions = resdx.dx_unit.HeatingConditions
 CoolingConditions = resdx.dx_unit.CoolingConditions

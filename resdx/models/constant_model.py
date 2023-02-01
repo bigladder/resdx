@@ -1,11 +1,3 @@
-from scipy import optimize
-
-from ..units import fr_u, to_u
-from ..util import calc_biquad, calc_quad
-from ..psychrometrics import psychrolib, PsychState
-from ..defrost import DefrostControl, DefrostStrategy
-from ..conditions import CoolingConditions
-
 from .base_model import DXModel
 
 class ConstantDXModel(DXModel):

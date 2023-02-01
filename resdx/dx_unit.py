@@ -5,7 +5,7 @@ from scipy import optimize
 from .psychrometrics import PsychState, psychrolib, STANDARD_CONDITIONS
 from .conditions import HeatingConditions, CoolingConditions
 from .defrost import Defrost, DefrostControl
-from .units import fr_u, to_u
+from koozie import fr_u, to_u
 from .util import find_nearest, limit_check
 from .models import RESNETDXModel
 from numpy import linspace

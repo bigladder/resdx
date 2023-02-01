@@ -1,5 +1,5 @@
 from .psychrometrics import PsychState, STANDARD_CONDITIONS, psychrolib
-from .units import fr_u
+from koozie import fr_u
 
 class OperatingConditions:
   def __init__(self, outdoor=STANDARD_CONDITIONS,

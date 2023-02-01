@@ -1,4 +1,4 @@
-from ..units import fr_u
+from koozie import fr_u
 from ..fan import ConstantEfficacyFan
 
 class DXModel:

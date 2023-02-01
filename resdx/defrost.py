@@ -1,7 +1,7 @@
 from enum import Enum
 import sys
 
-from .units import fr_u
+from koozie import fr_u
 
 # Defrost characterisitcs
 class DefrostControl(Enum):

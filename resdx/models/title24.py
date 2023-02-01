@@ -3,7 +3,7 @@ from scipy import optimize
 
 from resdx.fan import ConstantEfficacyFan
 
-from ..units import fr_u, to_u
+from koozie import fr_u, to_u
 from ..defrost import DefrostStrategy
 
 from .base_model import DXModel

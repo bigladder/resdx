@@ -1,7 +1,6 @@
 import resdx
 from pytest import approx
-
-fr_u = resdx.units.fr_u
+from koozie import fr_u
 
 def test_psc_fan():
 

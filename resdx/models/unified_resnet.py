@@ -2,8 +2,8 @@ from .base_model import DXModel
 from .nrel import NRELDXModel
 from .title24 import Title24DXModel
 from .henderson_defrost_model import HendersonDefrostModel
-from ..units import fr_u
-from ..fan import ConstantEfficacyFan, ECMFlowFan, PSCFan
+from koozie import fr_u
+from ..fan import ECMFlowFan, PSCFan
 
 class RESNETDXModel(DXModel):
 

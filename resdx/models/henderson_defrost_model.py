@@ -1,14 +1,8 @@
 import sys
 
-from scipy import optimize
-import numpy as np
 from scipy import interpolate
 
-from ..units import fr_u, to_u
-from ..util import calc_biquad, calc_quad
-from ..psychrometrics import psychrolib, PsychState
-from ..defrost import DefrostControl, DefrostStrategy
-from ..conditions import CoolingConditions
+from koozie import fr_u
 
 from .base_model import DXModel
 
