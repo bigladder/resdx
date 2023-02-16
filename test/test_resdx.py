@@ -133,15 +133,19 @@ def test_vchp_regression():
 
   vchp_unit = resdx.make_vchp_unit(cooling_data, heating_data)
   assert vchp_unit.net_total_cooling_capacity() == approx(vchp_unit.rated_net_total_cooling_capacity[0],0.01)
+  assert vchp_unit.net_cooling_cop() == approx(vchp_unit.rated_net_cooling_cop[0],0.01)
+
   vchp_unit.print_cooling_info()
 
+  assert vchp_unit.net_integrated_heating_capacity() == approx(vchp_unit.rated_net_heating_capacity[0],0.01)
+  assert vchp_unit.net_integrated_heating_cop() == approx(vchp_unit.rated_net_heating_cop[0],0.01)
   vchp_unit.print_heating_info()
   vchp_unit.print_heating_info(region=2)
 
   assert vchp_unit.seer() == approx(20.292, 0.01)
   assert vchp_unit.eer() == approx(9.38338, 0.01)
-  assert vchp_unit.hspf() == approx(20.03, 0.01)
-  assert vchp_unit.hspf(region=2) == approx(22.00, 0.01)
+  assert vchp_unit.hspf() == approx(13.21, 0.01)
+  assert vchp_unit.hspf(region=2) == approx(13.68, 0.01)
 
 
 def test_plot():

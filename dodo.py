@@ -24,6 +24,7 @@ def task_examples():
       'python examples/model-comparison.py',
       'python examples/model-verification.py',
       'python examples/inverse-calculations.py',
+      'python examples/neep-examples.py',
       'python examples/generate-205.py'],
     'clean': True
   }

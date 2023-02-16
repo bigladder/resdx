@@ -181,7 +181,7 @@ def make_vchp_unit(
 
     correction_factor = base_model.gross_steady_state_heating_capacity(single_speed_conditions) / base_model.gross_steady_state_heating_capacity(rated_conditions)
 
-    return correction_factor * gross_cooling_data.get_capacity[conditions.compressor_speed](conditions.outdoor.db)
+    return correction_factor * gross_heating_data.get_capacity[conditions.compressor_speed](conditions.outdoor.db)
 
   def new_gross_steady_state_heating_power(self, conditions):
     rated_conditions = self.system.make_condition(HeatingConditions,compressor_speed=0,outdoor=PsychState(drybulb=conditions.outdoor.db,rel_hum=0.4))
@@ -191,7 +191,7 @@ def make_vchp_unit(
 
     correction_factor = base_model.gross_steady_state_heating_power(single_speed_conditions) / base_model.gross_steady_state_heating_power(rated_conditions)
 
-    return correction_factor * gross_cooling_data.get_capacity[conditions.compressor_speed](conditions.outdoor.db) / gross_cooling_data.get_cop[conditions.compressor_speed](conditions.outdoor.db)
+    return correction_factor * gross_heating_data.get_capacity[conditions.compressor_speed](conditions.outdoor.db) / gross_heating_data.get_cop[conditions.compressor_speed](conditions.outdoor.db)
 
   new_model.gross_cooling_power = types.MethodType(new_gross_cooling_power, new_model)
   new_model.gross_total_cooling_capacity = types.MethodType(new_gross_total_cooling_capacity, new_model)
