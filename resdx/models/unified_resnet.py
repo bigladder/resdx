@@ -55,7 +55,7 @@ class RESNETDXModel(DXModel):
       self.system.rated_net_total_cooling_capacity = [rated_net_total_cooling_capacity]
 
     ## Heating
-    rated_net_heating_capacity = self.set_default(rated_net_heating_capacity, self.system.rated_net_total_cooling_capacity[0]*0.98 + fr_u(180.,"Btu/h")) # From Title24
+    rated_net_heating_capacity = self.set_heating_default(rated_net_heating_capacity, self.system.rated_net_total_cooling_capacity[0]*0.98 + fr_u(180.,"Btu/h")) # From Title24
     if type(rated_net_heating_capacity) is list:
       self.system.rated_net_heating_capacity = rated_net_heating_capacity
     else:
@@ -66,26 +66,26 @@ class RESNETDXModel(DXModel):
     self.system.rated_full_flow_external_static_pressure = self.system.get_rated_full_flow_rated_pressure()
 
     # Rated flow rates per net capacity
-    self.system.rated_cooling_airflow_per_rated_net_capacity = self.set_default(self.system.rated_cooling_airflow_per_rated_net_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
-    self.system.rated_heating_airflow_per_rated_net_capacity = self.set_default(self.system.rated_heating_airflow_per_rated_net_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_input_stages)
+    self.system.rated_cooling_airflow_per_rated_net_capacity = self.set_cooling_default(self.system.rated_cooling_airflow_per_rated_net_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_cooling_speeds)
+    self.system.rated_heating_airflow_per_rated_net_capacity = self.set_heating_default(self.system.rated_heating_airflow_per_rated_net_capacity, [fr_u(400.,"cfm/ton_ref")]*self.system.number_of_heating_speeds)
 
     if fan is not None:
       self.system.fan = fan
-      for i in range(self.system.number_of_input_stages):
+      for i in range(self.system.number_of_cooling_speeds):
         self.system.rated_cooling_airflow[i] = self.system.fan.airflow(self.system.rated_cooling_fan_speed[i])
         self.system.rated_cooling_fan_power[i] = self.system.fan.power(self.system.rated_cooling_fan_speed[i])
-      for i in range(self.system.number_of_input_stages):
+      for i in range(self.system.number_of_heating_speeds):
         self.system.rated_heating_airflow[i] = self.system.fan.airflow(self.system.rated_heating_fan_speed[i])
         self.system.rated_heating_fan_power[i] = self.system.fan.power(self.system.rated_heating_fan_speed[i])
     else:
-      self.system.cooling_fan_speed = [None]*self.system.number_of_input_stages
-      self.system.heating_fan_speed = [None]*self.system.number_of_input_stages
-      self.system.rated_cooling_fan_speed = [None]*self.system.number_of_input_stages
-      self.system.rated_heating_fan_speed = [None]*self.system.number_of_input_stages
+      self.system.cooling_fan_speed = [None]*self.system.number_of_cooling_speeds
+      self.system.heating_fan_speed = [None]*self.system.number_of_heating_speeds
+      self.system.rated_cooling_fan_speed = [None]*self.system.number_of_cooling_speeds
+      self.system.rated_heating_fan_speed = [None]*self.system.number_of_heating_speeds
 
       self.system.rated_cooling_airflow[0] = self.system.rated_net_total_cooling_capacity[0]*self.system.rated_cooling_airflow_per_rated_net_capacity[0]
       design_external_static_pressure = fr_u(0.5, "in_H2O")
-      if self.system.number_of_input_stages > 1:
+      if self.system.number_of_cooling_speeds > 1:
         self.system.fan = ECMFlowFan(self.system.rated_cooling_airflow[0], design_external_static_pressure, design_efficacy=fr_u(0.3, 'W/cfm'))
       else:
         self.system.fan = PSCFan(self.system.rated_cooling_airflow[0], design_external_static_pressure, design_efficacy=fr_u(0.365, 'W/cfm'))
@@ -136,9 +136,9 @@ class RESNETDXModel(DXModel):
 
 
     # setup lower speed net capacities if they aren't provided
-    if len(self.system.rated_net_total_cooling_capacity) < self.system.number_of_input_stages:
-      if self.system.number_of_input_stages == 2:
-        # Cooling
+    if len(self.system.rated_net_total_cooling_capacity) < self.system.number_of_cooling_speeds:
+      # Cooling
+      if self.system.number_of_cooling_speeds == 2:
         cooling_capacity_ratio = 0.72
         self.system.rated_cooling_fan_power[0] = self.system.fan.power(self.system.rated_cooling_fan_speed[0],self.system.rated_cooling_external_static_pressure[0])
         self.system.rated_gross_total_cooling_capacity[0] = self.system.rated_net_total_cooling_capacity[0] + self.system.rated_cooling_fan_power[0]
@@ -157,7 +157,8 @@ class RESNETDXModel(DXModel):
         self.system.rated_cooling_fan_power[1] = self.system.fan.power(self.system.rated_cooling_fan_speed[1],self.system.rated_cooling_external_static_pressure[1])
         self.system.rated_net_total_cooling_capacity.append(self.system.rated_gross_total_cooling_capacity[1] - self.system.rated_cooling_fan_power[1])
 
-        # Heating
+      # Heating
+      if self.system.number_of_heating_speeds == 2:
         heating_capacity_ratio = 0.72
         self.system.rated_heating_fan_power[0] = self.system.fan.power(self.system.rated_heating_fan_speed[0],self.system.rated_heating_external_static_pressure[0])
         self.system.rated_gross_heating_capacity[0] = self.system.rated_net_heating_capacity[0] - self.system.rated_heating_fan_power[0]
@@ -183,14 +184,14 @@ class RESNETDXModel(DXModel):
       default = 0.25
     else:
       default = RESNETDXModel.c_d(self.system.input_seer)
-    self.system.c_d_cooling = self.set_default(input, default)
+    self.system.c_d_cooling = self.set_cooling_default(input, default)
 
   def set_c_d_heating(self, input):
     if self.system.input_hspf is None:
       default = 0.25
     else:
       default = RESNETDXModel.c_d(RESNETDXModel.estimated_seer(self.system.input_hspf))
-    self.system.c_d_heating = self.set_default(input, default)
+    self.system.c_d_heating = self.set_heating_default(input, default)
 
   def set_rated_net_cooling_cop(self, input):
     NRELDXModel.set_rated_net_cooling_cop(self, input)

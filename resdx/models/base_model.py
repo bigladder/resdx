@@ -57,7 +57,7 @@ class DXModel:
     return 1.0
 
   # Default assumptions
-  def set_default(self, input, default):
+  def set_default(self, input, default, number_of_speeds):
     if input is None:
       return default
     else:
@@ -65,23 +65,29 @@ class DXModel:
         if type(input) is list:
           return input
         else:
-          return [input]*self.system.number_of_input_stages
+          return [input]*number_of_speeds
       else:
         return input
+
+  def set_cooling_default(self, input, default):
+    return self.set_default(input, default, self.system.number_of_cooling_speeds)
+
+  def set_heating_default(self, input, default):
+    return self.set_default(input, default, self.system.number_of_heating_speeds)
 
   def set_rated_net_total_cooling_capacity(self, input):
     # No default, but need to set to list (and default lower speeds)
     if type(input) is list:
       self.system.rated_net_total_cooling_capacity = input
     else:
-      self.system.rated_net_total_cooling_capacity = [input]*self.system.number_of_input_stages
+      self.system.rated_net_total_cooling_capacity = [input]*self.system.number_of_cooling_speeds
 
   def set_rated_net_heating_capacity(self, input):
-    input = self.set_default(input, self.system.rated_net_total_cooling_capacity[0])
+    input = self.set_heating_default(input, self.system.rated_net_total_cooling_capacity[0])
     if type(input) is list:
       self.system.rated_net_heating_capacity = input
     else:
-      self.system.rated_net_heating_capacity = [input]*self.system.number_of_input_stages
+      self.system.rated_net_heating_capacity = [input]*self.system.number_of_heating_speeds
 
   def set_fan(self, input):
     if input is not None:
@@ -121,47 +127,47 @@ class DXModel:
     self.set_fan(fan)
 
   def set_c_d_cooling(self, input):
-    self.system.c_d_cooling = self.set_default(input, 0.25)
+    self.system.c_d_cooling = self.set_cooling_default(input, 0.25)
 
   def set_c_d_heating(self, input):
-    self.system.c_d_heating = self.set_default(input, 0.25)
+    self.system.c_d_heating = self.set_heating_default(input, 0.25)
 
   def set_rated_net_cooling_cop(self, input):
     # No default, but need to set to list (and default lower speeds)
     if type(input) is list:
       self.system.rated_net_cooling_cop = input
     else:
-      self.system.rated_net_cooling_cop = [input]*self.system.number_of_input_stages
-    self.system.rated_net_cooling_power = [self.system.rated_net_total_cooling_capacity[i]/self.system.rated_net_cooling_cop[i] for i in range(self.system.number_of_input_stages)]
-    self.system.rated_gross_cooling_power = [self.system.rated_net_cooling_power[i] - self.system.rated_cooling_fan_power[i] for i in range(self.system.number_of_input_stages)]
-    self.system.rated_gross_cooling_cop = [self.system.rated_gross_total_cooling_capacity[i]/self.system.rated_gross_cooling_power[i] for i in range(self.system.number_of_input_stages)]
+      self.system.rated_net_cooling_cop = [input]*self.system.number_of_cooling_speeds
+    self.system.rated_net_cooling_power = [self.system.rated_net_total_cooling_capacity[i]/self.system.rated_net_cooling_cop[i] for i in range(self.system.number_of_cooling_speeds)]
+    self.system.rated_gross_cooling_power = [self.system.rated_net_cooling_power[i] - self.system.rated_cooling_fan_power[i] for i in range(self.system.number_of_cooling_speeds)]
+    self.system.rated_gross_cooling_cop = [self.system.rated_gross_total_cooling_capacity[i]/self.system.rated_gross_cooling_power[i] for i in range(self.system.number_of_cooling_speeds)]
 
   def set_rated_gross_cooling_cop(self, input):
     # No default, but need to set to list (and default lower speeds)
     if type(input) is list:
       self.system.rated_gross_cooling_cop = input
     else:
-      self.system.rated_gross_cooling_cop = [input]*self.system.number_of_input_stages
-      self.system.rated_gross_cooling_power = [self.system.rated_gross_total_cooling_capacity[i]/self.system.rated_gross_cooling_cop[i] for i in range(self.system.number_of_input_stages)]
-      self.system.rated_net_cooling_power = [self.system.rated_gross_cooling_power[i] + self.system.rated_cooling_fan_power[i] for i in range(self.system.number_of_input_stages)]
-      self.system.rated_net_cooling_cop = [self.system.rated_net_total_cooling_capacity[i]/self.system.rated_net_cooling_power[i] for i in range(self.system.number_of_input_stages)]
+      self.system.rated_gross_cooling_cop = [input]*self.system.number_of_cooling_speeds
+      self.system.rated_gross_cooling_power = [self.system.rated_gross_total_cooling_capacity[i]/self.system.rated_gross_cooling_cop[i] for i in range(self.system.number_of_cooling_speeds)]
+      self.system.rated_net_cooling_power = [self.system.rated_gross_cooling_power[i] + self.system.rated_cooling_fan_power[i] for i in range(self.system.number_of_cooling_speeds)]
+      self.system.rated_net_cooling_cop = [self.system.rated_net_total_cooling_capacity[i]/self.system.rated_net_cooling_power[i] for i in range(self.system.number_of_cooling_speeds)]
 
   def set_rated_net_heating_cop(self, input):
     # No default, but need to set to list (and default lower speeds)
     if type(input) is list:
       self.system.rated_net_heating_cop = input
     else:
-      self.system.rated_net_heating_cop = [input]*self.system.number_of_input_stages
-    self.system.rated_net_heating_power = [self.system.rated_net_heating_capacity[i]/self.system.rated_net_heating_cop[i] for i in range(self.system.number_of_input_stages)]
-    self.system.rated_gross_heating_power = [self.system.rated_net_heating_power[i] - self.system.rated_heating_fan_power[i] for i in range(self.system.number_of_input_stages)]
-    self.system.rated_gross_heating_cop = [self.system.rated_gross_heating_capacity[i]/self.system.rated_gross_heating_power[i] for i in range(self.system.number_of_input_stages)]
+      self.system.rated_net_heating_cop = [input]*self.system.number_of_heating_speeds
+    self.system.rated_net_heating_power = [self.system.rated_net_heating_capacity[i]/self.system.rated_net_heating_cop[i] for i in range(self.system.number_of_heating_speeds)]
+    self.system.rated_gross_heating_power = [self.system.rated_net_heating_power[i] - self.system.rated_heating_fan_power[i] for i in range(self.system.number_of_heating_speeds)]
+    self.system.rated_gross_heating_cop = [self.system.rated_gross_heating_capacity[i]/self.system.rated_gross_heating_power[i] for i in range(self.system.number_of_heating_speeds)]
 
   def set_rated_gross_heating_cop(self, input):
     # No default, but need to set to list (and default lower speeds)
     if type(input) is list:
       self.system.rated_gross_heating_cop = input
     else:
-      self.system.rated_gross_heating_cop = [input]*self.system.number_of_input_stages
-      self.system.rated_gross_heating_power = [self.system.rated_gross_heating_capacity[i]/self.system.rated_gross_heating_cop[i] for i in range(self.system.number_of_input_stages)]
-      self.system.rated_net_heating_power = [self.system.rated_gross_heating_power[i] + self.system.rated_heating_fan_power[i] for i in range(self.system.number_of_input_stages)]
-      self.system.rated_net_heating_cop = [self.system.rated_net_heating_capacity[i]/self.system.rated_net_heating_power[i] for i in range(self.system.number_of_input_stages)]
+      self.system.rated_gross_heating_cop = [input]*self.system.number_of_heating_speeds
+      self.system.rated_gross_heating_power = [self.system.rated_gross_heating_capacity[i]/self.system.rated_gross_heating_cop[i] for i in range(self.system.number_of_heating_speeds)]
+      self.system.rated_net_heating_power = [self.system.rated_gross_heating_power[i] + self.system.rated_heating_fan_power[i] for i in range(self.system.number_of_heating_speeds)]
+      self.system.rated_net_heating_cop = [self.system.rated_net_heating_capacity[i]/self.system.rated_net_heating_power[i] for i in range(self.system.number_of_heating_speeds)]

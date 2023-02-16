@@ -82,10 +82,10 @@ def test_2_speed_regression():
   # Two speed, SEER 17, HSPF 10
   seer_2 = 17.
   hspf_2 = 10.
-  cop_2_c, solution_2_c = optimize.newton(lambda x : DXUnit(number_of_input_stages=2, rated_gross_cooling_cop=x, input_seer=seer_2).seer() - seer_2,seer_2/3.33, full_output = True)
-  cop_2_h, solution_2_h = optimize.newton(lambda x : DXUnit(number_of_input_stages=2, rated_gross_heating_cop=x, input_hspf=hspf_2).hspf() - hspf_2,hspf_2/2., full_output = True)
+  cop_2_c, solution_2_c = optimize.newton(lambda x : DXUnit(number_of_cooling_speeds=2, rated_gross_cooling_cop=x, input_seer=seer_2).seer() - seer_2,seer_2/3.33, full_output = True)
+  cop_2_h, solution_2_h = optimize.newton(lambda x : DXUnit(number_of_cooling_speeds=2, rated_gross_heating_cop=x, input_hspf=hspf_2).hspf() - hspf_2,hspf_2/2., full_output = True)
 
-  dx_unit_2_speed = DXUnit(number_of_input_stages=2, rated_gross_cooling_cop=cop_2_c, rated_gross_heating_cop=cop_2_h, input_seer=seer_2, input_hspf=hspf_2)
+  dx_unit_2_speed = DXUnit(number_of_cooling_speeds=2, rated_gross_cooling_cop=cop_2_c, rated_gross_heating_cop=cop_2_h, input_seer=seer_2, input_hspf=hspf_2)
 
   dx_unit_2_speed.print_cooling_info()
 

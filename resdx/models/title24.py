@@ -142,7 +142,7 @@ class Title24DXModel(DXModel):
     '''
     # If not already in the model data, initialize the model data
     if "cap17" not in self.system.model_data:
-      self.system.model_data["cap17"] = [None]*self.system.number_of_input_stages
+      self.system.model_data["cap17"] = [None]*self.system.number_of_heating_speeds
 
     if self.system.model_data["cap17"][conditions.compressor_speed] is not None:
       # If it's already in the model data, return the stored value
@@ -160,7 +160,7 @@ class Title24DXModel(DXModel):
 
   def get_cap35(self, conditions):
     if "cap35" not in self.system.model_data:
-      self.system.model_data["cap35"] = [None]*self.system.number_of_input_stages
+      self.system.model_data["cap35"] = [None]*self.system.number_of_heating_speeds
 
     if self.system.model_data["cap35"][conditions.compressor_speed] is not None:
       return self.system.model_data["cap35"][conditions.compressor_speed]
@@ -267,10 +267,10 @@ class Title24DXModel(DXModel):
 
   def calculate_cops(self, conditions):
     if "cop35" not in self.system.model_data:
-      self.system.model_data["cop35"] = [None]*self.system.number_of_input_stages
+      self.system.model_data["cop35"] = [None]*self.system.number_of_heating_speeds
 
     if "cop17" not in self.system.model_data:
-      self.system.model_data["cop17"] = [None]*self.system.number_of_input_stages
+      self.system.model_data["cop17"] = [None]*self.system.number_of_heating_speeds
 
     root_fn = lambda cop17 : self.check_hspf(conditions, cop17) - self.system.input_hspf
     cop17_guess = 3.0 #0.2186*hspf + 0.6734
