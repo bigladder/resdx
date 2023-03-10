@@ -129,6 +129,9 @@ class DXUnit:
                     cooling_fan_speed = None,  # Map of heating compressor speed to fan speed setting
                     rated_heating_fan_speed = None,  # Map of cooling compressor speed to fan speed setting used for ratings
                     rated_cooling_fan_speed = None,  # Map of heating compressor speed to fan speed setting used for ratings
+                    # Standby
+                    crankcase_heater_capacity = None,
+                    crankcase_heater_setpoint_temperature = fr_u(50.0,"°F"),
                     # Faults
                     refrigerant_charge_deviation=0.0,
                     # Ratings
@@ -170,6 +173,7 @@ class DXUnit:
     else:
       self.defrost = defrost
 
+    self.crankcase_heater_setpoint_temperature = crankcase_heater_setpoint_temperature
     self.rating_standard = rating_standard
     self.heating_off_temperature = heating_off_temperature
     self.refrigerant_charge_deviation = refrigerant_charge_deviation
@@ -270,6 +274,12 @@ class DXUnit:
 
     for i in range(self.number_of_heating_speeds):
       self.rated_gross_heating_capacity[i] = self.rated_net_heating_capacity[i] - self.rated_heating_fan_power[i]
+
+    # Crankcase
+    if crankcase_heater_capacity is None:
+      self.crankcase_heater_capacity = 10.*to_u(self.rated_net_total_cooling_capacity[self.cooling_full_load_speed],"ton_ref")
+    else:
+      self.crankcase_heater_capacity = crankcase_heater_capacity
 
     # Set rating conditions
     self.set_rating_conditions()
@@ -1020,10 +1030,10 @@ class DXUnit:
       "performance_map_cooling": performance_map_cooling,
       "performance_map_standby": {
         "grid_variables": {
-          "outdoor_coil_environment_dry_bulb_temperature": [fr_u(20.0, "°C")],
+          "outdoor_coil_environment_dry_bulb_temperature": [self.crankcase_heater_setpoint_temperature + dt for dt in (-0.5,0.5)],
         },
         "lookup_variables": {
-          "gross_power": [0.], # TODO: Add crankcase power
+          "gross_power": [self.crankcase_heater_capacity, 0.],
         }
       }
     }
