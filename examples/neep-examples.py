@@ -1,6 +1,10 @@
 import resdx
 from koozie import fr_u
 
+output_directory_path = "output"
+
+dx_units = {}
+
 # Mitsubishi Electric M-Series
 # MUZ-GL15NAH2 https://ashp.neep.org/#!/product/33396/7/25000///0
 # SEER 21.6, EER 13, HSPF 10.8
@@ -33,9 +37,7 @@ heating_data.append(
     capacities=[fr_u(14100,"Btu/h"),fr_u(2080,"Btu/h")],
     cops=[2.43,1.65]))
 
-muz_gl15 = resdx.make_vchp_unit(cooling_data, heating_data, cooling_full_load_speed_ratio=14000./18200., heating_full_load_speed_ratio=18000./20900.)
-muz_gl15.print_cooling_info()
-muz_gl15.print_heating_info()
+dx_units["MUZ-GL15NAH2"] = resdx.make_vchp_unit(cooling_data, heating_data, cooling_full_load_speed_ratio=14000./18200., heating_full_load_speed_ratio=18000./20900.)
 
 # Mitsubishi Electric M-Series
 # MUZ-FH18NAH2 https://ashp.neep.org/#!/product/25896/7/25000///0
@@ -69,9 +71,7 @@ heating_data.append(
     capacities=[fr_u(20900,"Btu/h"),fr_u(3700,"Btu/h")],
     cops=[2.06,2.05]))
 
-muz_fh18 = resdx.make_vchp_unit(cooling_data, heating_data, cooling_full_load_speed_ratio=17200./21000., heating_full_load_speed_ratio=20300./30400.)
-muz_fh18.print_cooling_info()
-muz_fh18.print_heating_info()
+dx_units["MUZ-FH18NAH2"] = resdx.make_vchp_unit(cooling_data, heating_data, cooling_full_load_speed_ratio=17200./21000., heating_full_load_speed_ratio=20300./30400.)
 
 # Mitsubishi Electric P-Series
 # PUZ-HA36NHA5 https://ashp.neep.org/#!/product/28981/7/25000///0
@@ -105,6 +105,11 @@ heating_data.append(
     capacities=[fr_u(38000,"Btu/h"),fr_u(8000,"Btu/h")],
     cops=[1.92,2.82]))
 
-puz_ha36 = resdx.make_vchp_unit(cooling_data, heating_data, cooling_full_load_speed_ratio=36000./36000., heating_full_load_speed_ratio=38000./40000.)
-puz_ha36.print_cooling_info()
-puz_ha36.print_heating_info()
+dx_units["PUZ-HA36NHA5"] = resdx.make_vchp_unit(cooling_data, heating_data, cooling_full_load_speed_ratio=36000./36000., heating_full_load_speed_ratio=38000./40000.)
+
+for dx_unit in dx_units:
+  print(f"Cooling info for {dx_unit}:")
+  dx_units[dx_unit].print_cooling_info()
+  print(f"Heating info for {dx_unit}:")
+  dx_units[dx_unit].print_heating_info()
+  resdx.write_idf(dx_units[dx_unit], output_path=f"{output_directory_path}/{dx_unit}.idf", system_name=dx_unit, autosize=True, )
