@@ -96,7 +96,7 @@ def make_vchp_unit(
   intermediate_heating_speed = full_heating_speed + 1
   for point in net_heating_data:
     point.capacities.insert(intermediate_heating_speed, point.capacities[min_heating_speed] + heating_intermediate_stage_speed_ratio*(point.capacities[full_heating_speed] - point.capacities[min_heating_speed]))
-    point.cops.insert(intermediate_heating_speed, point.cops[min_heating_speed] + heating_intermediate_stage_speed_ratio*(point.cops[full_heating_speed] - point.cops[1]))
+    point.cops.insert(intermediate_heating_speed, point.cops[min_heating_speed] + heating_intermediate_stage_speed_ratio*(point.cops[full_heating_speed] - point.cops[min_heating_speed]))
   rated_heating_fan_efficacy.insert(intermediate_heating_speed, rated_heating_fan_efficacy[min_heating_speed] + heating_intermediate_stage_speed_ratio*(rated_heating_fan_efficacy[full_heating_speed] - rated_heating_fan_efficacy[min_heating_speed]))
   rated_heating_airflow_per_rated_net_capacity.insert(intermediate_heating_speed, rated_heating_airflow_per_rated_net_capacity[min_heating_speed] + heating_intermediate_stage_speed_ratio*(rated_heating_airflow_per_rated_net_capacity[full_heating_speed] - rated_heating_airflow_per_rated_net_capacity[min_heating_speed]))
   min_heating_speed = intermediate_heating_speed + 1
