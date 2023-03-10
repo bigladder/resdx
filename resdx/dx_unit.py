@@ -924,23 +924,25 @@ class DXUnit:
     hspf = q_sum/(e_sum + rh_sum) * f_def # eq. 11.133
     return to_u(hspf,'Btu/Wh')
 
-  def print_cooling_info(self):
-    print(f"SEER: {self.seer()}")
+  def print_cooling_info(self, power_units="W", capacity_units="ton_ref"):
+    print(f"SEER: {self.seer():.2f}")
     for speed in range(self.number_of_cooling_speeds):
       conditions = self.make_condition(CoolingConditions, compressor_speed=speed)
-      print(f"Net cooling power for stage {speed + 1} : {self.net_cooling_power(conditions)}")
-      print(f"Net cooling capacity for stage {speed + 1} : {self.net_total_cooling_capacity(conditions)}")
-      print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions)}")
-      print(f"Gross cooling COP for stage {speed + 1} : {self.gross_cooling_cop(conditions)}")
-      print(f"Net SHR for stage {speed + 1} : {self.net_shr(conditions)}")
+      print(f"Net cooling power for stage {speed + 1} : {to_u(self.net_cooling_power(conditions),power_units):.2f} {power_units}")
+      print(f"Net cooling capacity for stage {speed + 1} : {to_u(self.net_total_cooling_capacity(conditions),capacity_units):.2f} {capacity_units}")
+      print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions):.2f}")
+      print(f"Gross cooling COP for stage {speed + 1} : {self.gross_cooling_cop(conditions):.3f}")
+      print(f"Net SHR for stage {speed + 1} : {self.net_shr(conditions):.3f}")
+    print("")
 
-  def print_heating_info(self, region=4):
-    print(f"HSPF (region {region}): {self.hspf(region)}")
+  def print_heating_info(self, power_units="W", capacity_units="ton_ref", region=4):
+    print(f"HSPF (region {region}): {self.hspf(region):.2f}")
     for speed in range(self.number_of_heating_speeds):
       conditions = self.make_condition(HeatingConditions, compressor_speed=speed)
-      print(f"Net heating power for stage {speed + 1} : {self.net_integrated_heating_power(conditions)}")
-      print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions)}")
-      print(f"Net heating capacity for stage {speed + 1} : {self.net_integrated_heating_capacity(conditions)}")
+      print(f"Net heating power for stage {speed + 1} : {to_u(self.net_integrated_heating_power(conditions),power_units):.2f} {power_units}")
+      print(f"Net heating capacity for stage {speed + 1} : {to_u(self.net_integrated_heating_capacity(conditions),capacity_units):.2f} {capacity_units}")
+      print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions):.3f}")
+    print("")
 
   def generate_205_representation(self):
     timestamp = datetime.datetime.now().isoformat("T","minutes")
