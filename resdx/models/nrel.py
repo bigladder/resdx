@@ -71,19 +71,18 @@ class NRELDXModel(DXModel):
     else:
       return self.system.gross_steady_state_heating_capacity(conditions)
 
-  def get_cooling_cop60(self, conditions):
-    if "cooling_cop60" not in self.system.model_data:
-      self.system.model_data["cooling_cop60"] = [None]*self.system.number_of_cooling_speeds
-
-    if self.system.model_data["cooling_cop60"][conditions.compressor_speed] is not None:
-      return self.system.model_data["cooling_cop60"][conditions.compressor_speed]
+  def get_cooling_cop60(self):
+    '''
+    Used to estimate compressor efficiency during defrost. Assume defrost uses full-speed cooling.
+    '''
+    if "cooling_cop60" in self.system.model_data:
+      return self.system.model_data["cooling_cop60"]
     else:
       condition = self.system.make_condition(CoolingConditions,
                                         outdoor=PsychState(drybulb=fr_u(60.0,"°F"),wetbulb=fr_u(48.0,"°F")),  # 60 F at ~40% RH
-                                        indoor=PsychState(drybulb=fr_u(70.0,"°F"),wetbulb=fr_u(60.0,"°F")),  # Use H1 indoor conditions (since we're still heating)
-                                        compressor_speed=conditions.compressor_speed)
-      self.system.model_data["cooling_cop60"][conditions.compressor_speed] = self.system.gross_cooling_cop(condition)
-      return self.system.model_data["cooling_cop60"][conditions.compressor_speed]
+                                        indoor=PsychState(drybulb=fr_u(70.0,"°F"),wetbulb=fr_u(60.0,"°F")))  # Use H1 indoor conditions (since we're still heating)
+      self.system.model_data["cooling_cop60"] = self.system.gross_cooling_cop(condition)
+      return self.system.model_data["cooling_cop60"]
 
   def gross_integrated_heating_power(self, conditions):
     '''EPRI algorithm as described in EnergyPlus documentation'''
@@ -98,7 +97,7 @@ class NRELDXModel(DXModel):
         #T_iwb = to_u(conditions.indoor.wb,"°C")
         #T_odb = conditions.outdoor.db_C
         # defEIRfT = calc_biquad([0.1528, 0, 0, 0, 0, 0], T_iwb, T_odb) # Assumption from BEopt 0.1528 = 1/gross_cop_cooling(60F)
-        defEIRfT = 1/NRELDXModel.get_cooling_cop60(conditions)  # Assume defrost EIR is constant (maybe it could/should change with indoor conditions?)
+        defEIRfT = 1./NRELDXModel.get_cooling_cop60()  # Assume defrost EIR is constant (maybe it could/should change with indoor conditions?)
         P_defrost = defEIRfT*(self.system.rated_gross_heating_capacity[conditions.compressor_speed]/1.01667)
       else:
         P_defrost = self.system.defrost.resistive_power
