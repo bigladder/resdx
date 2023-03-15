@@ -67,8 +67,23 @@ class Fan:
   def airflow(self, speed_setting, external_static_pressure=None):
     raise NotImplementedError()
 
+  def airflow_ratio(self, speed_setting, base_speed=0, external_static_pressure=None):
+    return self.airflow(speed_setting, external_static_pressure)/self.airflow(base_speed, external_static_pressure)
+
   def power(self, speed_setting, external_static_pressure=None):
     return self.airflow(speed_setting, external_static_pressure)*self.efficacy(speed_setting, external_static_pressure)
+
+  def power_ratio(self, speed_setting, base_speed=0, external_static_pressure=None):
+    return self.power(speed_setting, external_static_pressure)/self.power(base_speed, external_static_pressure)
+
+  def fluid_power(self, speed_setting, external_static_pressure=None):
+    if external_static_pressure is None:
+      return (self.airflow(speed_setting, external_static_pressure)*self.operating_pressure(speed_setting))
+    else:
+      return self.airflow(speed_setting, external_static_pressure)*external_static_pressure
+
+  def efficiency(self, speed_setting, external_static_pressure=None):
+    return self.fluid_power(speed_setting, external_static_pressure)/self.power(speed_setting, external_static_pressure)
 
   def rotational_speed(self, speed_setting, external_static_pressure=None):
     raise NotImplementedError()
@@ -79,7 +94,7 @@ class Fan:
       fx = self.system_flow
     else:
       fx = system_curve
-    p, solution = optimize.brentq(lambda x : self.airflow(speed_setting, x) - fx(x), 0., 2.*self.design_external_static_pressure, full_output = True)
+    p, solution = optimize.brentq(lambda x : self.airflow(speed_setting, x) - fx(x), 0., 3.*self.design_external_static_pressure, full_output = True)
     return p
 
   def check_power(self, airflow, external_static_pressure=None):

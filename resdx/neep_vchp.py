@@ -7,7 +7,7 @@ from koozie import fr_u
 from .dx_unit import DXUnit
 from scipy import interpolate
 from .models import RESNETDXModel
-from .fan import ConstantEfficacyFan
+from .fan import ECMFlowFan, ConstantEfficacyFan
 
 class VCHPDataPoint:
   def __init__(self,drybulb,capacities,cops):

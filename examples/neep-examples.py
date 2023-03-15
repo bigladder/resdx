@@ -112,4 +112,9 @@ for dx_unit in dx_units:
   dx_units[dx_unit].print_cooling_info()
   print(f"Heating info for {dx_unit}:")
   dx_units[dx_unit].print_heating_info()
-  resdx.write_idf(dx_units[dx_unit], output_path=f"{output_directory_path}/{dx_unit}.idf", system_name=dx_unit, autosize=True, )
+  resdx.write_idf(dx_units[dx_unit],
+                  output_path=f"{output_directory_path}/{dx_unit}.idf",
+                  system_name="living_unit1 ZN-MSHP",
+                  system_type=resdx.EnergyPlusSystemType.ZONEHVAC_PTHP,
+                  autosize=True,
+                  normalize=False)
