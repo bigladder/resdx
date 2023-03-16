@@ -117,4 +117,4 @@ for dx_unit in dx_units:
                   system_name="living_unit1 ZN-MSHP",
                   system_type=resdx.EnergyPlusSystemType.ZONEHVAC_PTHP,
                   autosize=True,
-                  normalize=False)
+                  normalize=True)
