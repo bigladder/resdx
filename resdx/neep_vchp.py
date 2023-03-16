@@ -7,7 +7,7 @@ from koozie import fr_u
 from .dx_unit import DXUnit
 from scipy import interpolate
 from .models import RESNETDXModel
-from .fan import ECMFlowFan, ConstantEfficacyFan
+from .fan import ECMFlowFan
 
 class VCHPDataPoint:
   def __init__(self,drybulb,capacities,cops):
@@ -49,8 +49,7 @@ def make_vchp_unit(
   heating_intermediate_stage_speed_ratio=0.5,
   c_d_cooling=0.25,
   c_d_heating=0.25,
-  rated_cooling_fan_efficacy=[fr_u(0.2075,'W/cfm')]*2,
-  rated_heating_fan_efficacy=[fr_u(0.2075,'W/cfm')]*2,
+  rated_cooling_fan_efficacy=fr_u(0.2075,'W/cfm'),
   rated_cooling_airflow_per_rated_net_capacity=[fr_u(400.0,"cfm/ton_ref")]*2,
   rated_heating_airflow_per_rated_net_capacity=[fr_u(400.0,"cfm/ton_ref")]*2,
   base_model=RESNETDXModel()):
@@ -61,14 +60,24 @@ def make_vchp_unit(
   max_heating_speed = 0
   min_heating_speed = 1
 
+  rated_max_cooling_airflow_rate = rated_cooling_airflow_per_rated_net_capacity[max_cooling_speed]*net_cooling_data[0].capacities[max_cooling_speed]
+
+  cooling_fan_speed = [0]
+  heating_fan_speed = []
+
+  fan = ECMFlowFan(rated_max_cooling_airflow_rate, fr_u(0.1, "in_H2O"), design_efficacy=rated_cooling_fan_efficacy)
+  fan.add_speed(rated_heating_airflow_per_rated_net_capacity[max_heating_speed]*net_heating_data[0].capacities[max_heating_speed])
+  heating_fan_speed.append(fan.number_of_speeds - 1)
+
   # Add "full" speed
   if cooling_full_load_speed_ratio < 1.0:
     full_cooling_speed = 1
     for point in net_cooling_data:
       point.capacities.insert(full_cooling_speed, point.capacities[min_cooling_speed] + cooling_full_load_speed_ratio*(point.capacities[max_cooling_speed] - point.capacities[min_cooling_speed]))
       point.cops.insert(full_cooling_speed, point.cops[min_cooling_speed] + cooling_full_load_speed_ratio*(point.cops[max_cooling_speed] - point.cops[min_cooling_speed]))
-    rated_cooling_fan_efficacy.insert(full_cooling_speed, rated_cooling_fan_efficacy[min_cooling_speed] + cooling_full_load_speed_ratio*(rated_cooling_fan_efficacy[max_cooling_speed] - rated_cooling_fan_efficacy[min_cooling_speed]))
     rated_cooling_airflow_per_rated_net_capacity.insert(full_cooling_speed, rated_cooling_airflow_per_rated_net_capacity[min_cooling_speed] + cooling_full_load_speed_ratio*(rated_cooling_airflow_per_rated_net_capacity[max_cooling_speed] - rated_cooling_airflow_per_rated_net_capacity[min_cooling_speed]))
+    fan.add_speed(rated_cooling_airflow_per_rated_net_capacity[full_cooling_speed]*net_cooling_data[0].capacities[full_cooling_speed])
+    cooling_fan_speed.append(fan.number_of_speeds - 1)
     min_cooling_speed = full_cooling_speed + 1
   else:
     full_cooling_speed = 0
@@ -78,8 +87,9 @@ def make_vchp_unit(
     for point in net_heating_data:
       point.capacities.insert(full_heating_speed, point.capacities[min_heating_speed] + heating_full_load_speed_ratio*(point.capacities[max_heating_speed] - point.capacities[min_heating_speed]))
       point.cops.insert(full_heating_speed, point.cops[min_heating_speed] + heating_full_load_speed_ratio*(point.cops[max_heating_speed] - point.cops[min_heating_speed]))
-    rated_heating_fan_efficacy.insert(full_heating_speed, rated_heating_fan_efficacy[min_heating_speed] + heating_full_load_speed_ratio*(rated_heating_fan_efficacy[max_heating_speed] - rated_heating_fan_efficacy[min_heating_speed]))
     rated_heating_airflow_per_rated_net_capacity.insert(full_heating_speed, rated_heating_airflow_per_rated_net_capacity[min_heating_speed] + heating_full_load_speed_ratio*(rated_heating_airflow_per_rated_net_capacity[max_heating_speed] - rated_heating_airflow_per_rated_net_capacity[min_heating_speed]))
+    fan.add_speed(rated_heating_airflow_per_rated_net_capacity[full_heating_speed]*net_heating_data[0].capacities[full_heating_speed])
+    heating_fan_speed.append(fan.number_of_speeds - 1)
     min_heating_speed = full_heating_speed + 1
   else:
     full_heating_speed = 0
@@ -89,26 +99,33 @@ def make_vchp_unit(
   for point in net_cooling_data:
     point.capacities.insert(intermediate_cooling_speed, point.capacities[min_cooling_speed] + cooling_intermediate_stage_speed_ratio*(point.capacities[full_cooling_speed] - point.capacities[min_cooling_speed]))
     point.cops.insert(intermediate_cooling_speed, point.cops[min_cooling_speed] + cooling_intermediate_stage_speed_ratio*(point.cops[full_cooling_speed] - point.cops[min_cooling_speed]))
-  rated_cooling_fan_efficacy.insert(intermediate_cooling_speed, rated_cooling_fan_efficacy[min_cooling_speed] + cooling_intermediate_stage_speed_ratio*(rated_cooling_fan_efficacy[full_cooling_speed] - rated_cooling_fan_efficacy[min_cooling_speed]))
   rated_cooling_airflow_per_rated_net_capacity.insert(intermediate_cooling_speed, rated_cooling_airflow_per_rated_net_capacity[min_cooling_speed] + cooling_intermediate_stage_speed_ratio*(rated_cooling_airflow_per_rated_net_capacity[full_cooling_speed] - rated_cooling_airflow_per_rated_net_capacity[min_cooling_speed]))
+  fan.add_speed(rated_cooling_airflow_per_rated_net_capacity[intermediate_cooling_speed]*net_cooling_data[0].capacities[intermediate_cooling_speed])
+  cooling_fan_speed.append(fan.number_of_speeds - 1)
   min_cooling_speed = intermediate_cooling_speed + 1
 
   intermediate_heating_speed = full_heating_speed + 1
   for point in net_heating_data:
     point.capacities.insert(intermediate_heating_speed, point.capacities[min_heating_speed] + heating_intermediate_stage_speed_ratio*(point.capacities[full_heating_speed] - point.capacities[min_heating_speed]))
     point.cops.insert(intermediate_heating_speed, point.cops[min_heating_speed] + heating_intermediate_stage_speed_ratio*(point.cops[full_heating_speed] - point.cops[min_heating_speed]))
-  rated_heating_fan_efficacy.insert(intermediate_heating_speed, rated_heating_fan_efficacy[min_heating_speed] + heating_intermediate_stage_speed_ratio*(rated_heating_fan_efficacy[full_heating_speed] - rated_heating_fan_efficacy[min_heating_speed]))
   rated_heating_airflow_per_rated_net_capacity.insert(intermediate_heating_speed, rated_heating_airflow_per_rated_net_capacity[min_heating_speed] + heating_intermediate_stage_speed_ratio*(rated_heating_airflow_per_rated_net_capacity[full_heating_speed] - rated_heating_airflow_per_rated_net_capacity[min_heating_speed]))
+  fan.add_speed(rated_heating_airflow_per_rated_net_capacity[intermediate_heating_speed]*net_heating_data[0].capacities[intermediate_heating_speed])
+  heating_fan_speed.append(fan.number_of_speeds - 1)
   min_heating_speed = intermediate_heating_speed + 1
+
+  fan.add_speed(rated_cooling_airflow_per_rated_net_capacity[min_cooling_speed]*net_cooling_data[0].capacities[min_cooling_speed])
+  cooling_fan_speed.append(fan.number_of_speeds - 1)
+  fan.add_speed(rated_heating_airflow_per_rated_net_capacity[min_heating_speed]*net_heating_data[0].capacities[min_heating_speed])
+  heating_fan_speed.append(fan.number_of_speeds - 1)
 
   # Setup data
   net_cooling_data.setup()
   net_heating_data.setup()
 
   net_total_cooling_capacity = [net_cooling_data.get_capacity[i](fr_u(95.0,"°F")) for i in range(net_cooling_data.number_of_stages)]
-  cooling_rated_fan_power = [net_total_cooling_capacity[i]*rated_cooling_fan_efficacy[i]*rated_cooling_airflow_per_rated_net_capacity[i] for i in range(net_cooling_data.number_of_stages)]
+  cooling_rated_fan_power = [fan.power(cooling_fan_speed[i]) for i in range(net_cooling_data.number_of_stages)]
   net_heating_capacity = [net_heating_data.get_capacity[i](fr_u(47.0,"°F")) for i in range(net_heating_data.number_of_stages)]
-  heating_rated_fan_power = [net_heating_capacity[i]*rated_heating_fan_efficacy[i]*rated_heating_airflow_per_rated_net_capacity[i] for i in range(net_heating_data.number_of_stages)]
+  heating_rated_fan_power = [fan.power(heating_fan_speed[i]) for i in range(net_heating_data.number_of_stages)]
 
   gross_cooling_data = copy.deepcopy(net_cooling_data)
   for point in gross_cooling_data:
@@ -130,25 +147,6 @@ def make_vchp_unit(
 
   gross_cooling_data.setup()
   gross_heating_data.setup()
-
-  # Setup fan
-  airflows = []
-  efficacies = []
-  fan_speed = 0
-  cooling_fan_speed = []
-  heating_fan_speed = []
-  for i in range(gross_cooling_data.number_of_stages):
-    airflows.append(net_total_cooling_capacity[i]*rated_cooling_airflow_per_rated_net_capacity[i])
-    efficacies.append(rated_cooling_fan_efficacy[i])
-    cooling_fan_speed.append(fan_speed)
-    fan_speed += 1
-  for i in range(gross_heating_data.number_of_stages):
-    airflows.append(net_heating_capacity[i]*rated_heating_airflow_per_rated_net_capacity[i])
-    efficacies.append(rated_heating_fan_efficacy[i])
-    heating_fan_speed.append(fan_speed)
-    fan_speed += 1
-
-  fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), design_efficacy=efficacies)
 
   new_model = copy.deepcopy(base_model)
 
