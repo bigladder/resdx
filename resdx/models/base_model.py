@@ -1,13 +1,17 @@
+from typing import Union, TYPE_CHECKING
 from koozie import fr_u
 from ..fan import ConstantEfficacyFan
 
+if TYPE_CHECKING:
+    from ..dx_unit import DXUnit
+
 
 class DXModel:
-    def __init__(self):
-        self.system = None
+    def __init__(self) -> None:
+        self.system: Union["DXUnit", None] = None
         self.allowed_kwargs = ["base_model"]
 
-    def set_system(self, system):
+    def set_system(self, system: "DXUnit") -> None:
         self.system = system
         for kwarg in system.kwargs:
             if kwarg not in self.allowed_kwargs:
@@ -41,19 +45,24 @@ class DXModel:
     def gross_integrated_heating_power(self, conditions):
         raise NotImplementedError()
 
-    def gross_total_cooling_capacity_charge_factor(self, conditions):
+    def gross_total_cooling_capacity_charge_factor(
+        self, conditions  # pylint: disable=unused-argument
+    ):
         return 1.0
 
-    def gross_total_cooling_capacity_charge_factor(self, conditions):
+    def gross_cooling_power_charge_factor(
+        self, conditions  # pylint: disable=unused-argument
+    ):
         return 1.0
 
-    def gross_cooling_power_charge_factor(self, conditions):
+    def gross_steady_state_heating_capacity_charge_factor(
+        self, conditions  # pylint: disable=unused-argument
+    ):
         return 1.0
 
-    def gross_steady_state_heating_capacity_charge_factor(self, conditions):
-        return 1.0
-
-    def gross_steady_state_heating_power_charge_factor(self, conditions):
+    def gross_steady_state_heating_power_charge_factor(
+        self, conditions  # pylint: disable=unused-argument
+    ):
         return 1.0
 
     # Default assumptions

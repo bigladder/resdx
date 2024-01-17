@@ -1,13 +1,15 @@
 from enum import Enum
 import math
 from scipy import optimize
+from typing import Union, List
 
 from .psychrometrics import PsychState, psychrolib, STANDARD_CONDITIONS
 from .conditions import HeatingConditions, CoolingConditions
 from .defrost import Defrost, DefrostControl
 from koozie import fr_u, to_u
 from .util import find_nearest, limit_check
-from .models import RESNETDXModel
+from .models import RESNETDXModel, DXModel
+from .fan import Fan
 from numpy import linspace
 import uuid
 import datetime
@@ -44,14 +46,14 @@ class HeatingDistribution:
 
     def __init__(
         self,
-        outdoor_design_temperature=fr_u(5.0, "°F"),
+        outdoor_design_temperature: float=fr_u(5.0, "°F"),
         # fmt: off
-        fractional_hours=[0.132, 0.111, 0.103, 0.093, 0.100, 0.109, 0.126, 0.087, 0.055,0.036, 0.026, 0.013, 0.006, 0.002, 0.001, 0, 0, 0],
+        fractional_hours: List[float]=[0.132, 0.111, 0.103, 0.093, 0.100, 0.109, 0.126, 0.087, 0.055,0.036, 0.026, 0.013, 0.006, 0.002, 0.001, 0, 0, 0],
         # fmt: on
         c=None,
         c_vs=None,
         zero_load_temperature=None,
-    ):
+    ) -> None:
         self.outdoor_design_temperature = outdoor_design_temperature
         self.c = c
         self.c_vs = c_vs
@@ -66,7 +68,7 @@ class HeatingDistribution:
             self.fractional_hours = fractional_hours
         self.number_of_bins = len(self.fractional_hours)
         if self.number_of_bins != 18:
-            raise Exception(f"Heating distributions must be provided in 18 bins.")
+            raise Exception("Heating distributions must be provided in 18 bins.")
 
 
 class CoolingDistribution:
@@ -124,7 +126,7 @@ class DXUnit:
 
     def __init__(
         self,
-        model=None,
+        model: Union[DXModel, None] = None,
         # defaults of None are defaulted within this function based on other argument values
         number_of_cooling_speeds=None,
         number_of_heating_speeds=None,
@@ -171,15 +173,9 @@ class DXUnit:
         # Initialize direct values
         self.kwargs = kwargs
 
-        if model is None:
-            self.model = RESNETDXModel()
-        else:
-            self.model = model
+        self.model: DXModel = RESNETDXModel() if model is None else model
 
-        if metadata is None:
-            self.metadata = DXUnitMetadata()
-        else:
-            self.metadata = metadata
+        self.metadata = DXUnitMetadata() if metadata is None else metadata
 
         self.model.set_system(self)
 
@@ -202,7 +198,7 @@ class DXUnit:
             self.heating_on_temperature = self.heating_off_temperature
 
         # Placeholder for additional data set specific to the model
-        self.model_data = {}
+        self.model_data: dict = {}
 
         # Number of stages/speeds
         if number_of_cooling_speeds is not None:
@@ -238,15 +234,13 @@ class DXUnit:
         self.cooling_full_load_speed = cooling_full_load_speed
         self.heating_full_load_speed = heating_full_load_speed
 
-        if self.cooling_full_load_speed > 0:
-            self.cooling_boost_speed = 0
-        else:
-            self.cooling_boost_speed = None
+        self.cooling_boost_speed: Union[int, None] = (
+            0 if self.cooling_full_load_speed > 0 else None
+        )
 
-        if self.heating_full_load_speed > 0:
-            self.heating_boost_speed = 0
-        else:
-            self.heating_boost_speed = None
+        self.heating_boost_speed: Union[int, None] = (
+            0 if self.heating_full_load_speed > 0 else None
+        )
 
         if cooling_intermediate_speed is None:
             self.cooling_intermediate_speed = cooling_full_load_speed + 1
@@ -289,11 +283,16 @@ class DXUnit:
         )
 
         # Set net capacities and fan
+        self.rated_net_total_cooling_capacity: List[float]
+        self.rated_net_heating_capacity: List[float]
+        self.fan: Fan
         self.model.set_net_capacities_and_fan(
             rated_net_total_cooling_capacity, rated_net_heating_capacity, fan
         )
 
         # Degradation coefficients
+        self.c_d_cooling: float
+        self.c_d_heating: float
         self.model.set_c_d_cooling(c_d_cooling)
         self.model.set_c_d_heating(c_d_heating)
 
@@ -331,12 +330,12 @@ class DXUnit:
         # COP determinations
         if rated_net_cooling_cop is None and rated_gross_cooling_cop is None:
             raise Exception(
-                f"Must define either 'rated_net_cooling_cop' or 'rated_gross_cooling_cop'."
+                "Must define either 'rated_net_cooling_cop' or 'rated_gross_cooling_cop'."
             )
 
         if rated_net_heating_cop is None and rated_gross_heating_cop is None:
             raise Exception(
-                f"Must define either 'rated_net_heating_cop' or 'rated_gross_heating_cop'."
+                "Must define either 'rated_net_heating_cop' or 'rated_gross_heating_cop'."
             )
 
         if rated_net_cooling_cop is not None:
@@ -504,13 +503,13 @@ class DXUnit:
             self.fan.add_speed(airflow, pressure)
             new_fan_speed = self.fan.number_of_speeds - 1
 
-            if i == self.full_load_speed:
+            if i == self.cooling_full_load_speed:
                 self.A_full_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.B_full_cond.set_new_fan_speed(new_fan_speed, airflow)
-            if i == self.intermediate_speed:
+            if i == self.cooling_intermediate_speed:
                 self.A_int_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.E_int_cond.set_new_fan_speed(new_fan_speed, airflow)
-            if i == self.low_speed:
+            if i == self.cooling_low_speed:
                 self.A_low_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.B_low_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.F_low_cond.set_new_fan_speed(new_fan_speed, airflow)
@@ -527,14 +526,14 @@ class DXUnit:
             self.fan.add_speed(airflow, pressure)
             new_fan_speed = self.fan.number_of_speeds - 1
 
-            if i == self.full_load_speed:
+            if i == self.heating_full_load_speed:
                 self.H1_full_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.H2_full_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.H3_full_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.H4_full_cond.set_new_fan_speed(new_fan_speed, airflow)
-            if i == self.intermediate_speed:
+            if i == self.heating_intermediate_speed:
                 self.H2_int_cond.set_new_fan_speed(new_fan_speed, airflow)
-            if i == self.low_speed:
+            if i == self.heating_low_speed:
                 self.H0_low_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.H1_low_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.H2_low_cond.set_new_fan_speed(new_fan_speed, airflow)
