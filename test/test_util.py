@@ -1,9 +1,11 @@
-from resdx import VCHPDataPoint, VCHPDataPoints
+"""Resdx utility unit tests."""
 from pytest import approx
-from koozie import fr_u
+from koozie import fr_u  # type: ignore
+from resdx import VCHPDataPoint, VCHPDataPoints
 
 
 def test_neep_interpolation():
+    """Test NEEP interpolation."""
     cooling_data = VCHPDataPoints()
     rated_maximum_capacity = fr_u(13600, "Btu/h")
     cooling_data.append(
