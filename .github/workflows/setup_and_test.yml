@@ -22,9 +22,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Test
-        run: |
-          source $VENV
-          poetry run doit
+        run: poetry run doit
       - name: Upload output
         uses: actions/upload-artifact@v3
         with:
