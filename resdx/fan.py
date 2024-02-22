@@ -1,10 +1,14 @@
-from koozie import fr_u, to_u, convert
-from math import exp, log, inf
-from scipy import optimize  # Used for finding system/fan curve intersection
-from numpy import linspace, array
 import uuid
 import datetime
 from random import Random
+from typing import List, Tuple
+
+from math import exp, log, inf
+from scipy import optimize  # Used for finding system/fan curve intersection
+from numpy import linspace, array
+from koozie import fr_u, to_u, convert
+
+from .util import calc_quad
 
 
 class FanMetadata:
@@ -22,6 +26,10 @@ class FanMetadata:
 
 
 class Fan:
+    """Base class for fan models"""
+
+    SYSTEM_EXPONENT = 0.5
+
     def __init__(
         self,
         design_airflow,
@@ -41,15 +49,12 @@ class Fan:
             self.metadata = metadata
 
         if type(design_airflow) is list:
+            self.calculate_system_curve_constant(design_airflow[0])
             for airflow in design_airflow:
                 self.add_speed(airflow)
         else:
+            self.calculate_system_curve_constant(design_airflow)
             self.add_speed(design_airflow)
-        self.system_exponent = 0.5
-        self.system_curve_constant = (
-            self.design_external_static_pressure ** (self.system_exponent)
-            / self.design_airflow[0]
-        )
 
     def add_speed(self, airflow, external_static_pressure=None):
         self.design_airflow.append(airflow)
@@ -64,12 +69,18 @@ class Fan:
         self.design_airflow_ratio.pop(speed_setting)
 
     def system_pressure(self, airflow):
-        return (airflow * self.system_curve_constant) ** (1.0 / self.system_exponent)
+        return (airflow * self.system_curve_constant) ** (1.0 / self.SYSTEM_EXPONENT)
 
     def system_flow(self, external_static_pressure):
         return (
-            external_static_pressure ** (self.system_exponent)
+            external_static_pressure ** (self.SYSTEM_EXPONENT)
             / self.system_curve_constant
+        )
+
+    def calculate_system_curve_constant(self, nominal_airflow: float) -> None:
+        self.system_curve_constant = (
+            self.design_external_static_pressure ** (self.SYSTEM_EXPONENT)
+            / nominal_airflow
         )
 
     def efficacy(self, speed_setting, external_static_pressure=None):
@@ -148,28 +159,43 @@ class Fan:
 
         if rated_full_flow_external_static_pressure is not None:
             full_airflow = self.airflow(0, rated_full_flow_external_static_pressure)
-            pressure_function = (
-                lambda x: rated_full_flow_external_static_pressure
-                * (x / full_airflow) ** 2
-            )
+
+            def pressure_function(airflow):
+                return (
+                    rated_full_flow_external_static_pressure
+                    * (airflow / full_airflow) ** 2
+                )
+
         else:
-            pressure_function = lambda x: None
+
+            def pressure_function(airflow):
+                return None
 
         if cooling:
-            net_capacity_function = lambda x: gross_capacity - self.check_power(
-                x, pressure_function(x)
-            )
+
+            def net_capacity_function(airflow):
+                return gross_capacity - self.check_power(
+                    airflow, pressure_function(airflow)
+                )
+
         else:
-            net_capacity_function = lambda x: gross_capacity + self.check_power(
-                x, pressure_function(x)
+
+            def net_capacity_function(airflow):
+                return gross_capacity + self.check_power(
+                    airflow, pressure_function(airflow)
+                )
+
+        def optimization_function(airflow):
+            return (
+                net_capacity_function(airflow)
+                - airflow / rated_flow_per_rated_net_capacity
             )
 
-        root_fn = (
-            lambda x: net_capacity_function(x) - x / rated_flow_per_rated_net_capacity
+        airflow, solution = optimize.newton(
+            optimization_function, guess_airflow, full_output=True
         )
-        f, solution = optimize.newton(root_fn, guess_airflow, full_output=True)
-        self.add_speed(f, pressure_function(f))
-        return f
+        self.add_speed(airflow, pressure_function(airflow))
+        return airflow
 
     def get_speed_order_map(self):
         airflow_list = array(
@@ -442,7 +468,6 @@ class PSCFan(Fan):
         return self.speed_efficacy[speed_setting]
 
     def airflow(self, speed_setting, external_static_pressure=None):
-        i = speed_setting
         if external_static_pressure is None:
             external_static_pressure = self.operating_pressure(speed_setting)
         return max(
@@ -597,6 +622,141 @@ class ECMFlowFan(Fan):
             self.efficacy(speed_setting, external_static_pressure)
             / self.unconstrained_efficacy(speed_setting, external_static_pressure)
         )
+
+
+class EEREFan(Fan):
+    """Base class for fans modeled with 'EERE-2014-BT-STD-0048-0098' assumptions"""
+
+    NOMINAL_CAPACITIES = [
+        fr_u(capacity, "ton_ref") for capacity in (2.0, 3.0, 4.0, 5.0)
+    ]
+    FLOW_COEFFICIENTS: Tuple[float, float]
+    BASE_EFFICACIES: List[float]
+    EFFICACY_COEFFICIENTS: Tuple[float, float]
+
+    def __init__(
+        self,
+        design_airflow,
+        design_external_static_pressure,
+    ):
+        self.free_airflow: List[float] = []
+        super().__init__(design_airflow, design_external_static_pressure)
+        self.nominal_system_capacity = self.design_airflow[0] / fr_u(
+            400.0, "cfm/ton_ref"
+        )
+
+        # Determine indices of sizes to interpolate/extrapolate from
+        if self.nominal_system_capacity < self.NOMINAL_CAPACITIES[0]:
+            self.lower_index = 0
+            self.upper_index = 1
+        elif (
+            self.nominal_system_capacity
+            > self.NOMINAL_CAPACITIES[len(self.NOMINAL_CAPACITIES) - 1]
+        ):
+            self.lower_index = len(self.NOMINAL_CAPACITIES) - 2
+            self.upper_index = len(self.NOMINAL_CAPACITIES) - 1
+        else:
+            for index, capacity in enumerate(self.NOMINAL_CAPACITIES):
+                if self.nominal_system_capacity > capacity:
+                    self.lower_index = index
+                    self.upper_index = index + 1
+
+        self.capacity_weight = (
+            self.nominal_system_capacity - self.NOMINAL_CAPACITIES[self.lower_index]
+        ) / (
+            self.NOMINAL_CAPACITIES[self.upper_index]
+            - self.NOMINAL_CAPACITIES[self.lower_index]
+        )
+
+    def airflow(self, speed_setting, external_static_pressure=None):
+        return calc_quad(
+            (self.free_airflow[speed_setting], *self.FLOW_COEFFICIENTS),
+            external_static_pressure,
+        )
+
+    def efficacy(self, speed_setting, external_static_pressure=None):
+        """Calculate efficacy based on Eq. 7-C.4 in 'EERE-2014-BT-STD-0048-0098' using linear interpolation"""
+        lower_coefficients = (
+            self.BASE_EFFICACIES[self.lower_index],
+            *self.EFFICACY_COEFFICIENTS,
+        )
+        upper_coefficients = (
+            self.BASE_EFFICACIES[self.upper_index],
+            *self.EFFICACY_COEFFICIENTS,
+        )
+        efficacy_lower = calc_quad(lower_coefficients, external_static_pressure)
+        efficacy_upper = calc_quad(upper_coefficients, external_static_pressure)
+
+        return efficacy_lower + (efficacy_upper - efficacy_lower) * self.capacity_weight
+
+    def add_speed(self, airflow, external_static_pressure=None):
+        if external_static_pressure is None:
+            external_static_pressure = self.system_pressure(airflow)
+        super().add_speed(airflow, external_static_pressure)
+        airflow_offset = (
+            self.FLOW_COEFFICIENTS[0] * external_static_pressure
+            + self.FLOW_COEFFICIENTS[1]
+            * external_static_pressure
+            * external_static_pressure
+        )
+        self.free_airflow.append(airflow - airflow_offset)
+
+    def remove_speed(self, speed_setting):
+        super().remove_speed(speed_setting)
+        self.free_airflow.pop(speed_setting)
+
+    def rotational_speed(self, speed_setting, external_static_pressure=None):
+        return super().rotational_speed(speed_setting, external_static_pressure)
+
+
+class EEREBaselinePSCFan(EEREFan):
+    FLOW_COEFFICIENTS = (fr_u(49.0, "cfm/in_H2O"), fr_u(-570.0, "cfm/in_H2O**2"))
+    BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.49, 0.52, 0.55, 0.57)]
+    EFFICACY_COEFFICIENTS = (
+        fr_u(-0.2, "(W/cfm)/in_H2O"),
+        fr_u(0.19, "(W/cfm)/in_H2O**2"),
+    )
+
+
+class EEREImprovedPSCFan(EEREBaselinePSCFan):
+    BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.44, 0.47, 0.49, 0.52)]
+
+
+class EEREPSCWithControlsFan(EEREFan):
+    FLOW_COEFFICIENTS = (fr_u(267.0, "cfm/in_H2O"), fr_u(-338.0, "cfm/in_H2O**2"))
+    BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.25, 0.27, 0.29, 0.31)]
+    EFFICACY_COEFFICIENTS = (
+        fr_u(0.14, "(W/cfm)/in_H2O"),
+        fr_u(0.06, "(W/cfm)/in_H2O**2"),
+    )
+
+
+class EEREBPMSingleStageConstantTorqueFan(EEREFan):
+    FLOW_COEFFICIENTS = (fr_u(-456.0, "cfm/in_H2O"), fr_u(8.0, "cfm/in_H2O**2"))
+    BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.18, 0.19, 0.21, 0.23)]
+    EFFICACY_COEFFICIENTS = (
+        fr_u(0.12, "(W/cfm)/in_H2O"),
+        fr_u(0.07, "(W/cfm)/in_H2O**2"),
+    )
+
+
+class EEREBPMMultiStageConstantTorqueFan(EEREBPMSingleStageConstantTorqueFan):
+    BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.14, 0.15, 0.17, 0.16)]
+
+
+class EEREBPMMultiStageConstantAirflowFan(EEREFan):
+    FLOW_COEFFICIENTS = (fr_u(99.0, "cfm/in_H2O"), fr_u(-103.0, "cfm/in_H2O**2"))
+    BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.11, 0.12, 0.13, 0.15)]
+    EFFICACY_COEFFICIENTS = (
+        fr_u(0.25, "(W/cfm)/in_H2O"),
+        fr_u(-0.01, "(W/cfm)/in_H2O**2"),
+    )
+
+
+class EEREBPMMultiStageBackwardCurvedImpellerConstantAirflowFan(
+    EEREBPMMultiStageConstantAirflowFan
+):
+    BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.09, 0.10, 0.11, 0.12)]
 
 
 # TODO: class ECMTorqueFan(Fan)

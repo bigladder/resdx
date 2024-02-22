@@ -46,7 +46,7 @@ class HeatingDistribution:
 
     def __init__(
         self,
-        outdoor_design_temperature: float=fr_u(5.0, "°F"),
+        outdoor_design_temperature: float = fr_u(5.0, "°F"),
         # fmt: off
         fractional_hours: List[float]=[0.132, 0.111, 0.103, 0.093, 0.100, 0.109, 0.126, 0.087, 0.055,0.036, 0.026, 0.013, 0.006, 0.002, 0.001, 0, 0, 0],
         # fmt: on
@@ -364,16 +364,16 @@ class DXUnit:
             self.get_rated_full_flow_rated_pressure()
         )
 
-        self.A_full_cond = self.make_condition(
+        self.A_full_cond: CoolingConditions = self.make_condition(
             CoolingConditions, compressor_speed=self.cooling_full_load_speed
         )
-        self.B_full_cond = self.make_condition(
+        self.B_full_cond: CoolingConditions = self.make_condition(
             CoolingConditions,
             outdoor=PsychState(drybulb=fr_u(82.0, "°F"), wetbulb=fr_u(65.0, "°F")),
             compressor_speed=self.cooling_full_load_speed,
         )
 
-        self.H1_full_cond = self.make_condition(
+        self.H1_full_cond: HeatingConditions = self.make_condition(
             HeatingConditions, compressor_speed=self.heating_full_load_speed
         )
         self.H2_full_cond = self.make_condition(
@@ -381,12 +381,12 @@ class DXUnit:
             outdoor=PsychState(drybulb=fr_u(35.0, "°F"), wetbulb=fr_u(33.0, "°F")),
             compressor_speed=self.heating_full_load_speed,
         )
-        self.H3_full_cond = self.make_condition(
+        self.H3_full_cond: HeatingConditions = self.make_condition(
             HeatingConditions,
             outdoor=PsychState(drybulb=fr_u(17.0, "°F"), wetbulb=fr_u(15.0, "°F")),
             compressor_speed=self.heating_full_load_speed,
         )
-        self.H4_full_cond = self.make_condition(
+        self.H4_full_cond: HeatingConditions = self.make_condition(
             HeatingConditions,
             outdoor=PsychState(drybulb=fr_u(5.0, "°F"), wetbulb=fr_u(3.0, "°F")),
             compressor_speed=self.heating_full_load_speed,
@@ -394,10 +394,10 @@ class DXUnit:
 
         if self.staging_type != StagingType.SINGLE_STAGE:
             if self.staging_type == StagingType.VARIABLE_SPEED:
-                self.A_int_cond = self.make_condition(
+                self.A_int_cond: CoolingConditions = self.make_condition(
                     CoolingConditions, compressor_speed=self.cooling_intermediate_speed
                 )  # Not used in AHRI ratings, only used for 'rated' SHR calculations at low speeds
-                self.E_int_cond = self.make_condition(
+                self.E_int_cond: CoolingConditions = self.make_condition(
                     CoolingConditions,
                     outdoor=PsychState(
                         drybulb=fr_u(87.0, "°F"), wetbulb=fr_u(69.0, "°F")
@@ -405,7 +405,7 @@ class DXUnit:
                     compressor_speed=self.cooling_intermediate_speed,
                 )
 
-                self.H2_int_cond = self.make_condition(
+                self.H2_int_cond: HeatingConditions = self.make_condition(
                     HeatingConditions,
                     outdoor=PsychState(
                         drybulb=fr_u(35.0, "°F"), wetbulb=fr_u(33.0, "°F")
@@ -414,38 +414,38 @@ class DXUnit:
                 )
 
             if self.cooling_boost_speed is not None:
-                self.A_boost_cond = self.make_condition(
+                self.A_boost_cond: CoolingConditions = self.make_condition(
                     CoolingConditions, compressor_speed=self.cooling_boost_speed
                 )  # TODO: Evaluate impacts on AHRI ratings
 
-            self.A_low_cond = self.make_condition(
+            self.A_low_cond: CoolingConditions = self.make_condition(
                 CoolingConditions, compressor_speed=self.cooling_low_speed
             )  # Not used in AHRI ratings, only used for 'rated' SHR calculations at low speeds
-            self.B_low_cond = self.make_condition(
+            self.B_low_cond: CoolingConditions = self.make_condition(
                 CoolingConditions,
                 outdoor=PsychState(drybulb=fr_u(82.0, "°F"), wetbulb=fr_u(65.0, "°F")),
                 compressor_speed=self.cooling_low_speed,
             )
-            self.F_low_cond = self.make_condition(
+            self.F_low_cond: CoolingConditions = self.make_condition(
                 CoolingConditions,
                 outdoor=PsychState(drybulb=fr_u(67.0, "°F"), wetbulb=fr_u(53.5, "°F")),
                 compressor_speed=self.cooling_low_speed,
             )
 
-            self.H0_low_cond = self.make_condition(
+            self.H0_low_cond: HeatingConditions = self.make_condition(
                 HeatingConditions,
                 outdoor=PsychState(drybulb=fr_u(62.0, "°F"), wetbulb=fr_u(56.5, "°F")),
                 compressor_speed=self.heating_low_speed,
             )
-            self.H1_low_cond = self.make_condition(
+            self.H1_low_cond: HeatingConditions = self.make_condition(
                 HeatingConditions, compressor_speed=1
             )
-            self.H2_low_cond = self.make_condition(
+            self.H2_low_cond: HeatingConditions = self.make_condition(
                 HeatingConditions,
                 outdoor=PsychState(drybulb=fr_u(35.0, "°F"), wetbulb=fr_u(33.0, "°F")),
                 compressor_speed=self.heating_low_speed,
             )
-            self.H3_low_cond = self.make_condition(
+            self.H3_low_cond: HeatingConditions = self.make_condition(
                 HeatingConditions,
                 outdoor=PsychState(drybulb=fr_u(17.0, "°F"), wetbulb=fr_u(15.0, "°F")),
                 compressor_speed=self.heating_low_speed,
@@ -735,10 +735,10 @@ class DXUnit:
         w_i = inlet_state.get_hr()
         T_odb = outlet_state.db_C
         w_o = outlet_state.get_hr()
-        root_fn = lambda T_ADP: psychrolib.GetHumRatioFromRelHum(
-            T_ADP, 1.0, inlet_state.p
-        ) - (w_i - (w_i - w_o) / (T_idb - T_odb) * (T_idb - T_ADP))
-        T_ADP = optimize.newton(root_fn, T_idb)
+
+        def root_function(T_ADP):
+            return psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, inlet_state.p) - (w_i - (w_i - w_o) / (T_idb - T_odb) * (T_idb - T_ADP))
+        T_ADP = optimize.newton(root_function, T_idb)
         w_ADP = w_i - (w_i - w_o) / (T_idb - T_odb) * (T_idb - T_ADP)
         # Output an error if ADP calculation method is not applicable:
         if T_odb < T_ADP or w_o < w_ADP:
@@ -747,7 +747,7 @@ class DXUnit:
             )
         return PsychState(fr_u(T_ADP, "°C"), pressure=inlet_state.p, hum_rat=w_ADP)
 
-    def calculate_rated_bypass_factor(self, conditions):  # for rated flow rate
+    def calculate_rated_bypass_factor(self, conditions: CoolingConditions):  # for rated flow rate
         Q_s_rated = self.rated_gross_shr_cooling[
             conditions.compressor_speed
         ] * self.gross_total_cooling_capacity(conditions)

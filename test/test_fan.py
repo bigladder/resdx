@@ -68,3 +68,22 @@ def test_ecm_fan():
     assert ecm_fan.airflow(1) == fr_u(2200.0, "cfm")
     assert ecm_fan.power(0) == approx(fr_u(881.43, "W"), 0.01)
     assert ecm_fan.power(6) == approx(fr_u(102.08, "W"), 0.01)
+
+
+def test_eere_fans():
+    design_external_static_pressure = fr_u(0.0, "in_H2O")
+
+    for fan_type in [
+        resdx.EEREBaselinePSCFan,
+        resdx.EEREImprovedPSCFan,
+        resdx.EEREPSCWithControlsFan,
+        resdx.EEREBPMSingleStageConstantTorqueFan,
+        resdx.EEREBPMMultiStageConstantTorqueFan,
+        resdx.EEREBPMMultiStageConstantAirflowFan,
+        resdx.EEREBPMMultiStageBackwardCurvedImpellerConstantAirflowFan,
+    ]:
+        fan = fan_type(
+            design_airflow=[fr_u(v, "cfm") for v in [1179.0, 1003.0, 740.0]],
+            design_external_static_pressure=design_external_static_pressure,
+        )
+        assert fan.airflow(0, 0.0) == fr_u(1179.0, "cfm")
