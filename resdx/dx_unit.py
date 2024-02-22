@@ -89,12 +89,14 @@ class DXUnitMetadata:
         notes="",
         compressor_type="",
         uuid_seed=None,
+        data_version=1,
     ):
         self.description = description
         self.data_source = data_source
         self.notes = notes
         self.compressor_type = compressor_type
         self.uuid_seed = uuid_seed
+        self.data_version = data_version
 
 
 class DXUnit:
@@ -452,22 +454,22 @@ class DXUnit:
             )
 
     def set_sensible_cooling_variables(self):
-        self.rated_gross_shr_cooling[
-            self.cooling_full_load_speed
-        ] = self.model.gross_shr(self.A_full_cond)
+        self.rated_gross_shr_cooling[self.cooling_full_load_speed] = (
+            self.model.gross_shr(self.A_full_cond)
+        )
         self.calculate_rated_bypass_factor(self.A_full_cond)
 
         if self.staging_type != StagingType.SINGLE_STAGE:
             if self.staging_type == StagingType.VARIABLE_SPEED:
-                self.rated_gross_shr_cooling[
-                    self.cooling_intermediate_speed
-                ] = self.model.gross_shr(self.A_int_cond)
+                self.rated_gross_shr_cooling[self.cooling_intermediate_speed] = (
+                    self.model.gross_shr(self.A_int_cond)
+                )
                 self.calculate_rated_bypass_factor(self.A_int_cond)
 
                 if self.cooling_boost_speed is not None:
-                    self.rated_gross_shr_cooling[
-                        self.cooling_boost_speed
-                    ] = self.model.gross_shr(self.A_boost_cond)
+                    self.rated_gross_shr_cooling[self.cooling_boost_speed] = (
+                        self.model.gross_shr(self.A_boost_cond)
+                    )
                     self.calculate_rated_bypass_factor(self.A_boost_cond)
 
             self.rated_gross_shr_cooling[self.cooling_low_speed] = self.model.gross_shr(
@@ -737,7 +739,10 @@ class DXUnit:
         w_o = outlet_state.get_hr()
 
         def root_function(T_ADP):
-            return psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, inlet_state.p) - (w_i - (w_i - w_o) / (T_idb - T_odb) * (T_idb - T_ADP))
+            return psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, inlet_state.p) - (
+                w_i - (w_i - w_o) / (T_idb - T_odb) * (T_idb - T_ADP)
+            )
+
         T_ADP = optimize.newton(root_function, T_idb)
         w_ADP = w_i - (w_i - w_o) / (T_idb - T_odb) * (T_idb - T_ADP)
         # Output an error if ADP calculation method is not applicable:
@@ -747,7 +752,9 @@ class DXUnit:
             )
         return PsychState(fr_u(T_ADP, "°C"), pressure=inlet_state.p, hum_rat=w_ADP)
 
-    def calculate_rated_bypass_factor(self, conditions: CoolingConditions):  # for rated flow rate
+    def calculate_rated_bypass_factor(
+        self, conditions: CoolingConditions
+    ):  # for rated flow rate
         Q_s_rated = self.rated_gross_shr_cooling[
             conditions.compressor_speed
         ] * self.gross_total_cooling_capacity(conditions)
@@ -761,10 +768,9 @@ class DXUnit:
         self.rated_bypass_factor[conditions.compressor_speed] = (h_o - h_ADP) / (
             h_i - h_ADP
         )
-        self.normalized_ntu[
-            conditions.compressor_speed
-        ] = -conditions.mass_airflow * math.log(
-            self.rated_bypass_factor[conditions.compressor_speed]
+        self.normalized_ntu[conditions.compressor_speed] = (
+            -conditions.mass_airflow
+            * math.log(self.rated_bypass_factor[conditions.compressor_speed])
         )  # A0 = - m_dot * ln(BF)
 
     def bypass_factor(self, conditions=None):
@@ -1382,11 +1388,11 @@ class DXUnit:
         metadata_dx = {
             "data_model": "ASHRAE_205",
             "schema": "RS0004",
-            "schema_version": "1.0.0",
+            "schema_version": "2.0.0",
             "description": f"{coil_capacity:.1f} kBtu/h, {coil_cop:.2f} COP, {coil_shr:.2f} SHR cooling coil",
             "id": unique_id,
             "data_timestamp": f"{timestamp}Z",
-            "data_version": 1,
+            "data_version": self.metadata.data_version,
             "data_source": self.metadata.data_source,
             "disclaimer": "This data is synthetic and does not represent any physical products.",
         }
@@ -1433,6 +1439,7 @@ class DXUnit:
         gross_total_capacities = []
         gross_sensible_capacities = []
         gross_powers = []
+        operation_states = []
 
         for tdb_o in outdoor_coil_entering_dry_bulb_temperatures:
             for rh_o in indoor_coil_entering_relative_humidities:
@@ -1464,6 +1471,7 @@ class DXUnit:
                                 gross_powers.append(
                                     self.gross_cooling_power(conditions)
                                 )
+                                operation_states.append("NORMAL")
 
         performance_map_cooling = {
             "grid_variables": grid_variables,
@@ -1471,13 +1479,14 @@ class DXUnit:
                 "gross_total_capacity": gross_total_capacities,
                 "gross_sensible_capacity": gross_sensible_capacities,
                 "gross_power": gross_powers,
+                "operation_state": operation_states,
             },
         }
 
         performance_dx = {
-            "compressor_speed_control_type": "DISCRETE"
-            if self.number_of_cooling_speeds < 3
-            else "CONTINUOUS",  # TODO: Use staging type
+            "compressor_speed_control_type": (
+                "DISCRETE" if self.number_of_cooling_speeds < 3 else "CONTINUOUS"
+            ),  # TODO: Use staging type
             "cycling_degradation_coefficient": self.c_d_cooling,
             "performance_map_cooling": performance_map_cooling,
             "performance_map_standby": {
@@ -1506,11 +1515,11 @@ class DXUnit:
         metadata = {
             "data_model": "ASHRAE_205",
             "schema": "RS0002",
-            "schema_version": "1.0.0",
+            "schema_version": "2.0.0",
             "description": self.metadata.description,
             "id": unique_id_rs0002,
             "data_timestamp": f"{timestamp}Z",
-            "data_version": 1,
+            "data_version": self.metadata.data_version,
             "data_source": self.metadata.data_source,
             "disclaimer": "This data is synthetic and does not represent any physical products.",
         }

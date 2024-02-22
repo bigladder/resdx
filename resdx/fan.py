@@ -18,11 +18,13 @@ class FanMetadata:
         data_source="https://github.com/bigladder/resdx",
         notes="",
         uuid_seed=None,
+        data_version=1,
     ):
         self.description = description
         self.data_source = data_source
         self.notes = notes
         self.uuid_seed = uuid_seed
+        self.data_version = data_version
 
 
 class Fan:
@@ -238,11 +240,11 @@ class Fan:
         metadata_motor = {
             "data_model": "ASHRAE_205",
             "schema": "RS0005",
-            "schema_version": "1.0.0",
+            "schema_version": "2.0.0",
             "description": f"Placeholder motor representation (performance characterized in parent RS0003 fan assembly)",
             "id": str(uuid.UUID(int=rnd.getrandbits(128), version=4)),
             "data_timestamp": f"{timestamp}Z",
-            "data_version": 1,
+            "data_version": self.metadata.data_version,
             "data_source": self.metadata.data_source,
             "disclaimer": "This data is synthetic and does not represent any physical products.",
         }
@@ -284,11 +286,11 @@ class Fan:
         metadata = {
             "data_model": "ASHRAE_205",
             "schema": "RS0003",
-            "schema_version": "1.0.0",
+            "schema_version": "2.0.0",
             "description": self.metadata.description,
             "id": unique_id,
             "data_timestamp": f"{timestamp}Z",
-            "data_version": 1,
+            "data_version": self.metadata.data_version,
             "data_source": self.metadata.data_source,
             "disclaimer": "This data is synthetic and does not represent any physical products.",
         }
@@ -315,6 +317,7 @@ class Fan:
         standard_air_volumetric_flow_rate = []
         shaft_power = []
         impeller_rotational_speed = []
+        operation_state = []
 
         for speed in speed_number:
             for esp in static_pressure_difference:
@@ -341,6 +344,7 @@ class Fan:
                         "rps",
                     )
                 )
+                operation_state.append("NORMAL")
 
         performance_map = {
             "grid_variables": grid_variables,
@@ -348,6 +352,7 @@ class Fan:
                 "shaft_power": shaft_power,
                 "standard_air_volumetric_flow_rate": standard_air_volumetric_flow_rate,
                 "impeller_rotational_speed": impeller_rotational_speed,
+                "operation_state": operation_state,
             },
         }
 
