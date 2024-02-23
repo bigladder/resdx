@@ -40,6 +40,12 @@ dx_unit = resdx.DXUnit(
 size = resdx.to_u(dx_unit.rated_net_total_cooling_capacity[0], "ton_ref")
 
 dx_unit.metadata.description = f"{dx_unit.number_of_cooling_speeds} speed, {size:.1f} ton, {seer2:.1f} SEER2 air conditioner"
+dx_unit.metadata.uuid_seed = hash((dx_unit.number_of_cooling_speeds, size, seer2))
+dx_unit.metadata.data_version = 2
+
+dx_unit.fan.metadata.uuid_seed = dx_unit.metadata.uuid_seed + 1
+dx_unit.fan.metadata.data_version = dx_unit.metadata.data_version
+
 
 representation = dx_unit.generate_205_representation()
 
