@@ -1,6 +1,9 @@
 name: Setup and Test
 
-on: push
+on:
+  push:
+  schedule:
+    - cron: "0 9 * * SUN"
 
 jobs:
   build:
