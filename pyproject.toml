@@ -11,6 +11,7 @@ PsychroLib = "^2.5.0"
 matplotlib = "^3.3.4"
 scipy = "^1.6.3"
 seaborn = "^0.11.1"
+numpy = "1.24.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.1.3"
