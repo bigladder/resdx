@@ -19,7 +19,7 @@ jobs:
     name: ${{ matrix.os }} py${{ matrix.python-version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Python ${{ matrix.python-version }}
         uses: bigladder/github-actions/setup-python-poetry@main
         with:
@@ -27,7 +27,7 @@ jobs:
       - name: Test
         run: poetry run doit
       - name: Upload output
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: output-${{ matrix.os }}-py${{ matrix.python-version }}
           path: output
