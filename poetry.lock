@@ -444,13 +444,13 @@ files = [
 
 [[package]]
 name = "koozie"
-version = "1.2.0"
+version = "1.2.2"
 description = "A light-weight wrapper around pint for unit conversions."
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "koozie-1.2.0-py3-none-any.whl", hash = "sha256:92f27536707fd13121acb6030d0b85e30bc4e66061e08feaebd0c53cc6b2692b"},
-    {file = "koozie-1.2.0.tar.gz", hash = "sha256:a3f385a4012f9a147b97072878f9b1970000f6e850ab13525815bd201d45b2de"},
+    {file = "koozie-1.2.2-py3-none-any.whl", hash = "sha256:6c32fd9cb15e036a35671a668ab78cb108c8c20a5641f3d3a4e99b8d2d0dbf84"},
+    {file = "koozie-1.2.2.tar.gz", hash = "sha256:e875847febe5aeafb203fbe9855db935a096119c41a5c4e0bf6786def9a16b08"},
 ]
 
 [package.dependencies]
@@ -936,4 +936,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "42b0110c1a7b3a88526fdfbfd827ea8b21d3b8170d8e68eda40a00ddedbae0b6"
+content-hash = "839ac297aa7e7dc30a58a222467638be209e588b66a9d2cbca9406d940887440"
