@@ -1,7 +1,7 @@
 from .base_model import DXModel
 from .nrel import NRELDXModel
 from .title24 import Title24DXModel
-from .henderson_defrost_model import HendersonDefrostModel
+from .carrier_defrost_model import CarrierDefrostModel
 from koozie import fr_u
 from ..fan import ECMFlowFan, PSCFan
 
@@ -35,13 +35,13 @@ class RESNETDXModel(DXModel):
         return NRELDXModel.gross_steady_state_heating_capacity(self, conditions)
 
     def gross_integrated_heating_capacity(self, conditions):
-        return HendersonDefrostModel.gross_integrated_heating_capacity(self, conditions)
+        return CarrierDefrostModel.gross_integrated_heating_capacity(self, conditions)
 
     def gross_steady_state_heating_power(self, conditions):
         return NRELDXModel.gross_steady_state_heating_power(self, conditions)
 
     def gross_integrated_heating_power(self, conditions):
-        return HendersonDefrostModel.gross_integrated_heating_power(self, conditions)
+        return CarrierDefrostModel.gross_integrated_heating_power(self, conditions)
 
     def gross_cooling_power_charge_factor(self, conditions):
         return NRELDXModel.gross_cooling_power_charge_factor(self, conditions)

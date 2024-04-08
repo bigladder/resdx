@@ -6,14 +6,14 @@ from koozie import fr_u
 
 # Defrost characterisitcs
 class DefrostControl(Enum):
-    NONE = (0,)
-    TIMED = (1,)
+    NONE = 0
+    TIMED = 1
     DEMAND = 2
 
 
 class DefrostStrategy(Enum):
-    NONE = (0,)
-    REVERSE_CYCLE = (1,)
+    NONE = 0
+    REVERSE_CYCLE = 1
     RESISTIVE = 2
 
 
