@@ -549,24 +549,13 @@ class ECMFlowFan(Fan):
         super().add_speed(airflow, external_static_pressure)
         self.free_efficacy.append(
             self.design_free_efficacy
-            * self.normalized_free_efficacy(self.design_airflow_ratio[-1])
+            * self.design_airflow_ratio[-1]
+            * self.design_airflow_ratio[-1]
         )
 
     def remove_speed(self, speed_setting):
         super().remove_speed(speed_setting)
         self.free_efficacy.pop(speed_setting)
-
-    def normalized_free_efficacy(self, flow_ratio):
-        minimum_flow_ratio = 0.293 / 2.4  # local minima, derived mathematically
-        minimum_efficacy = self.free_efficacy_fit(minimum_flow_ratio)
-        if flow_ratio < minimum_flow_ratio:
-            return minimum_efficacy
-        else:
-            return self.free_efficacy_fit(flow_ratio)
-
-    @staticmethod
-    def free_efficacy_fit(flow_ratio):
-        return 0.0981 - 0.293 * flow_ratio + 1.2 * flow_ratio**2
 
     def unconstrained_efficacy(self, speed_setting, external_static_pressure):
         return (
