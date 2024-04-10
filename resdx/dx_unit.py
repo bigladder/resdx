@@ -165,6 +165,7 @@ class DXUnit:
         heating_full_load_speed=0,  # The first entry (index = 0) in arrays reflects AHRI "full" speed.
         heating_intermediate_speed=None,
         staging_type=None,  # Allow default based on inputs
+        is_ducted=True,
         rating_standard=AHRIVersion.AHRI_210_240_2017,
         # Used for comparisons and to inform some defaults
         input_seer=None,
@@ -184,6 +185,7 @@ class DXUnit:
         self.input_seer = input_seer
         self.input_hspf = input_hspf
         self.cycling_method = cycling_method
+        self.is_ducted = is_ducted
 
         if defrost is None:
             self.defrost = Defrost()
@@ -626,6 +628,8 @@ class DXUnit:
         return condition
 
     def get_rated_full_flow_rated_pressure(self):
+        if self.is_ducted:
+            return 0.0
         if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
             # TODO: Add Small-duct, High-velocity Systems
             if self.rated_net_total_cooling_capacity[0] <= fr_u(29000, "Btu/h"):
