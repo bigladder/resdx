@@ -164,11 +164,11 @@ class RESNETDXModel(DXModel):
             self.system.heating_fan_speed[0] = self.system.fan.number_of_speeds - 1
 
             # At rated pressure
-            self.system.rated_cooling_external_static_pressure[
-                0
-            ] = self.system.calculate_rated_pressure(
-                self.system.rated_cooling_airflow[0],
-                self.system.rated_cooling_airflow[0],
+            self.system.rated_cooling_external_static_pressure[0] = (
+                self.system.calculate_rated_pressure(
+                    self.system.rated_cooling_airflow[0],
+                    self.system.rated_cooling_airflow[0],
+                )
             )
             self.system.fan.add_speed(
                 self.system.rated_cooling_airflow[0],
@@ -184,11 +184,11 @@ class RESNETDXModel(DXModel):
                 self.system.rated_cooling_external_static_pressure[0],
             )
 
-            self.system.rated_heating_external_static_pressure[
-                0
-            ] = self.system.calculate_rated_pressure(
-                self.system.rated_heating_airflow[0],
-                self.system.rated_heating_airflow[0],
+            self.system.rated_heating_external_static_pressure[0] = (
+                self.system.calculate_rated_pressure(
+                    self.system.rated_heating_airflow[0],
+                    self.system.rated_heating_airflow[0],
+                )
             )
             self.system.fan.add_speed(
                 self.system.rated_heating_airflow[0],
@@ -217,11 +217,11 @@ class RESNETDXModel(DXModel):
                 self.system.cooling_fan_speed[i] = self.system.fan.number_of_speeds - 1
 
                 # At rated pressure
-                self.system.rated_cooling_external_static_pressure[
-                    i
-                ] = self.system.calculate_rated_pressure(
-                    self.system.rated_cooling_airflow[i],
-                    self.system.rated_cooling_airflow[0],
+                self.system.rated_cooling_external_static_pressure[i] = (
+                    self.system.calculate_rated_pressure(
+                        self.system.rated_cooling_airflow[i],
+                        self.system.rated_cooling_airflow[0],
+                    )
                 )
                 self.system.fan.add_speed(
                     self.system.rated_cooling_airflow[i],
@@ -250,11 +250,11 @@ class RESNETDXModel(DXModel):
                 self.system.heating_fan_speed[i] = self.system.fan.number_of_speeds - 1
 
                 # At rated pressure
-                self.system.rated_heating_external_static_pressure[
-                    i
-                ] = self.system.calculate_rated_pressure(
-                    self.system.rated_heating_airflow[i],
-                    self.system.rated_heating_airflow[0],
+                self.system.rated_heating_external_static_pressure[i] = (
+                    self.system.calculate_rated_pressure(
+                        self.system.rated_heating_airflow[i],
+                        self.system.rated_heating_airflow[0],
+                    )
                 )
                 self.system.fan.add_speed(
                     self.system.rated_heating_airflow[i],
@@ -296,13 +296,13 @@ class RESNETDXModel(DXModel):
                     self.system.fan.design_airflow[self.system.cooling_fan_speed[0]]
                     * cooling_capacity_ratio
                 )
-                self.system.rated_cooling_airflow[
-                    1
-                ] = self.system.fan.find_rated_fan_speed(
-                    self.system.rated_gross_total_cooling_capacity[1],
-                    self.system.rated_heating_airflow_per_rated_net_capacity[1],
-                    guess_airflow,
-                    self.system.rated_full_flow_external_static_pressure,
+                self.system.rated_cooling_airflow[1] = (
+                    self.system.fan.find_rated_fan_speed(
+                        self.system.rated_gross_total_cooling_capacity[1],
+                        self.system.rated_heating_airflow_per_rated_net_capacity[1],
+                        guess_airflow,
+                        self.system.rated_full_flow_external_static_pressure,
+                    )
                 )
                 self.system.rated_cooling_fan_speed[1] = (
                     self.system.fan.number_of_speeds - 1
@@ -312,11 +312,11 @@ class RESNETDXModel(DXModel):
                 self.system.fan.add_speed(self.system.rated_cooling_airflow[1])
                 self.system.cooling_fan_speed[1] = self.system.fan.number_of_speeds - 1
 
-                self.system.rated_cooling_external_static_pressure[
-                    1
-                ] = self.system.calculate_rated_pressure(
-                    self.system.rated_cooling_airflow[1],
-                    self.system.rated_cooling_airflow[0],
+                self.system.rated_cooling_external_static_pressure[1] = (
+                    self.system.calculate_rated_pressure(
+                        self.system.rated_cooling_airflow[1],
+                        self.system.rated_cooling_airflow[0],
+                    )
                 )
                 self.system.rated_cooling_fan_power[1] = self.system.fan.power(
                     self.system.rated_cooling_fan_speed[1],
@@ -347,13 +347,13 @@ class RESNETDXModel(DXModel):
                     self.system.fan.design_airflow[self.system.heating_fan_speed[0]]
                     * heating_capacity_ratio
                 )
-                self.system.rated_heating_airflow[
-                    1
-                ] = self.system.fan.find_rated_fan_speed(
-                    self.system.rated_gross_heating_capacity[1],
-                    self.system.rated_heating_airflow_per_rated_net_capacity[1],
-                    guess_airflow,
-                    self.system.rated_full_flow_external_static_pressure,
+                self.system.rated_heating_airflow[1] = (
+                    self.system.fan.find_rated_fan_speed(
+                        self.system.rated_gross_heating_capacity[1],
+                        self.system.rated_heating_airflow_per_rated_net_capacity[1],
+                        guess_airflow,
+                        self.system.rated_full_flow_external_static_pressure,
+                    )
                 )
                 self.system.rated_heating_fan_speed[1] = (
                     self.system.fan.number_of_speeds - 1
@@ -363,11 +363,11 @@ class RESNETDXModel(DXModel):
                 self.system.fan.add_speed(self.system.rated_heating_airflow[1])
                 self.system.heating_fan_speed[1] = self.system.fan.number_of_speeds - 1
 
-                self.system.rated_heating_external_static_pressure[
-                    1
-                ] = self.system.calculate_rated_pressure(
-                    self.system.rated_heating_airflow[1],
-                    self.system.rated_heating_airflow[0],
+                self.system.rated_heating_external_static_pressure[1] = (
+                    self.system.calculate_rated_pressure(
+                        self.system.rated_heating_airflow[1],
+                        self.system.rated_heating_airflow[0],
+                    )
                 )
                 self.system.rated_heating_fan_power[1] = self.system.fan.power(
                     self.system.rated_heating_fan_speed[1],
