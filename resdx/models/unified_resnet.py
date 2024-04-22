@@ -405,16 +405,25 @@ class RESNETDXModel(DXModel):
             ]
         else:
             Qr95min = (
-                0.474 - 0.119 * self.system.kwargs["seer2"] / self.system.kwargs["eer2"]
+                0.510 - 0.119 * self.system.kwargs["seer2"] / self.system.kwargs["eer2"]
             )
 
-        Qr95rated = 0.893
-        Qm95max = 0.955
-        Qm95min = 0.925
-        EIRr95rated = 0.879
-        EIRr95min = 0.710
-        EIRm95max = 1.368
-        EIRm95min = 1.318
+        if "rated_net_total_cooling_min_eir_ratio_82" in self.system.kwargs:
+            EIRr82min = self.system.kwargs[
+                "rated_net_total_cooling_min_eir_ratio_82"
+            ]
+        else:
+            EIRr82min = (
+                1.305 - 0.324 * self.system.kwargs["seer2"] / self.system.kwargs["eer2"]
+            )
+
+
+        Qr95rated = 0.934
+        Qm95max = 0.940
+        Qm95min = 0.948
+        EIRr95rated = 0.928
+        EIRm95max = 1.326
+        EIRm95min = 1.315
 
         Q = [[None] * (Qmax + 1) for _ in range(Tmax + 1)]  # Initialize dimensions
         P = Q
@@ -430,9 +439,9 @@ class RESNETDXModel(DXModel):
         Q[T82][Qmax] = Q[T95][Qmax] / Qm95max
         Q[T82][Qmin] = Q[T95][Qmin] / Qm95min
         Q[T82][Qrated] = Q[T82][Qmin] + (Q[T95][Qrated] - Q[T95][Qmin]) / (
-            Q[T95][Qmax] - Q[T95][Qrated]
+            Q[T95][Qmax] - Q[T95][Qmin]
         ) * (
-            Q[T82][Qmax] - Q[T95][Qmin]
+            Q[T82][Qmax] - Q[T82][Qmin]
         )  # Interpolate
 
         # Tmin
@@ -447,22 +456,21 @@ class RESNETDXModel(DXModel):
 
         # Net Power
         Pr95rated = Qr95rated * EIRr95rated
-        Pr95min = Qr95min * EIRr95min
-        Pm95max = Qm95max * EIRm95max
+        Pr82min = (Q[T82][Qmin]/Q[T82][Qmax]) * EIRr82min
         Pm95min = Qm95min * EIRm95min
+        Pm95max = Qm95max * EIRm95max
 
-        # 95 F
+        # 95/82 F
         P[T95][Qrated] = Q[T95][Qrated] / fr_u(self.system.kwargs["eer2"], "Wh/Btu")
         P[T95][Qmax] = P[T95][Qrated] / Pr95rated
-        P[T95][Qmin] = P[T95][Qmax] * Pr95min
-
-        # 82 F
         P[T82][Qmax] = P[T95][Qmax] / Pm95max
-        P[T82][Qmin] = P[T95][Qmin] / Pm95min
+        P[T82][Qmin] = P[T82][Qmax] * Pr82min
+        P[T95][Qmin] = P[T82][Qmin] * Pm95min
+
         P[T82][Qrated] = P[T82][Qmin] + (P[T95][Qrated] - P[T95][Qmin]) / (
-            P[T95][Qmax] - P[T95][Qrated]
+            P[T95][Qmax] - P[T95][Qmin]
         ) * (
-            P[T82][Qmax] - P[T95][Qmin]
+            P[T82][Qmax] - P[T82][Qmin]
         )  # Interpolate
 
         # Tmin
@@ -494,25 +502,25 @@ class RESNETDXModel(DXModel):
         Qrated = 1
         Qmax = 2
 
-        Qr47rated = 0.850
-        Qr47min = 0.260
+        Qr47rated = 0.908
+        Qr47min = 0.272
         Qr17rated = 0.817
-        Qr17min = 0.264
-        Qm5max = 0.897
-        Qr5rated = 0.974
-        Qr5min = 0.253
+        Qr17min = 0.341
+        Qm5max = 0.866
+        Qr5rated = 0.988
+        Qr5min = 0.321
         QmslopeLCTmax = -0.025
-        QmslopeLCTmin = -0.025
-        EIRr47rated = 0.904
-        EIRr47min = 0.738
-        EIRm17rated = 1.365
-        EIRr17rated = 0.882
-        EIRr17min = 0.844
-        EIRm5max = 1.118
-        EIRr5rated = 0.998
-        EIRr5min = 0.955
+        QmslopeLCTmin = -0.024
+        EIRr47rated = 0.939
+        EIRr47min = 0.730
+        EIRm17rated = 1.351
+        EIRr17rated = 0.902
+        EIRr17min = 0.798
+        EIRm5max = 1.164
+        EIRr5rated = 1.000
+        EIRr5min = 0.866
         EIRmslopeLCTmax = 0.012
-        EIRmslopeLCTmin = 0.014
+        EIRmslopeLCTmin = 0.012
 
         if "rated_net_stead_state_heating_capacity_17" in self.system.kwargs:
             Qm17rated = (
@@ -520,7 +528,7 @@ class RESNETDXModel(DXModel):
                 / self.system.rated_net_total_cooling_capacity
             )
         else:
-            Qm17rated = 0.719
+            Qm17rated = 0.689
 
         Q = [[None] * (Qmax + 1) for _ in range(Tmax + 1)]  # Initialize dimensions
         P = Q
@@ -557,9 +565,9 @@ class RESNETDXModel(DXModel):
         Q[Tmin][Qmax] = Q[T5][Qmax] * QmLCTmax
         Q[Tmin][Qmin] = Q[T5][Qmin] * QmLCTmin
         Q[Tmin][Qrated] = Q[Tmin][Qmin] + (Q[T5][Qrated] - Q[T5][Qmin]) / (
-            Q[T5][Qmax] - Q[T5][Qrated]
+            Q[T5][Qmax] - Q[T5][Qmin]
         ) * (
-            Q[Tmin][Qmax] - Q[T5][Qmin]
+            Q[Tmin][Qmax] - Q[Tmin][Qmin]
         )  # Interpolate
 
         # Tmax
@@ -570,7 +578,7 @@ class RESNETDXModel(DXModel):
         # Net Power
         if self.system.rated_net_heating_cop is None:
             self.system.rated_net_heating_cop = (
-                2.222 + 0.123 * self.system.kwargs["hspf2"]
+                2.837 + 0.066 * self.system.kwargs["hspf2"]
             )
 
         Pr47rated = Qr47rated * EIRr47rated
