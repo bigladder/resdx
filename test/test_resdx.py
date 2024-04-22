@@ -173,7 +173,7 @@ def test_2_speed_regression():
     )
     assert dx_unit_2_speed.seer() == approx(seer_2, 0.01)
     assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.333, 0.001)
-    assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.681, 0.001)
+    assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.685, 0.001)
     assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
     assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(3.962, 0.001)
     assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.433, 0.001)

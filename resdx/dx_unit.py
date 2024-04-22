@@ -628,7 +628,7 @@ class DXUnit:
         return condition
 
     def get_rated_full_flow_rated_pressure(self):
-        if self.is_ducted:
+        if not self.is_ducted:
             return 0.0
         if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
             # TODO: Add Small-duct, High-velocity Systems

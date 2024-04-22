@@ -70,8 +70,12 @@ class NRELDXModel(DXModel):
 
     def gross_total_cooling_capacity(self, conditions):
         """From Cutler et al."""
-        T_iwb = to_u(conditions.indoor.get_wb(), "°F")  # Cutler curves use °F
-        T_odb = to_u(conditions.outdoor.db, "°F")  # Cutler curves use °F
+        T_iwb = bracket(
+            to_u(conditions.indoor.get_wb(), "°F"), min=57.0, max=72.0
+        )  # Cutler curves use °F
+        T_odb = bracket(
+            to_u(conditions.outdoor.db, "°F"), min=75.0
+        )  # Cutler curves use °F
         cap_FT = calc_biquad(
             [
                 3.68637657,
