@@ -634,20 +634,10 @@ class RESNETDXModel(DXModel):
         P[Tmax][Qmin] = P[T47][Qmin]
 
     def set_c_d_cooling(self, input):
-        if self.system.input_seer is None:
-            default = 0.25
-        else:
-            default = RESNETDXModel.c_d(self.system.input_seer)
-        self.system.c_d_cooling = self.set_cooling_default(input, default)
+        self.system.c_d_cooling = self.set_cooling_default(input, 0.15)
 
     def set_c_d_heating(self, input):
-        if self.system.input_hspf is None:
-            default = 0.25
-        else:
-            default = RESNETDXModel.c_d(
-                RESNETDXModel.estimated_seer(self.system.input_hspf)
-            )
-        self.system.c_d_heating = self.set_heating_default(input, default)
+        self.system.c_d_heating = self.set_heating_default(input, 0.15)
 
     def set_rated_net_cooling_cop(self, input):
         NRELDXModel.set_rated_net_cooling_cop(self, input)
@@ -661,44 +651,10 @@ class RESNETDXModel(DXModel):
     def set_rated_gross_heating_cop(self, input):
         NRELDXModel.set_rated_gross_heating_cop(self, input)
 
-    @staticmethod
-    def fan_efficacy(seer):
-        if seer <= 14:
-            return fr_u(0.25, "W/cfm")
-        elif seer >= 16:
-            return fr_u(0.18, "W/cfm")
-        else:
-            return fr_u(0.25, "W/cfm") + (
-                fr_u(0.18, "W/cfm") - fr_u(0.25, "W/cfm")
-            ) / 2.0 * (seer - 14.0)
-
-    @staticmethod
-    def c_d(seer):
-        if seer <= 12:
-            return 0.2
-        elif seer >= 13:
-            return 0.1
-        else:
-            return 0.2 + (0.1 - 0.2) * (seer - 12.0)
-
-    @staticmethod
-    def estimated_seer(
-        hspf,
-    ):  # Linear model fitted (R² = 0.994) based on data of the histrory of federal minimums (https://www.eia.gov/todayinenergy/detail.php?id=40232#).
-        return (hspf - 3.2627) / 0.3526
-
-    @staticmethod
-    def estimated_hspf(
-        seer,
-    ):  # Linear model fitted (R² = 0.994) based on data of the histrory of federal minimums (https://www.eia.gov/todayinenergy/detail.php?id=40232#).
-        return seer * 0.3526 + 3.2627
-
-
 def extrapolate_below(ys, y_axis, xs):
     return ys[1][y_axis] - (ys[2][y_axis] - ys[1][y_axis]) / (xs[2] - xs[1]) * (
         xs[1] - xs[0]
     )
-
 
 def extrapolate_above(ys, y_axis, xs):
     i = len(xs) - 1
