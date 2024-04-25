@@ -123,7 +123,10 @@ class Fan:
         )
 
     def rotational_speed(self, speed_setting, external_static_pressure=None):
-        raise NotImplementedError()
+        # Reasonable default. Not needed for much beyond 205 representations.
+        return fr_u(1100, "rpm") * self.airflow_ratio(
+            speed_setting, 0, external_static_pressure
+        )
 
     def operating_pressure(self, speed_setting, system_curve=None):
         # Calculate pressure that corresponds to intersection of system curve and fan curve for this setting
@@ -751,6 +754,71 @@ class EEREBPMMultiStageBackwardCurvedImpellerConstantAirflowFan(
     EEREBPMMultiStageConstantAirflowFan
 ):
     BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.09, 0.10, 0.11, 0.12)]
+
+
+# RESNET Fan Models
+class RESNETFan(Fan):
+    def airflow(self, speed_setting, external_static_pressure=None):
+        return self.design_airflow[speed_setting]
+
+
+class RESNETPSCFan(RESNETFan):
+    EFFICACY_SLOPE = PSCFan.EFFICACY_SLOPE
+
+    def __init__(
+        self,
+        design_airflow,
+    ):
+        super().__init__(design_airflow, fr_u(0.5, "in_H2O"), fr_u(0.414, "W/cfm"))
+
+    def efficacy(self, speed_setting, external_static_pressure=None):
+        return self.design_efficacy * (
+            self.EFFICACY_SLOPE
+            * self.airflow_ratio(speed_setting, 0, external_static_pressure)
+            + (1.0 - self.EFFICACY_SLOPE)
+        )
+
+
+class RESNETBPMFan(RESNETFan):
+    DUCTED_DESIGN_EFFICACY = fr_u(0.281, "W/cfm")
+    DUCTLESS_DESIGN_EFFICACY = fr_u(0.171, "W/cfm")
+
+    def __init__(
+        self,
+        design_airflow,
+    ):
+        super().__init__(
+            design_airflow, fr_u(0.5, "in_H2O"), self.DUCTED_DESIGN_EFFICACY
+        )
+
+    def efficacy(self, speed_setting, external_static_pressure=None):
+        ducted_external_static_pressure = self.operating_pressure(speed_setting)
+        ductless_external_static_pressure = 0.0
+
+        if external_static_pressure is None:
+            external_static_pressure = ducted_external_static_pressure
+
+        ducted_airflow_ratio = self.airflow_ratio(
+            speed_setting, 0, ducted_external_static_pressure
+        )
+        ductless_airflow_ratio = self.airflow_ratio(
+            speed_setting, 0, ductless_external_static_pressure
+        )
+
+        ducted_efficacy = self.DUCTED_DESIGN_EFFICACY * ducted_airflow_ratio**1.75
+
+        ductless_efficacy = (
+            self.DUCTLESS_DESIGN_EFFICACY
+            * ductless_airflow_ratio
+            * ductless_airflow_ratio
+        )
+
+        return (
+            ductless_efficacy
+            + (ducted_efficacy - ductless_efficacy)
+            * external_static_pressure
+            / ducted_external_static_pressure
+        )
 
 
 # TODO: class ECMTorqueFan(Fan)

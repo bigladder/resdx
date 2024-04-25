@@ -21,8 +21,8 @@ CoolingConditions = resdx.dx_unit.CoolingConditions
 
 
 # Single speed gross COP values used for regression testing
-COP_C = 4.121
-COP_H = 3.677
+COP_C = 4.277
+COP_H = 3.740
 
 
 # Tests
@@ -106,8 +106,8 @@ def test_1_speed_2023_regression():
 
     dx_unit_1_speed.print_cooling_info()
     dx_unit_1_speed.print_heating_info()
-    assert dx_unit_1_speed.seer() == approx(12.932, 0.001)  # SEER2
-    assert dx_unit_1_speed.hspf() == approx(7.053, 0.001)  # HSPF2
+    assert dx_unit_1_speed.seer() == approx(12.999, 0.001)  # SEER2
+    assert dx_unit_1_speed.hspf() == approx(7.068, 0.001)  # HSPF2
 
 
 def test_1_speed_rating_version():
@@ -131,7 +131,7 @@ def test_1_speed_rating_version():
     assert dx_unit_2017.rated_cooling_airflow[0] == approx(
         dx_unit_2023.rated_cooling_airflow[0], 0.001
     )
-    assert dx_unit_2017.seer() > dx_unit_2023.seer()  # SEER > SEER2
+    assert dx_unit_2017.seer() >= dx_unit_2023.seer()  # SEER > SEER2
     assert dx_unit_2017.hspf() > dx_unit_2023.hspf()  # HSPF > HSPF2
 
 
@@ -172,11 +172,11 @@ def test_2_speed_regression():
         dx_unit_2_speed.rated_gross_total_cooling_capacity[0], 0.01
     )
     assert dx_unit_2_speed.seer() == approx(seer_2, 0.01)
-    assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.423, 0.001)
-    assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.779, 0.001)
+    assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.407, 0.001)
+    assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.763, 0.001)
     assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
-    assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(4.037, 0.001)
-    assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.491, 0.001)
+    assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(4.031, 0.001)
+    assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.486, 0.001)
 
 
 def test_vchp_regression():

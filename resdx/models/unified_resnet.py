@@ -1,9 +1,16 @@
+from enum import Enum
+
 from .base_model import DXModel
 from .nrel import NRELDXModel
 from .title24 import Title24DXModel
 from .carrier_defrost_model import CarrierDefrostModel
 from koozie import fr_u
-from ..fan import ECMFlowFan, PSCFan
+from ..fan import RESNETPSCFan, RESNETBPMFan
+
+
+class FanMotorType(Enum):
+    PSC = 1
+    BPM = 2
 
 
 class RESNETDXModel(DXModel):
@@ -11,12 +18,14 @@ class RESNETDXModel(DXModel):
     def __init__(self):
         super().__init__()
         self.allowed_kwargs += [
-            "eer2",
-            "seer2",
-            "hspf2",
             "rated_net_stead_state_heating_capacity_17",
             "rated_net_total_cooling_min_capacity_ratio_95",
+            "motor_type",
         ]
+        self.motor_type = None
+
+    def process_kwargs(self):
+        self.motor_type = self.get_kwarg_value("motor_type")
 
     # Power and capacity
     def gross_cooling_power(self, conditions):
@@ -140,19 +149,16 @@ class RESNETDXModel(DXModel):
                 self.system.rated_net_total_cooling_capacity[0]
                 * self.system.rated_cooling_airflow_per_rated_net_capacity[0]
             )
-            design_external_static_pressure = fr_u(0.5, "in_H2O")
-            if self.system.number_of_cooling_speeds > 1:
-                self.system.fan = ECMFlowFan(
-                    self.system.rated_cooling_airflow[0],
-                    design_external_static_pressure,
-                    design_efficacy=fr_u(0.3, "W/cfm"),
-                )
-            else:
-                self.system.fan = PSCFan(
-                    self.system.rated_cooling_airflow[0],
-                    design_external_static_pressure,
-                    design_efficacy=fr_u(0.365, "W/cfm"),
-                )
+            if self.motor_type is None:
+                if self.system.number_of_cooling_speeds > 1:
+                    self.motor_type = FanMotorType.BPM
+                else:
+                    self.motor_type = FanMotorType.PSC
+
+            if self.motor_type == FanMotorType.PSC:
+                self.system.fan = RESNETPSCFan(self.system.rated_cooling_airflow[0])
+            elif self.motor_type == FanMotorType.BPM:
+                self.system.fan = RESNETBPMFan(self.system.rated_cooling_airflow[0])
 
             self.system.cooling_fan_speed[0] = self.system.fan.number_of_speeds - 1
 
@@ -409,14 +415,11 @@ class RESNETDXModel(DXModel):
             )
 
         if "rated_net_total_cooling_min_eir_ratio_82" in self.system.kwargs:
-            EIRr82min = self.system.kwargs[
-                "rated_net_total_cooling_min_eir_ratio_82"
-            ]
+            EIRr82min = self.system.kwargs["rated_net_total_cooling_min_eir_ratio_82"]
         else:
             EIRr82min = (
                 1.305 - 0.324 * self.system.kwargs["seer2"] / self.system.kwargs["eer2"]
             )
-
 
         Qr95rated = 0.934
         Qm95max = 0.940
@@ -456,7 +459,7 @@ class RESNETDXModel(DXModel):
 
         # Net Power
         Pr95rated = Qr95rated * EIRr95rated
-        Pr82min = (Q[T82][Qmin]/Q[T82][Qmax]) * EIRr82min
+        Pr82min = (Q[T82][Qmin] / Q[T82][Qmax]) * EIRr82min
         Pm95min = Qm95min * EIRm95min
         Pm95max = Qm95max * EIRm95max
 
@@ -651,10 +654,12 @@ class RESNETDXModel(DXModel):
     def set_rated_gross_heating_cop(self, input):
         NRELDXModel.set_rated_gross_heating_cop(self, input)
 
+
 def extrapolate_below(ys, y_axis, xs):
     return ys[1][y_axis] - (ys[2][y_axis] - ys[1][y_axis]) / (xs[2] - xs[1]) * (
         xs[1] - xs[0]
     )
+
 
 def extrapolate_above(ys, y_axis, xs):
     i = len(xs) - 1
