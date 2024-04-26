@@ -1,19 +1,22 @@
 from enum import Enum
 import math
-from scipy import optimize
+import uuid
+import datetime
+from random import Random
 from typing import Union, List
+
+from scipy import optimize
+from numpy import linspace
+
+from koozie import fr_u, to_u
 
 from .psychrometrics import PsychState, psychrolib, STANDARD_CONDITIONS
 from .conditions import HeatingConditions, CoolingConditions
 from .defrost import Defrost, DefrostControl
-from koozie import fr_u, to_u
 from .util import find_nearest, limit_check
 from .models import RESNETDXModel, DXModel
 from .fan import Fan
-from numpy import linspace
-import uuid
-import datetime
-from random import Random
+from .enums import StagingType
 
 
 def interpolate(f, cond_1, cond_2, x):
@@ -25,12 +28,6 @@ def interpolate(f, cond_1, cond_2, x):
 class CyclingMethod(Enum):
     BETWEEN_LOW_FULL = 1
     BETWEEN_OFF_FULL = 2
-
-
-class StagingType(Enum):
-    SINGLE_STAGE = 1
-    TWO_STAGE = 2
-    VARIABLE_SPEED = 3
 
 
 class AHRIVersion(Enum):
@@ -138,6 +135,7 @@ class DXUnit:
         rated_net_cooling_cop=None,
         rated_cooling_airflow_per_rated_net_capacity=None,
         c_d_cooling=None,
+        cooling_off_temperature=fr_u(125.0, "°F"),
         # Heating (rating = AHRI H1 conditions)
         rated_net_heating_capacity=None,
         rated_gross_heating_cop=3.82,
@@ -169,6 +167,7 @@ class DXUnit:
         rating_standard=AHRIVersion.AHRI_210_240_2017,
         # Used for comparisons and to inform some defaults
         input_seer=None,
+        input_eer=None,
         input_hspf=None,
         metadata=None,
         **kwargs,
@@ -184,8 +183,12 @@ class DXUnit:
 
         self.input_seer = input_seer
         self.input_hspf = input_hspf
+        self.input_eer = input_eer
+
         self.cycling_method = cycling_method
         self.is_ducted = is_ducted
+
+        self.cooling_off_temperature = cooling_off_temperature
 
         if defrost is None:
             self.defrost = Defrost()
@@ -217,6 +220,10 @@ class DXUnit:
             self.number_of_cooling_speeds = len(rated_net_total_cooling_capacity)
         elif number_of_heating_speeds is not None:
             self.number_of_cooling_speeds = number_of_heating_speeds
+        elif staging_type is not None:
+            self.number_of_cooling_speeds = (
+                staging_type.value if staging_type != StagingType.VARIABLE_SPEED else 4
+            )
         else:
             self.number_of_cooling_speeds = 1
 
@@ -232,6 +239,10 @@ class DXUnit:
             self.number_of_heating_speeds = len(rated_net_heating_capacity)
         elif number_of_cooling_speeds is not None:
             self.number_of_heating_speeds = number_of_cooling_speeds
+        elif staging_type is not None:
+            self.number_of_heating_speeds = (
+                staging_type.value if staging_type != StagingType.VARIABLE_SPEED else 4
+            )
         else:
             self.number_of_heating_speeds = 1
 
