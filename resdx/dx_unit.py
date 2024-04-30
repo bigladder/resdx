@@ -124,11 +124,10 @@ class DXUnit:
     ] + [(fr_u(50000, "Btu/h") + i * fr_u(10000, "Btu/h")) for i in range(0, 9)]
 
     def __init__(
+        # defaults of None are defaulted within this function based on other argument values
         self,
         model: Union[DXModel, None] = None,
-        # defaults of None are defaulted within this function based on other argument values
-        number_of_cooling_speeds=None,
-        number_of_heating_speeds=None,
+        staging_type=None,  # Allow default based on inputs
         # Cooling (rating = AHRI A conditions)
         rated_net_total_cooling_capacity=fr_u(3.0, "ton_ref"),
         rated_gross_cooling_cop=3.72,
@@ -162,7 +161,6 @@ class DXUnit:
         cooling_intermediate_speed=None,
         heating_full_load_speed=0,  # The first entry (index = 0) in arrays reflects AHRI "full" speed.
         heating_intermediate_speed=None,
-        staging_type=None,  # Allow default based on inputs
         is_ducted=True,
         rating_standard=AHRIVersion.AHRI_210_240_2017,
         # Used for comparisons and to inform some defaults
@@ -208,18 +206,8 @@ class DXUnit:
         self.model_data: dict = {}
 
         # Number of stages/speeds
-        if number_of_cooling_speeds is not None:
-            self.number_of_cooling_speeds = number_of_cooling_speeds
-            if type(rated_net_total_cooling_capacity) is list:
-                num_capacities = len(rated_net_total_cooling_capacity)
-                if num_capacities != number_of_cooling_speeds:
-                    raise Exception(
-                        f"Length of 'rated_net_total_cooling_capacity' ({num_capacities}) != 'number_of_cooling_speeds' ({number_of_cooling_speeds})."
-                    )
-        elif type(rated_net_total_cooling_capacity) is list:
+        if type(rated_net_total_cooling_capacity) is list:
             self.number_of_cooling_speeds = len(rated_net_total_cooling_capacity)
-        elif number_of_heating_speeds is not None:
-            self.number_of_cooling_speeds = number_of_heating_speeds
         elif staging_type is not None:
             self.number_of_cooling_speeds = (
                 staging_type.value if staging_type != StagingType.VARIABLE_SPEED else 4
@@ -227,18 +215,8 @@ class DXUnit:
         else:
             self.number_of_cooling_speeds = 1
 
-        if number_of_heating_speeds is not None:
-            self.number_of_heating_speeds = number_of_heating_speeds
-            if type(rated_net_heating_capacity) is list:
-                num_capacities = len(rated_net_heating_capacity)
-                if num_capacities != number_of_heating_speeds:
-                    raise Exception(
-                        f"Length of 'rated_net_heating_capacity' ({num_capacities}) != 'number_of_cooling_speeds' ({number_of_heating_speeds})."
-                    )
-        elif type(rated_net_heating_capacity) is list:
+        if type(rated_net_heating_capacity) is list:
             self.number_of_heating_speeds = len(rated_net_heating_capacity)
-        elif number_of_cooling_speeds is not None:
-            self.number_of_heating_speeds = number_of_cooling_speeds
         elif staging_type is not None:
             self.number_of_heating_speeds = (
                 staging_type.value if staging_type != StagingType.VARIABLE_SPEED else 4

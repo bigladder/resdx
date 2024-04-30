@@ -47,7 +47,9 @@ cops_from_seer = []
 for seer in seer_range:
     root_fn = (
         lambda x: resdx.DXUnit(
-            number_of_cooling_speeds=2, rated_gross_cooling_cop=x, input_seer=seer
+            staging_type=resdx.StagingType.TWO_STAGE,
+            rated_gross_cooling_cop=x,
+            input_seer=seer,
         ).seer()
         - seer
     )
@@ -86,7 +88,9 @@ cops_from_hspf = []
 for hspf in hspf_range:
     root_fn = (
         lambda x: resdx.DXUnit(
-            number_of_cooling_speeds=2, rated_gross_heating_cop=x, input_hspf=hspf
+            staging_type=resdx.StagingType.TWO_STAGE,
+            rated_gross_heating_cop=x,
+            input_hspf=hspf,
         ).hspf()
         - hspf
     )

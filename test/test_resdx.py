@@ -15,6 +15,7 @@ from pytest import approx
 
 
 DXUnit = resdx.DXUnit
+StagingType = resdx.StagingType
 PsychState = resdx.psychrometrics.PsychState
 HeatingConditions = resdx.dx_unit.HeatingConditions
 CoolingConditions = resdx.dx_unit.CoolingConditions
@@ -141,7 +142,9 @@ def test_2_speed_regression():
     hspf_2 = 10.0
     cop_2_c, solution_2_c = optimize.newton(
         lambda x: DXUnit(
-            number_of_cooling_speeds=2, rated_gross_cooling_cop=x, input_seer=seer_2
+            staging_type=resdx.StagingType.TWO_STAGE,
+            rated_gross_cooling_cop=x,
+            input_seer=seer_2,
         ).seer()
         - seer_2,
         seer_2 / 3.33,
@@ -149,7 +152,9 @@ def test_2_speed_regression():
     )
     cop_2_h, solution_2_h = optimize.newton(
         lambda x: DXUnit(
-            number_of_cooling_speeds=2, rated_gross_heating_cop=x, input_hspf=hspf_2
+            staging_type=resdx.StagingType.TWO_STAGE,
+            rated_gross_heating_cop=x,
+            input_hspf=hspf_2,
         ).hspf()
         - hspf_2,
         hspf_2 / 2.0,
@@ -157,7 +162,7 @@ def test_2_speed_regression():
     )
 
     dx_unit_2_speed = DXUnit(
-        number_of_cooling_speeds=2,
+        staging_type=resdx.StagingType.TWO_STAGE,
         rated_gross_cooling_cop=cop_2_c,
         rated_gross_heating_cop=cop_2_h,
         input_seer=seer_2,
@@ -172,11 +177,11 @@ def test_2_speed_regression():
         dx_unit_2_speed.rated_gross_total_cooling_capacity[0], 0.01
     )
     assert dx_unit_2_speed.seer() == approx(seer_2, 0.01)
-    assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.407, 0.001)
-    assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.763, 0.001)
+    assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.343, 0.001)
+    assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.772, 0.001)
     assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
-    assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(4.031, 0.001)
-    assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.486, 0.001)
+    assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(3.936, 0.001)
+    assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.525, 0.001)
 
 
 def test_vchp_regression():
@@ -244,6 +249,38 @@ def test_vchp_regression():
     assert vchp_unit.eer() == approx(9.38338, 0.01)
     assert vchp_unit.hspf() == approx(13.21, 0.01)
     assert vchp_unit.hspf(region=2) == approx(13.68, 0.01)
+
+
+def test_neep_vchp_regression():
+    # SEER 21.3, EER 13.4, HSPF(4) = 11.7
+    vchp_unit = DXUnit(
+        staging_type=StagingType.VARIABLE_SPEED,
+        input_seer=21.3,
+        input_eer=13.4,
+        input_hspf=11.7,
+        rating_standard=AHRIVersion.AHRI_210_240_2023,
+    )
+    assert vchp_unit.net_total_cooling_capacity() == approx(
+        vchp_unit.rated_net_total_cooling_capacity[vchp_unit.cooling_full_load_speed],
+        0.01,
+    )
+    assert vchp_unit.net_cooling_cop() == approx(
+        fr_u(vchp_unit.input_eer, "Btu/Wh"),
+        0.01,
+    )
+
+    vchp_unit.print_cooling_info()
+
+    assert vchp_unit.net_steady_state_heating_capacity() == approx(
+        vchp_unit.rated_net_heating_capacity[vchp_unit.heating_full_load_speed],
+        0.01,
+    )
+
+    vchp_unit.print_heating_info()
+
+    assert vchp_unit.seer() == approx(19.44, 0.01)
+    assert vchp_unit.eer() == approx(vchp_unit.input_eer, 0.01)
+    assert vchp_unit.hspf() == approx(10.37, 0.01)
 
 
 def test_plot():

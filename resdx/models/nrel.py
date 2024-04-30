@@ -13,7 +13,6 @@ from .base_model import DXModel
 
 
 class NRELDXModel(DXModel):
-
     """Based on Cutler et al, but also includes internal EnergyPlus calculations"""
 
     """Also, some assumptions from: https://github.com/NREL/OpenStudio-ERI/blob/master/hpxml-measures/HPXMLtoOpenStudio/resources/hvac.rb"""
@@ -470,7 +469,7 @@ class NRELDXModel(DXModel):
 
     def set_rated_net_total_cooling_capacity(self, input):
         # No default, but need to set to list (and default lower speeds)
-        if type(input) is list:
+        if isinstance(input, list):
             self.system.rated_net_total_cooling_capacity = input
         else:
             if self.system.number_of_cooling_speeds == 1:
@@ -563,19 +562,15 @@ class NRELDXModel(DXModel):
 
     @staticmethod
     def cooling_cop_low(cooling_cop_high):
-        eir_high = 1.0 / cooling_cop_high
-        eir_low = 0.8887 * (eir_high) + 0.0083
-        return 1.0 / eir_low
+        return cooling_cop_high / 0.91
 
     @staticmethod
     def heating_cop_low(heating_cop_high):
-        eir_high = 1.0 / heating_cop_high
-        eir_low = 0.6241 * (eir_high) + 0.0681
-        return 1.0 / eir_low
+        return heating_cop_high / 0.87
 
     def set_rated_net_cooling_cop(self, input):
         # No default, but need to set to list (and default lower speeds)
-        if type(input) is list:
+        if isinstance(input, list):
             self.system.rated_net_cooling_cop = input
             self.system.rated_net_cooling_power = [
                 self.system.rated_net_total_cooling_capacity[i]
@@ -626,7 +621,7 @@ class NRELDXModel(DXModel):
 
     def set_rated_gross_cooling_cop(self, input):
         # No default, but need to set to list (and default lower speeds)
-        if type(input) is list:
+        if isinstance(input, list):
             self.system.rated_gross_cooling_cop = input
         else:
             self.system.rated_gross_cooling_cop[0] = input
@@ -653,7 +648,7 @@ class NRELDXModel(DXModel):
 
     def set_rated_net_heating_cop(self, input):
         # No default, but need to set to list (and default lower speeds)
-        if type(input) is list:
+        if isinstance(input, list):
             self.system.rated_net_heating_cop = input
             self.system.rated_net_heating_power = [
                 self.system.rated_net_heating_capacity[i]
@@ -704,7 +699,7 @@ class NRELDXModel(DXModel):
 
     def set_rated_gross_heating_cop(self, input):
         # No default, but need to set to list (and default lower speeds)
-        if type(input) is list:
+        if isinstance(input, list):
             self.system.rated_gross_heating_cop = input
         else:
             self.system.rated_gross_heating_cop[0] = input

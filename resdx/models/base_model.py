@@ -1,4 +1,4 @@
-from typing import Union, TYPE_CHECKING
+from typing import Union, List, TYPE_CHECKING
 from koozie import fr_u
 from ..fan import ConstantEfficacyFan
 
@@ -80,13 +80,19 @@ class DXModel:
         if input is None:
             return default
         else:
-            if type(default) is list:
-                if type(input) is list:
+            if isinstance(default, list):
+                if isinstance(input, list):
                     return input
                 else:
                     return [input] * number_of_speeds
             else:
                 return input
+
+    def make_list(self, input) -> List:
+        if isinstance(input, list):
+            return input
+        else:
+            return [input]
 
     def set_cooling_default(self, input, default):
         return self.set_default(input, default, self.system.number_of_cooling_speeds)

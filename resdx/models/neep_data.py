@@ -119,11 +119,6 @@ class NEEPPerformanceTable:
                     self.data[t_i + 1][s_i] - self.data[t_i - 1][s_i]
                 ) / (t_1 - t_m1) * (t - t_m1)
 
-    def add_intermediate_speed(self, after_speed: int = 1):
-        """Adds a new speed with interpolated values. Needed for rating calculations."""
-        self.speeds.append(len(self.speeds) + 1)
-        # for speed in self.speeds:
-
     def set_by_maintenance(
         self, speed: int, temperature: float, reference_temperature: float, ratio: float
     ) -> None:
@@ -151,6 +146,15 @@ class NEEPPerformanceTable:
 
     def calculate(self, speed: float, temperature: float) -> float:
         return self.interpolator([temperature, speed])[0]
+
+    def apply_fan_power_correction(self, fan_powers: List[float]) -> None:
+        assert len(fan_powers) == len(self.speeds)
+        for t_i, speed_data in enumerate(self.data):
+            for s_i, value in enumerate(speed_data):
+                self.data[t_i][s_i] = value - fan_powers[s_i]
+                assert self.data[t_i][s_i] > 0
+
+        self.set_interpolator()
 
 
 class NEEPCoolingPerformanceTable(NEEPPerformanceTable):
@@ -197,10 +201,26 @@ class NEEPPerformance:
         heating_powers: NEEPHeatingPerformanceTable,
     ) -> None:
 
+        self.number_of_cooling_speeds = len(cooling_capacities.speeds)
+        if len(cooling_powers.speeds) != self.number_of_cooling_speeds:
+            raise RuntimeError("Inconsistent power / capacity table sizes!")
+        self.number_of_cooling_temperatures = len(cooling_capacities.temperatures)
+        if len(cooling_powers.temperatures) != self.number_of_cooling_temperatures:
+            raise RuntimeError("Inconsistent power / capacity table sizes!")
+
+        self.number_of_heating_speeds = len(heating_capacities.speeds)
+        if len(heating_powers.speeds) != self.number_of_heating_speeds:
+            raise RuntimeError("Inconsistent power / capacity table sizes!")
+        self.number_of_heating_temperatures = len(heating_capacities.temperatures)
+        if len(heating_powers.temperatures) != self.number_of_heating_temperatures:
+            raise RuntimeError("Inconsistent power / capacity table sizes!")
+
         self.cooling_capacities = cooling_capacities
         self.cooling_powers = cooling_powers
         self.heating_capacities = heating_capacities
         self.heating_powers = heating_powers
+        self.rated_cooling_speed = 2
+        self.rated_heating_speed = 2
 
     def cooling_capacity(self, speed: float = 2, temperature: float = fr_u(95, "degF")):
         return self.cooling_capacities.calculate(speed, temperature)
@@ -223,6 +243,18 @@ class NEEPPerformance:
         return self.heating_capacity(speed, temperature) / self.heating_power(
             speed, temperature
         )
+
+    def make_gross(
+        self, cooling_fan_powers: List[float], heating_fan_powers: List[float]
+    ) -> None:
+        self.cooling_capacities.apply_fan_power_correction(
+            [-p for p in cooling_fan_powers]
+        )  # increases
+        self.cooling_powers.apply_fan_power_correction(cooling_fan_powers)  # decreases
+        self.heating_capacities.apply_fan_power_correction(
+            heating_fan_powers
+        )  # decreases
+        self.heating_powers.apply_fan_power_correction(heating_fan_powers)  # decreases
 
 
 def make_neep_statistical_model_data(
