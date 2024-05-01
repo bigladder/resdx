@@ -3,6 +3,8 @@
 # %%
 import resdx
 
+AHRIVersion = resdx.AHRIVersion
+
 fr_u = resdx.fr_u
 
 cooling_capacity = 9600
@@ -16,6 +18,7 @@ dx_unit = resdx.DXUnit(
     rated_net_heating_cop=heating_cop,
     rated_net_total_cooling_capacity=fr_u(cooling_capacity, "Btu/h"),
     rated_net_heating_capacity=fr_u(heating_capacity, "Btu/h"),
+    rating_standard=AHRIVersion.AHRI_210_240_2017,
 )
 
 dx_unit.print_cooling_info()

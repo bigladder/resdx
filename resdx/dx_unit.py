@@ -162,7 +162,7 @@ class DXUnit:
         heating_full_load_speed=0,  # The first entry (index = 0) in arrays reflects AHRI "full" speed.
         heating_intermediate_speed=None,
         is_ducted=True,
-        rating_standard=AHRIVersion.AHRI_210_240_2017,
+        rating_standard=AHRIVersion.AHRI_210_240_2023,
         # Used for comparisons and to inform some defaults
         input_seer=None,
         input_eer=None,
