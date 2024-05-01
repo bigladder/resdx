@@ -108,14 +108,14 @@ dx_units["PUZ-HA36NHA5"] = resdx.DXUnit(
     input_hspf=10,
 )
 
-for dx_unit in dx_units:
-    print(f"Cooling info for {dx_unit}:")
-    dx_units[dx_unit].print_cooling_info()
-    print(f"Heating info for {dx_unit}:")
-    dx_units[dx_unit].print_heating_info()
+for name, unit in dx_units.items():
+    print(f"Cooling info for {name}:")
+    unit.print_cooling_info()
+    print(f"Heating info for {name}:")
+    unit.print_heating_info()
     resdx.write_idf(
-        dx_units[dx_unit],
-        output_path=f"{output_directory_path}/{dx_unit}.idf",
+        unit,
+        output_path=f"{output_directory_path}/{name}.idf",
         system_name="living_unit1 ZN-MSHP",
         system_type=resdx.EnergyPlusSystemType.ZONEHVAC_PTHP,
         autosize=True,
