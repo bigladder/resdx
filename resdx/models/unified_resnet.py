@@ -2,7 +2,7 @@ from enum import Enum
 from typing import Union, Dict
 from copy import deepcopy
 
-from koozie import fr_u
+from koozie import fr_u, to_u
 
 from .base_model import DXModel
 from .nrel import NRELDXModel
@@ -98,10 +98,16 @@ class RESNETDXModel(DXModel):
         else:
             return NRELDXModel.gross_steady_state_heating_capacity(self, conditions)
 
-    def gross_integrated_heating_capacity(self, conditions):
-        return CarrierDefrostModel.gross_integrated_heating_capacity(
-            self, conditions
-        )  # TODO: Switch to new Title 24 model
+    def gross_integrated_heating_capacity(self, conditions: HeatingConditions):
+        if self.system.defrost.in_defrost(conditions):
+            fdef = max(
+                min(0.134 - 0.003 * to_u(conditions.outdoor.db, "degF"), 0.08), 0.0
+            )
+            return self.system.gross_steady_state_heating_capacity(conditions) * (
+                1.0 - 1.8 * fdef
+            )
+        else:
+            return self.system.gross_steady_state_heating_capacity(conditions)
 
     def gross_steady_state_heating_power(self, conditions):
         if self.net_neep_data is not None:
@@ -115,7 +121,15 @@ class RESNETDXModel(DXModel):
             return NRELDXModel.gross_steady_state_heating_power(self, conditions)
 
     def gross_integrated_heating_power(self, conditions):
-        return CarrierDefrostModel.gross_integrated_heating_power(self, conditions)
+        if self.system.defrost.in_defrost(conditions):
+            fdef = max(
+                min(0.134 - 0.003 * to_u(conditions.outdoor.db, "degF"), 0.08), 0.0
+            )
+            return self.gross_steady_state_heating_power(conditions) * (
+                1.0 - 0.3 * fdef
+            )
+        else:
+            return self.gross_steady_state_heating_power(conditions)
 
     def gross_cooling_power_charge_factor(self, conditions):
         return NRELDXModel.gross_cooling_power_charge_factor(self, conditions)
