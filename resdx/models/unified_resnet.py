@@ -151,8 +151,17 @@ class RESNETDXModel(DXModel):
         self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan
     ):
         if self.net_neep_data is not None:
-            # TODO: Check number of speeds etc.
-            pass
+            self.system.staging_type = StagingType(
+                min(self.net_neep_data.number_of_cooling_speeds, 3)
+            )
+            self.system.number_of_cooling_speeds = (
+                self.system.number_of_heating_speeds
+            ) = (
+                self.system.staging_type.value
+                if self.system.staging_type != StagingType.VARIABLE_SPEED
+                else 4
+            )
+            self.system.set_placeholder_arrays()
 
         if self.system.staging_type != StagingType.VARIABLE_SPEED:
             # Set high speed capacities
@@ -195,47 +204,43 @@ class RESNETDXModel(DXModel):
                         self.rated_net_heating_cop_47,
                     )
 
-                    self.system.cooling_boost_speed = 0
-                    self.system.cooling_full_load_speed = 1
-                    self.system.cooling_intermediate_speed = 2
-                    self.system.cooling_low_speed = 3
+                self.system.cooling_boost_speed = 0
+                self.system.cooling_full_load_speed = 1
+                self.system.cooling_intermediate_speed = 2
+                self.system.cooling_low_speed = 3
 
-                    self.system.heating_boost_speed = 0
-                    self.system.heating_full_load_speed = 1
-                    self.system.heating_intermediate_speed = 2
-                    self.system.heating_low_speed = 3
+                self.system.heating_boost_speed = 0
+                self.system.heating_full_load_speed = 1
+                self.system.heating_intermediate_speed = 2
+                self.system.heating_low_speed = 3
 
-                    self.neep_cooling_speed_map = self.neep_heating_speed_map = {
-                        0: 3.0,
-                        1: 2.0,
-                        2: 1.5,
-                        3: 1.0,
-                    }
+                self.neep_cooling_speed_map = self.neep_heating_speed_map = {
+                    0: 3.0,
+                    1: 2.0,
+                    2: 1.5,
+                    3: 1.0,
+                }
 
-                    self.inverse_neep_cooling_speed_map = {
-                        v: k
-                        for k, v in self.neep_cooling_speed_map.items()
-                        if v.is_integer()
-                    }
-                    self.inverse_neep_heating_speed_map = {
-                        v: k
-                        for k, v in self.neep_heating_speed_map.items()
-                        if v.is_integer()
-                    }
+                self.inverse_neep_cooling_speed_map = {
+                    v: k
+                    for k, v in self.neep_cooling_speed_map.items()
+                    if v.is_integer()
+                }
+                self.inverse_neep_heating_speed_map = {
+                    v: k
+                    for k, v in self.neep_heating_speed_map.items()
+                    if v.is_integer()
+                }
 
-                    self.system.rated_net_total_cooling_capacity = [
-                        self.net_neep_data.cooling_capacity(
-                            self.neep_cooling_speed_map[i]
-                        )
-                        for i in range(4)
-                    ]
+                self.system.rated_net_total_cooling_capacity = [
+                    self.net_neep_data.cooling_capacity(self.neep_cooling_speed_map[i])
+                    for i in range(4)
+                ]
 
-                    self.system.rated_net_heating_capacity = [
-                        self.net_neep_data.heating_capacity(
-                            self.neep_heating_speed_map[i]
-                        )
-                        for i in range(4)
-                    ]
+                self.system.rated_net_heating_capacity = [
+                    self.net_neep_data.heating_capacity(self.neep_heating_speed_map[i])
+                    for i in range(4)
+                ]
 
             else:
                 self.system.rated_net_total_cooling_capacity = (

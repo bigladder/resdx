@@ -251,7 +251,7 @@ def test_vchp_regression():
     assert vchp_unit.hspf(region=2) == approx(13.68, 0.01)
 
 
-def test_neep_vchp_regression():
+def test_neep_statistical_vchp_regression():
     # SEER 21.3, EER 13.4, HSPF(4) = 11.7
     vchp_unit = DXUnit(
         staging_type=StagingType.VARIABLE_SPEED,
@@ -281,6 +281,62 @@ def test_neep_vchp_regression():
     assert vchp_unit.seer() == approx(19.44, 0.01)
     assert vchp_unit.eer() == approx(vchp_unit.input_eer, 0.01)
     assert vchp_unit.hspf() == approx(10.37, 0.01)
+
+
+def test_neep_vchp_regression():
+    # AHRI Certification #: 202680596 https://ashp.neep.org/#!/product/34439/7/25000/95/7500/0///0
+    # SEER2 21, EER2 13, HSPF(4) = 11
+
+    cooling_capacities = [
+        [3428, None, 20098],  # 82
+        [3100, 14000, 18200],  # 95
+    ]
+
+    cooling_powers = [
+        [0.19, None, 1.8],  # 82
+        [0.21, 1.08, 2.0],  # 95
+    ]
+
+    heating_capacities = [
+        [2080, None, 14100],  # 5
+        [2150, 12100, 16400],  # 17
+        [4800, 18000, 20900],  # 47
+    ]
+
+    heating_powers = [
+        [0.24, None, 1.57],  # 5
+        [0.2, 1.6, 2.01],  # 17
+        [0.2, 1.6, 2.01],  # 47
+    ]
+
+    vchp_unit = resdx.DXUnit(
+        neep_data=resdx.models.neep_data.make_neep_model_data(
+            cooling_capacities, cooling_powers, heating_capacities, heating_powers
+        )
+    )
+    assert vchp_unit.net_total_cooling_capacity() == approx(
+        vchp_unit.rated_net_total_cooling_capacity[vchp_unit.cooling_full_load_speed],
+        0.01,
+    )
+    assert vchp_unit.net_cooling_cop() == approx(
+        vchp_unit.rated_net_cooling_cop[vchp_unit.cooling_full_load_speed], 0.01
+    )
+
+    vchp_unit.print_cooling_info()
+
+    assert vchp_unit.net_integrated_heating_capacity() == approx(
+        vchp_unit.rated_net_heating_capacity[vchp_unit.heating_full_load_speed], 0.01
+    )
+    assert vchp_unit.net_integrated_heating_cop() == approx(
+        vchp_unit.rated_net_heating_cop[vchp_unit.heating_full_load_speed], 0.01
+    )
+    vchp_unit.print_heating_info()
+    vchp_unit.print_heating_info(region=2)
+
+    assert vchp_unit.seer() == approx(16.83, 0.01)
+    assert vchp_unit.eer() == approx(12.965, 0.01)
+    assert vchp_unit.hspf() == approx(9.384, 0.01)
+    assert vchp_unit.hspf(region=2) == approx(10.063, 0.01)
 
 
 def test_plot():

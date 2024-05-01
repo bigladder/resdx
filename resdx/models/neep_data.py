@@ -457,3 +457,90 @@ def make_neep_statistical_model_data(
     P_h.set_interpolator()
 
     return NEEPPerformance(Q_c, P_c, Q_h, P_h)
+
+
+def make_neep_model_data(
+    cooling_capacities: List[List[Union[float, None]]],
+    cooling_powers: List[List[Union[float, None]]],
+    heating_capacities: List[List[Union[float, None]]],
+    heating_powers: List[List[Union[float, None]]],
+    lct: Union[float, None] = None,
+    max_cooling_temperature: float = fr_u(125, "degF"),
+    min_heating_temperature: float = fr_u(0, "degF"),
+):
+    # Convert from NEEP units
+    for s_i, value_list in enumerate(cooling_capacities):
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                cooling_capacities[s_i][t_i] = fr_u(value, "Btu/h")
+
+    for s_i, value_list in enumerate(cooling_powers):
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                cooling_powers[s_i][t_i] = fr_u(value, "kW")
+
+    for s_i, value_list in enumerate(heating_capacities):
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                heating_capacities[s_i][t_i] = fr_u(value, "Btu/h")
+
+    for s_i, value_list in enumerate(heating_powers):
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                heating_powers[s_i][t_i] = fr_u(value, "kW")
+
+    # Set up temperatures
+    t_60 = fr_u(60.0, "degF")
+
+    t_82 = fr_u(82.0, "degF")
+    t_95 = fr_u(95.0, "degF")
+    cooling_temperatures = [t_82, t_95]
+
+    t_5 = fr_u(5.0, "degF")
+    t_17 = fr_u(17.0, "degF")
+    t_47 = fr_u(47.0, "degF")
+    heating_temperatures = [t_5, t_17, t_47]
+    if lct is not None:
+        t_lct = fr_u(lct, "degF")
+        heating_temperatures = [t_lct] + heating_temperatures
+
+    Q_c = NEEPCoolingPerformanceTable(cooling_temperatures, 3, cooling_capacities)
+    P_c = NEEPCoolingPerformanceTable(cooling_temperatures, 3, cooling_powers)
+    Q_h = NEEPHeatingPerformanceTable(heating_temperatures, 3, heating_capacities)
+    P_h = NEEPHeatingPerformanceTable(heating_temperatures, 3, heating_powers)
+
+    # Interpolate for missing rated conditions, and extrapolate to extreme temperatures
+    Q_c.set_by_interpolation(2, t_82)
+    P_c.set_by_interpolation(2, t_82)
+
+    Q_c.add_temperature(t_60)
+    P_c.add_temperature(t_60)
+
+    Q_c.add_temperature(max_cooling_temperature)
+    P_c.add_temperature(max_cooling_temperature)
+
+    if Q_h.get(2, t_5) is None:
+        Q_h.set_by_interpolation(2, t_5)
+
+    if P_h.get(2, t_5) is None:
+        P_h.set_by_interpolation(2, t_5)
+
+    if lct is not None:
+        Q_h.set_by_interpolation(2, t_lct)
+        P_h.set_by_interpolation(2, t_lct)
+        if min_heating_temperature < t_lct:
+            Q_h.add_temperature(min_heating_temperature)
+            P_h.add_temperature(min_heating_temperature)
+    else:
+        Q_h.add_temperature(min_heating_temperature)
+        P_h.add_temperature(min_heating_temperature)
+
+    Q_h.add_temperature(t_60, False)
+    P_h.add_temperature(t_60, False)
+
+    Q_c.set_interpolator()
+    P_c.set_interpolator()
+    Q_h.set_interpolator()
+    P_h.set_interpolator()
+
+    return NEEPPerformance(Q_c, P_c, Q_h, P_h)
