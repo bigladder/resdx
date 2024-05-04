@@ -19,10 +19,14 @@ from .fan import Fan
 from .enums import StagingType
 
 
-def interpolate(f, cond_1, cond_2, x):
-    return f(cond_1) + (f(cond_2) - f(cond_1)) / (
+def interpolate_separate(f, f2, cond_1, cond_2, x):
+    return f(cond_1) + (f2(cond_2) - f(cond_1)) / (
         cond_2.outdoor.db - cond_1.outdoor.db
     ) * (x - cond_1.outdoor.db)
+
+
+def interpolate(f, cond_1, cond_2, x):
+    return interpolate_separate(f, f, cond_1, cond_2, x)
 
 
 class CyclingMethod(Enum):
@@ -322,12 +326,12 @@ class DXUnit:
 
         # COP determinations
         if rated_net_cooling_cop is None and rated_gross_cooling_cop is None:
-            raise Exception(
+            raise RuntimeError(
                 "Must define either 'rated_net_cooling_cop' or 'rated_gross_cooling_cop'."
             )
 
         if rated_net_heating_cop is None and rated_gross_heating_cop is None:
-            raise Exception(
+            raise RuntimeError(
                 "Must define either 'rated_net_heating_cop' or 'rated_gross_heating_cop'."
             )
 
@@ -352,7 +356,7 @@ class DXUnit:
         self.check_array_order(self.rated_net_total_cooling_capacity)
         self.check_array_order(self.rated_net_heating_capacity)
 
-    def set_rating_conditions(self):
+    def set_rating_conditions(self) -> None:
         self.rated_full_flow_external_static_pressure = (
             self.get_rated_full_flow_rated_pressure()
         )
@@ -431,7 +435,7 @@ class DXUnit:
                 compressor_speed=self.heating_low_speed,
             )
             self.H1_low_cond: HeatingConditions = self.make_condition(
-                HeatingConditions, compressor_speed=1
+                HeatingConditions, compressor_speed=self.heating_low_speed
             )
             self.H2_low_cond: HeatingConditions = self.make_condition(
                 HeatingConditions,
@@ -534,7 +538,7 @@ class DXUnit:
 
     def check_array_length(self, array, expected_length):
         if len(array) != expected_length:
-            raise Exception(
+            raise RuntimeError(
                 f"Unexpected array length ({len(array)}). Number of speeds is {expected_length}. Array items are {array}."
             )
 
@@ -554,7 +558,7 @@ class DXUnit:
 
     def check_array_order(self, array):
         if not all(earlier >= later for earlier, later in zip(array, array[1:])):
-            raise Exception(
+            raise RuntimeError(
                 f"Arrays must be in order of decreasing capacity. Array items are {array}."
             )
 
@@ -841,11 +845,14 @@ class DXUnit:
             for i in range(self.cooling_distribution.number_of_bins):
                 t = self.cooling_distribution.outdoor_drybulbs[i]
                 n = self.cooling_distribution.fractional_hours[i]
-                bl = (
-                    (t - fr_u(65.0, "°F"))
-                    / (fr_u(95, "°F") - fr_u(65.0, "°F"))
-                    * self.net_total_cooling_capacity(self.A_full_cond)
-                    / sizing_factor
+                bl = max(
+                    (
+                        (t - fr_u(65.0, "°F"))
+                        / (fr_u(95, "°F") - fr_u(65.0, "°F"))
+                        * self.net_total_cooling_capacity(self.A_full_cond)
+                        / sizing_factor,
+                        0.0,
+                    )
                 )  # eq. 11.60
                 q_low = interpolate(
                     self.net_total_cooling_capacity, self.F_low_cond, self.B_low_cond, t
@@ -1044,7 +1051,7 @@ class DXUnit:
         if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
             c = 0.77  # eq. 11.110 (agreement factor)
             dhr_min = (
-                self.net_integrated_heating_capacity(self.H1_full_cond)
+                self.net_steady_state_heating_capacity(self.H1_full_cond)
                 * (fr_u(65, "°F") - t_od)
                 / (fr_u(60, "°R"))
             )  # eq. 11.111
@@ -1055,18 +1062,19 @@ class DXUnit:
             else:
                 c_x = heating_distribution.c
             t_zl = heating_distribution.zero_load_temperature
+            q_A_full = self.net_total_cooling_capacity(self.A_full_cond)
 
         if self.staging_type == StagingType.VARIABLE_SPEED:
             # Intermediate capacity
-            q_H0_low = self.net_integrated_heating_capacity(self.H0_low_cond)
-            q_H1_low = self.net_integrated_heating_capacity(self.H1_low_cond)
+            q_H0_low = self.net_steady_state_heating_capacity(self.H0_low_cond)
+            q_H1_low = self.net_steady_state_heating_capacity(self.H1_low_cond)
             q_H2_int = self.net_integrated_heating_capacity(self.H2_int_cond)
-            q_H1_full = self.net_integrated_heating_capacity(self.H1_full_cond)
+            q_H1_full = self.net_steady_state_heating_capacity(self.H1_full_cond)
             q_H2_full = self.net_integrated_heating_capacity(self.H2_full_cond)
-            q_H3_full = self.net_integrated_heating_capacity(self.H3_full_cond)
-            q_H4_full = self.net_integrated_heating_capacity(self.H4_full_cond)
+            q_H3_full = self.net_steady_state_heating_capacity(self.H3_full_cond)
+            q_H4_full = self.net_steady_state_heating_capacity(self.H4_full_cond)
             q_35_low = interpolate(
-                self.net_integrated_heating_capacity,
+                self.net_steady_state_heating_capacity,
                 self.H0_low_cond,
                 self.H1_low_cond,
                 fr_u(35.0, "°F"),
@@ -1077,57 +1085,58 @@ class DXUnit:
             ) + (q_H2_full - q_H3_full) / (fr_u(35, "°F") - fr_u(17.0, "°F")) * N_Hq
 
             # Intermediate power
-            p_H0_low = self.net_integrated_heating_power(self.H0_low_cond)
-            p_H1_low = self.net_integrated_heating_power(self.H1_low_cond)
+            p_H0_low = self.net_steady_state_heating_power(self.H0_low_cond)
+            p_H1_low = self.net_steady_state_heating_power(self.H1_low_cond)
             p_H2_int = self.net_integrated_heating_power(self.H2_int_cond)
-            p_H1_full = self.net_integrated_heating_power(self.H1_full_cond)
+            p_H1_full = self.net_steady_state_heating_power(self.H1_full_cond)
             p_H2_full = self.net_integrated_heating_power(self.H2_full_cond)
-            p_H3_full = self.net_integrated_heating_power(self.H3_full_cond)
-            p_H4_full = self.net_integrated_heating_power(self.H4_full_cond)
+            p_H3_full = self.net_steady_state_heating_power(self.H3_full_cond)
+            p_H4_full = self.net_steady_state_heating_power(self.H4_full_cond)
             p_35_low = interpolate(
-                self.net_integrated_heating_power,
+                self.net_steady_state_heating_power,
                 self.H0_low_cond,
                 self.H1_low_cond,
                 fr_u(35.0, "°F"),
             )
             N_HE = (p_H2_int - p_35_low) / (p_H2_full - p_35_low)
             M_HE = (p_H0_low - p_H1_low) / (fr_u(62, "°F") - fr_u(47.0, "°F")) * (
-                1.0 - N_Hq
-            ) + (p_H2_full - p_H3_full) / (fr_u(35, "°F") - fr_u(17.0, "°F")) * N_Hq
+                1.0 - N_HE
+            ) + (p_H2_full - p_H3_full) / (fr_u(35, "°F") - fr_u(17.0, "°F")) * N_HE
 
         for i in range(heating_distribution.number_of_bins):
             t = heating_distribution.outdoor_drybulbs[i]
             n = heating_distribution.fractional_hours[i]
             if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
-                bl = (
-                    (fr_u(65, "°F") - t) / (fr_u(65, "°F") - t_od) * c * dhr_min
+                bl = max(
+                    (fr_u(65, "°F") - t) / (fr_u(65, "°F") - t_od) * c * dhr_min, 0.0
                 )  # eq. 11.109
             else:  # if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
-                q_A_full = self.net_total_cooling_capacity(self.A_full_cond)
-                bl = (t_zl - t) / (t_zl - t_od) * c_x * q_A_full
+                bl = max((t_zl - t) / (t_zl - t_od) * c_x * q_A_full, 0.0)
 
             t_ob = fr_u(45, "°F")  # eq. 11.119
             if t >= t_ob or t <= fr_u(17, "°F"):
                 q_full = interpolate(
-                    self.net_integrated_heating_capacity,
+                    self.net_steady_state_heating_capacity,
                     self.H3_full_cond,
                     self.H1_full_cond,
                     t,
                 )  # eq. 11.117
                 p_full = interpolate(
-                    self.net_integrated_heating_power,
+                    self.net_steady_state_heating_power,
                     self.H3_full_cond,
                     self.H1_full_cond,
                     t,
                 )  # eq. 11.117
             else:  # elif t > fr_u(17,"°F") and t < t_ob
-                q_full = interpolate(
+                q_full = interpolate_separate(
+                    self.net_steady_state_heating_capacity,
                     self.net_integrated_heating_capacity,
                     self.H3_full_cond,
                     self.H2_full_cond,
                     t,
                 )  # eq. 11.118
-                p_full = interpolate(
+                p_full = interpolate_separate(
+                    self.net_steady_state_heating_power,
                     self.net_integrated_heating_power,
                     self.H3_full_cond,
                     self.H2_full_cond,
@@ -1157,39 +1166,41 @@ class DXUnit:
                 t_ob = fr_u(40, "°F")  # eq. 11.134
                 if t >= t_ob:
                     q_low = interpolate(
-                        self.net_integrated_heating_capacity,
+                        self.net_steady_state_heating_capacity,
                         self.H0_low_cond,
                         self.H1_low_cond,
                         t,
                     )  # eq. 11.135
                     p_low = interpolate(
-                        self.net_integrated_heating_power,
+                        self.net_steady_state_heating_power,
                         self.H0_low_cond,
                         self.H1_low_cond,
                         t,
                     )  # eq. 11.138
                 elif t <= fr_u(17.0, "°F"):
                     q_low = interpolate(
-                        self.net_integrated_heating_capacity,
+                        self.net_steady_state_heating_capacity,
                         self.H1_low_cond,
                         self.H3_low_cond,
                         t,
                     )  # eq. 11.137
                     p_low = interpolate(
-                        self.net_integrated_heating_power,
+                        self.net_steady_state_heating_power,
                         self.H1_low_cond,
                         self.H3_low_cond,
                         t,
                     )  # eq. 11.140
                 else:
-                    q_low = interpolate(
+                    q_low = interpolate_separate(
                         self.net_integrated_heating_capacity,
+                        self.net_steady_state_heating_capacity,
                         self.H2_low_cond,
                         self.H3_low_cond,
                         t,
                     )  # eq. 11.136
-                    p_low = interpolate(
+                    p_low = interpolate_separate(
                         self.net_integrated_heating_power,
+                        self.net_steady_state_heating_power,
                         self.H2_low_cond,
                         self.H3_low_cond,
                         t,
@@ -1235,13 +1246,13 @@ class DXUnit:
             else:  # if self.staging_type == StagingType.VARIABLE_SPEED:
                 # Note: this is strange that there is no defrost cut in the low speed and doesn't use H2 or H3 low
                 q_low = interpolate(
-                    self.net_integrated_heating_capacity,
+                    self.net_steady_state_heating_capacity,
                     self.H0_low_cond,
                     self.H1_low_cond,
                     t,
                 )  # eq. 11.177
                 p_low = interpolate(
-                    self.net_integrated_heating_power,
+                    self.net_steady_state_heating_power,
                     self.H0_low_cond,
                     self.H1_low_cond,
                     t,
@@ -1290,13 +1301,13 @@ class DXUnit:
                     # Note: builds on previously defined q_full / p_full
                     if t > fr_u(5, "°F") or t <= fr_u(17, "°F"):
                         q_full = interpolate(
-                            self.net_integrated_heating_capacity,
+                            self.net_steady_state_heating_capacity,
                             self.H4_full_cond,
                             self.H3_full_cond,
                             t,
                         )  # eq. 11.203
                         p_full = interpolate(
-                            self.net_integrated_heating_power,
+                            self.net_steady_state_heating_power,
                             self.H4_full_cond,
                             self.H3_full_cond,
                             t,

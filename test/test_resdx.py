@@ -23,7 +23,7 @@ CoolingConditions = resdx.dx_unit.CoolingConditions
 
 # Single speed gross COP values used for regression testing
 COP_C = 4.277
-COP_H = 3.752
+COP_H = 3.462
 
 
 # Tests
@@ -129,7 +129,7 @@ def test_1_speed_2023_regression():
     dx_unit_1_speed.print_cooling_info()
     dx_unit_1_speed.print_heating_info()
     assert dx_unit_1_speed.seer() == approx(12.999, 0.001)  # SEER2
-    assert dx_unit_1_speed.hspf() == approx(7.059, 0.001)  # HSPF2
+    assert dx_unit_1_speed.hspf() == approx(7.197, 0.001)  # HSPF2
 
 
 def test_1_speed_rating_version():
@@ -205,8 +205,8 @@ def test_2_speed_regression():
     assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.343, 0.001)
     assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.772, 0.001)
     assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
-    assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(4.020, 0.001)
-    assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.621, 0.001)
+    assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(3.61, 0.001)
+    assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.146, 0.001)
 
 
 def test_neep_statistical_vchp_regression():
@@ -237,7 +237,7 @@ def test_neep_statistical_vchp_regression():
 
     assert vchp_unit.seer() == approx(19.44, 0.01)
     assert vchp_unit.eer() == approx(vchp_unit.input_eer, 0.01)
-    assert vchp_unit.hspf() == approx(10.37, 0.01)
+    assert vchp_unit.hspf() == approx(9.910, 0.01)
 
 
 def test_neep_vchp_regression():
@@ -293,8 +293,8 @@ def test_neep_vchp_regression():
 
     assert vchp_unit.seer() == approx(16.83, 0.01)
     assert vchp_unit.eer() == approx(12.965, 0.01)
-    assert vchp_unit.hspf() == approx(9.384, 0.01)
-    assert vchp_unit.hspf(region=2) == approx(10.063, 0.01)
+    assert vchp_unit.hspf() == approx(11.088, 0.01)
+    assert vchp_unit.hspf(region=2) == approx(20.071, 0.01)
 
 
 def test_plot():
