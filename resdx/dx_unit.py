@@ -168,9 +168,9 @@ class DXUnit:
         is_ducted=True,
         rating_standard=AHRIVersion.AHRI_210_240_2023,
         # Used for comparisons and to inform some defaults
-        input_seer=None,
-        input_eer=None,
-        input_hspf=None,
+        input_seer=None,  # SEER value input (may not match calculated SEER of the model)
+        input_eer=None,  # EER value input (may not match calculated EER of the model)
+        input_hspf=None,  # HSPF value input (may not match calculated HSPF of the model)
         metadata=None,
         **kwargs,
     ):  # Additional inputs used for specific models
@@ -183,9 +183,13 @@ class DXUnit:
 
         self.model.set_system(self)
 
+        # Inputs used by some models
+        # Ratings
         self.input_seer = input_seer
         self.input_hspf = input_hspf
         self.input_eer = input_eer
+
+        self.input_rated_net_heating_cop = rated_net_heating_cop
 
         self.cycling_method = cycling_method
         self.is_ducted = is_ducted

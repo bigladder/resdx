@@ -6,6 +6,8 @@ from scipy.interpolate import RegularGridInterpolator
 
 from koozie import fr_u
 
+from ..util import bracket
+
 
 class NEEPPerformanceTable:
     def __init__(
@@ -285,15 +287,10 @@ def make_neep_statistical_model_data(
         t_95,
     ]
 
-    if cooling_capacity_ratio is not None:
-        Qr95min = cooling_capacity_ratio
-    else:
-        Qr95min = 0.510 - 0.119 * seer2 / eer2
-
     if cooling_eir_ratio is not None:
-        EIRr82min = cooling_eir_ratio
+        EIRr82min = max(cooling_eir_ratio, 0.2)
     else:
-        EIRr82min = 1.305 - 0.324 * seer2 / eer2
+        EIRr82min = bracket(1.305 - 0.324 * seer2 / eer2, 0.2, 1.0)
 
     Qr95rated = 0.934
     Qm95max = 0.940
@@ -301,6 +298,13 @@ def make_neep_statistical_model_data(
     EIRr95rated = 0.928
     EIRm95max = 1.326
     EIRm95min = 1.315
+
+    if cooling_capacity_ratio is not None:
+        Qr95min = cooling_capacity_ratio
+    else:
+        Qr95min = bracket(
+            0.510 - 0.119 * (EIRr82min - 1.305) / (-0.324), 0.1, Qr95rated
+        )
 
     Q_c = NEEPCoolingPerformanceTable(t_c, 3)
     P_c = NEEPCoolingPerformanceTable(t_c, 3)

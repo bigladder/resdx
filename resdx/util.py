@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def limit_check(value, min=None, max=None):
     if min is not None:
         if value < min:
@@ -50,3 +53,55 @@ def find_nearest(array, value):
             closest_diff = diff
             closest_value = option
     return closest_value
+
+
+# Used for curve-fitting. TODO: Use to replace the functions above?
+
+
+def linear(x, c0, c1):
+    return c0 + c1 * x
+
+
+def linear_string(x_name, c0, c1):
+    return f"{c0:.4g} + {c1:.4g}*{x_name}"
+
+
+def quadratic(x, c0, c1, c2):
+    return c0 + c1 * x + c2 * x * x
+
+
+def quadratic_string(x_name, c0, c1, c2):
+    return f"{c0:.4g} + {c1:.4g}*{x_name} + {c2:.4g}*{x_name}^2"
+
+
+def cubic(x, c0, c1, c2, c3):
+    return c0 + c1 * x + c2 * x * x + c3 * x * x * x
+
+
+def cubic_string(x_name, c0, c1, c2, c3):
+    return f"{c0:.4g} + {c1:.4g}*{x_name} + {c2:.4g}*{x_name}^2 + {c3:.4g}*{x_name}^3"
+
+
+def quartic(x, c0, c1, c2, c3, c4):
+    x2 = x * x
+    return c0 + c1 * x + c2 * x2 + c3 * x2 * x + c4 * x2 * x2
+
+
+def quartic_string(x_name, c0, c1, c2, c3, c4):
+    return f"{c0:.4g} + {c1:.4g}*{x_name} + {c2:.4g}*{x_name}^2 + {c3:.4g}*{x_name}^3 + {c4:.4g}*{x_name}^4"
+
+
+def exponential(x, c0, c1, c2):
+    return c0 + c1 ** (c2 * x)
+
+
+def exponential_string(x_name, c0, c1, c2):
+    return f"{c0:.4g} + {c1:.4g}^({c2:.4g}*{x_name})"
+
+
+def calculate_r_squared(source_data, regression_data):
+    source_data_array = np.array(source_data)
+    residuals = source_data_array - np.array(regression_data)
+    ss_res = np.sum(residuals**2)
+    ss_tot = np.sum((source_data_array - np.mean(source_data_array)) ** 2)
+    return 1 - ss_res / ss_tot

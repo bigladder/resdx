@@ -27,15 +27,15 @@ class RESNETDXModel(DXModel):
         self.allowed_kwargs += [
             "neep_data",
             "rated_net_heating_capacity_17",
-            "rated_net_heating_cop_47" "min_net_total_cooling_capacity_ratio_95",
-            "min_net_total_cooling_eir_ratio_82" "neep_data",
+            "min_net_total_cooling_capacity_ratio_95",
+            "min_net_total_cooling_eir_ratio_82",
+            "neep_data",
             "motor_type",
         ]
         self.net_neep_data: Union[NEEPPerformance, None] = None
         self.gross_neep_data: Union[NEEPPerformance, None] = None
         self.motor_type: Union[FanMotorType, None] = None
         self.rated_net_heating_capacity_17: Union[float, None] = None
-        self.rated_net_heating_cop_47: Union[float, None] = None
         self.min_net_total_cooling_capacity_ratio_95: Union[float, None] = None
         self.min_net_total_cooling_eir_ratio_82: Union[float, None] = None
 
@@ -50,7 +50,6 @@ class RESNETDXModel(DXModel):
         self.rated_net_heating_capacity_17 = self.get_kwarg_value(
             "rated_net_heating_capacity_17"
         )
-        self.rated_net_heating_cop_47 = self.get_kwarg_value("rated_net_heating_cop_47")
         self.min_net_total_cooling_capacity_ratio_95 = self.get_kwarg_value(
             "min_net_total_cooling_capacity_ratio_95"
         )
@@ -201,7 +200,7 @@ class RESNETDXModel(DXModel):
                         self.system.heating_off_temperature,
                         self.min_net_total_cooling_capacity_ratio_95,
                         self.min_net_total_cooling_eir_ratio_82,
-                        self.rated_net_heating_cop_47,
+                        self.system.input_rated_net_heating_cop,
                     )
 
                 self.system.cooling_boost_speed = 0
