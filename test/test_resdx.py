@@ -1,13 +1,9 @@
 import resdx
 from koozie import fr_u
 
-import matplotlib.pyplot as plt
-import seaborn as sns
 from scipy import optimize
 
 from resdx.dx_unit import AHRIVersion
-
-sns.set()
 
 import numpy as np
 
@@ -221,7 +217,7 @@ def test_neep_statistical_vchp_regression():
         vchp_unit.rated_net_total_cooling_capacity[vchp_unit.cooling_full_load_speed],
         0.01,
     )
-    assert vchp_unit.net_cooling_cop() == approx(
+    assert vchp_unit.net_total_cooling_cop() == approx(
         fr_u(vchp_unit.input_eer, "Btu/Wh"),
         0.01,
     )
@@ -276,7 +272,7 @@ def test_neep_vchp_regression():
         vchp_unit.rated_net_total_cooling_capacity[vchp_unit.cooling_full_load_speed],
         0.01,
     )
-    assert vchp_unit.net_cooling_cop() == approx(
+    assert vchp_unit.net_total_cooling_cop() == approx(
         vchp_unit.rated_net_cooling_cop[vchp_unit.cooling_full_load_speed], 0.01
     )
 
@@ -329,44 +325,4 @@ def test_plot():
         rating_standard=AHRIVersion.AHRI_210_240_2017,
     )
 
-    # Plot integrated power and capacity
-    T_out = np.arange(-23, 76, 1)
-    conditions = [
-        dx_unit_1_speed.make_condition(
-            HeatingConditions, outdoor=PsychState(drybulb=fr_u(T, "°F"), rel_hum=0.4)
-        )
-        for T in T_out
-    ]
-    Q_integrated = [
-        dx_unit_1_speed.gross_integrated_heating_capacity(condition)
-        for condition in conditions
-    ]
-    P_integrated = [
-        dx_unit_1_speed.gross_integrated_heating_power(condition)
-        for condition in conditions
-    ]
-    COP_integrated = [
-        dx_unit_1_speed.gross_integrated_heating_cop(condition)
-        for condition in conditions
-    ]
-
-    fig, ax1 = plt.subplots()
-
-    color = "tab:red"
-    ax1.set_xlabel("Temp (°F)")
-    ax1.set_ylabel("Capacity/Power (W)", color=color)
-    ax1.plot(T_out, Q_integrated, color=color)
-    ax1.plot(T_out, P_integrated, color=color)
-    ax1.tick_params(axis="y", labelcolor=color)
-    ax1.set_ylim([0, 15000])
-
-    ax2 = ax1.twinx()
-
-    color = "tab:blue"
-    ax2.set_ylabel("COP", color=color)
-    ax2.plot(T_out, COP_integrated, color=color)
-    ax2.tick_params(axis="y", labelcolor=color)
-    ax2.set_ylim([0, 5.5])
-
-    fig.tight_layout()
-    plt.savefig("output/heat-pump.png")
+    dx_unit_1_speed.plot("output/heat-pump.html")

@@ -8,9 +8,8 @@ authors = ["Big Ladder Software"]
 python = "^3.9"
 koozie = "^1.2.2"
 PsychroLib = "^2.5.0"
-matplotlib = "^3.3.4"
 scipy = "^1.6.3"
-seaborn = "^0.12.0"
+dimes = { git = "https://github.com/bigladder/dimes.git", branch = "add-multidemensional-plots"} # { path = "../dimes/", develop = true }
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.1.3"

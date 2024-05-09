@@ -348,9 +348,11 @@ def write_idf(
         IDFField(f"{system_name}Schedule", "Availability Schedule Name"),
         IDFField(f"{system_name}Heating Coil Outlet Node", "Air Inlet Node Name"),
         IDFField(
-            f"{system_name}Unitary Outlet Node"
-            if system_type == EnergyPlusSystemType.UNITARY_SYSTEM
-            else f"{system_name}Supply Fan Outlet Node",
+            (
+                f"{system_name}Unitary Outlet Node"
+                if system_type == EnergyPlusSystemType.UNITARY_SYSTEM
+                else f"{system_name}Supply Fan Outlet Node"
+            ),
             "Air Outlet Node Name",
         ),
         IDFField(
@@ -571,7 +573,7 @@ def write_idf(
         ep_speed = unit.number_of_cooling_speeds - speed
         condition = unit.make_condition(CoolingConditions, compressor_speed=speed)
         rated_capacity = unit.gross_total_cooling_capacity(condition)
-        rated_cop = unit.gross_cooling_cop(condition)
+        rated_cop = unit.gross_total_cooling_cop(condition)
         cooling_speed = [
             IDFField(
                 rated_capacity,
@@ -622,7 +624,7 @@ def write_idf(
         for ff in flow_fractions:
             condition.set_mass_airflow_ratio(ff)
             capacities.append(unit.gross_total_cooling_capacity(condition))
-            eirs.append(1.0 / unit.gross_cooling_cop(condition))
+            eirs.append(1.0 / unit.gross_total_cooling_cop(condition))
 
         objects.append(
             make_lookup_table(
@@ -659,7 +661,7 @@ def write_idf(
                     outdoor=PsychState(drybulb=koozie.fr_u(t_odb, "°F"), rel_hum=0.4),
                 )
                 capacities.append(unit.gross_total_cooling_capacity(condition))
-                eirs.append(1.0 / unit.gross_cooling_cop(condition))
+                eirs.append(1.0 / unit.gross_total_cooling_cop(condition))
 
         objects.append(
             make_lookup_table(
@@ -727,9 +729,11 @@ def write_idf(
             2,
         ),
         IDFField(
-            koozie.to_u(unit.defrost.high_temperature, "°C")
-            if unit.defrost.strategy != DefrostStrategy.NONE
-            else -999.0,
+            (
+                koozie.to_u(unit.defrost.high_temperature, "°C")
+                if unit.defrost.strategy != DefrostStrategy.NONE
+                else -999.0
+            ),
             "Maximum Outdoor Dry-Bulb Temperature for Defrost Operation",
             2,
         ),
@@ -740,9 +744,11 @@ def write_idf(
             2,
         ),
         IDFField(
-            "ReverseCycle"
-            if unit.defrost.strategy == DefrostStrategy.REVERSE_CYCLE
-            else "Resistive",
+            (
+                "ReverseCycle"
+                if unit.defrost.strategy == DefrostStrategy.REVERSE_CYCLE
+                else "Resistive"
+            ),
             "Defrost Strategy",
         ),
         IDFField(
@@ -750,16 +756,20 @@ def write_idf(
             "Defrost Control",
         ),
         IDFField(
-            unit.defrost.time_fraction(unit.H1_full_cond)
-            if unit.defrost.control == DefrostControl.TIMED
-            else "",
+            (
+                unit.defrost.time_fraction(unit.H1_full_cond)
+                if unit.defrost.control == DefrostControl.TIMED
+                else ""
+            ),
             "Defrost Time Period Fraction",
             4,
         ),
         IDFField(
-            unit.defrost.resistive_power
-            if unit.defrost.strategy == DefrostStrategy.RESISTIVE
-            else "",
+            (
+                unit.defrost.resistive_power
+                if unit.defrost.strategy == DefrostStrategy.RESISTIVE
+                else ""
+            ),
             "Resistive Defrost Heater Capacity",
         ),
     ]

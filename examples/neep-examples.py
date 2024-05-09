@@ -121,3 +121,4 @@ for name, unit in dx_units.items():
         autosize=True,
         normalize=True,
     )
+    unit.plot(f"{output_directory_path}/{name}.html")

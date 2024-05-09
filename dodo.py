@@ -1,30 +1,23 @@
-import os
+from pathlib import Path
 from doit.tools import create_folder
 
 OUTPUT_PATH = "output"
+create_folder(OUTPUT_PATH)
+
 
 def task_test():
-  '''Performs tests'''
-  return {
-    'targets': ['output/heat-pump.png'],
-    'actions': [
-      (create_folder, [OUTPUT_PATH]),
-      'pytest -v test'],
-    'clean': True
-  }
+    """Performs tests"""
+    return {
+        "actions": ["pytest -v test"],
+        "clean": True,
+    }
+
 
 def task_examples():
-  '''Run examples'''
-  return {
-    'targets': ['output/title24-heat-pump.py',
-                'output/cooling-cop-v-seer.png',
-                'output/heating-cop-v-hspf.png'],
-    'actions': [
-      (create_folder, [OUTPUT_PATH]),
-      'python examples/model-comparison.py',
-      'python examples/model-verification.py',
-      'python examples/inverse-calculations.py',
-      'python examples/neep-examples.py',
-      'python examples/generate-205.py'],
-    'clean': True
-  }
+    """Run examples"""
+    for file_path in Path("examples").glob("*.py"):
+        yield {
+            "name": file_path.name,
+            "actions": [f"python {file_path}"],
+            "clean": True,
+        }

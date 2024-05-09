@@ -216,8 +216,8 @@ class NRELDXModel(DXModel):
                 ),  # 60 F at ~40% RH
                 indoor=PsychState(drybulb=fr_u(70.0, "°F"), wetbulb=fr_u(60.0, "°F")),
             )  # Use H1 indoor conditions (since we're still heating)
-            self.system.model_data["cooling_cop60"] = self.system.gross_cooling_cop(
-                condition
+            self.system.model_data["cooling_cop60"] = (
+                self.system.gross_total_cooling_cop(condition)
             )
             return self.system.model_data["cooling_cop60"]
 

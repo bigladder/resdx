@@ -237,6 +237,6 @@ for cap_17_maintenance in cap_17_maintenance_range:
 make_plot(
     hspf_range,
     vs_heating_systems,
-    "Net Cap 17 / Net Cap 47",
+    "Net COP (at H1full conditions)",
     "heating-vs-cop-v-hspf",
 )

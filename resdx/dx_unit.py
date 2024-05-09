@@ -3,15 +3,25 @@ import math
 import uuid
 import datetime
 from random import Random
-from typing import Union, List
+from typing import Union, List, Callable
+from pathlib import Path
+from dataclasses import dataclass
 
 from scipy import optimize
 from numpy import linspace
 
 from koozie import fr_u, to_u
 
+from dimes import (
+    DimensionalData,
+    DimensionalPlot,
+    DisplayData,
+    LineProperties,
+    sample_colorscale,
+)
+
 from .psychrometrics import PsychState, psychrolib, STANDARD_CONDITIONS
-from .conditions import HeatingConditions, CoolingConditions
+from .conditions import HeatingConditions, CoolingConditions, OperatingConditions
 from .defrost import Defrost, DefrostControl
 from .util import find_nearest, limit_check
 from .models import RESNETDXModel, DXModel
@@ -710,13 +720,23 @@ class DXUnit:
     def net_cooling_power(self, conditions=None):
         return self.gross_cooling_power(conditions) + self.cooling_fan_power(conditions)
 
-    def gross_cooling_cop(self, conditions=None):
+    def gross_total_cooling_cop(self, conditions=None):
         return self.gross_total_cooling_capacity(conditions) / self.gross_cooling_power(
             conditions
         )
 
-    def net_cooling_cop(self, conditions=None):
+    def gross_sensible_cooling_cop(self, conditions=None):
+        return self.gross_sensible_cooling_capacity(
+            conditions
+        ) / self.gross_cooling_power(conditions)
+
+    def net_total_cooling_cop(self, conditions=None):
         return self.net_total_cooling_capacity(conditions) / self.net_cooling_power(
+            conditions
+        )
+
+    def net_sensible_cooling_cop(self, conditions=None):
+        return self.net_sensible_cooling_capacity(conditions) / self.net_cooling_power(
             conditions
         )
 
@@ -786,13 +806,13 @@ class DXUnit:
         return self.calculate_adp_state(conditions.indoor, outlet_state)
 
     def eer(self, conditions=None):
-        return to_u(self.net_cooling_cop(conditions), "Btu/Wh")
+        return to_u(self.net_total_cooling_cop(conditions), "Btu/Wh")
 
     def seer(self):
         """Based on AHRI 210/240 2023 (unless otherwise noted)"""
         if self.staging_type == StagingType.SINGLE_STAGE:
             plf = 1.0 - 0.5 * self.c_d_cooling  # eq. 11.56
-            seer = plf * self.net_cooling_cop(
+            seer = plf * self.net_total_cooling_cop(
                 self.B_full_cond
             )  # eq. 11.55 (using COP to keep things in SI units for now)
         else:  # if self.staging_type == StagingType.TWO_STAGE or self.staging_type == StagingType.VARIABLE_SPEED:
@@ -1359,7 +1379,7 @@ class DXUnit:
             )
             print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions):.2f}")
             print(
-                f"Gross cooling COP for stage {speed + 1} : {self.gross_cooling_cop(conditions):.3f}"
+                f"Gross cooling COP for stage {speed + 1} : {self.gross_total_cooling_cop(conditions):.3f}"
             )
             print(f"Net SHR for stage {speed + 1} : {self.net_shr(conditions):.3f}")
         print("")
@@ -1390,7 +1410,7 @@ class DXUnit:
         # RS0004 DX Coil
 
         coil_capacity = to_u(self.gross_total_cooling_capacity(), "kBtu/h")
-        coil_cop = self.gross_cooling_cop()
+        coil_cop = self.gross_total_cooling_cop()
         coil_shr = self.gross_shr()
 
         metadata_dx = {
@@ -1545,3 +1565,178 @@ class DXUnit:
         representation = {"metadata": metadata, "performance": performance}
 
         return representation
+
+    def plot(self, output_path: Path):
+        """Generate an HTML plot for this system."""
+
+        # Heating Temperatures
+        heating_temperatures = DimensionalData(
+            [
+                self.heating_off_temperature,
+                fr_u(5.0, "degF"),
+                fr_u(17.0, "degF"),
+                fr_u(35.0, "degF"),
+                fr_u(47.0, "degF"),
+                fr_u(60.0, "degF"),
+            ],
+            "Heating Temperatures",
+            "K",
+            "°F",
+        )
+
+        # Cooling Temperatures
+        cooling_temperatures = DimensionalData(
+            [
+                fr_u(60.0, "degF"),
+                fr_u(82.0, "degF"),
+                fr_u(95.0, "degF"),
+                self.cooling_off_temperature,
+            ],
+            "Cooling Temperatures",
+            "K",
+            "°F",
+        )
+
+        plot = DimensionalPlot(
+            DimensionalData(
+                heating_temperatures.data_values + cooling_temperatures.data_values[1:],
+                "Outdoor Drybulb Temperature",
+                "K",
+                "°F",
+            )
+        )
+
+        @dataclass
+        class DisplayDataSpec:
+            function: Callable[[OperatingConditions], float]
+            net_or_gross: str
+            version: str
+            mode: str
+            quantity: str
+
+        # fmt:off
+        display_specs = [
+            DisplayDataSpec(self.net_steady_state_heating_capacity,"Net","Steady State","Heating","Capacity"),
+            DisplayDataSpec(self.net_integrated_heating_capacity,"Net","Integrated","Heating","Capacity"),
+            DisplayDataSpec(self.net_steady_state_heating_power,"Net","Steady State","Heating","Power"),
+            DisplayDataSpec(self.net_integrated_heating_power,"Net","Integrated","Heating","Power"),
+            DisplayDataSpec(self.net_steady_state_heating_cop,"Net","Steady State","Heating","COP"),
+            DisplayDataSpec(self.net_integrated_heating_cop,"Net","Integrated","Heating","COP"),
+            DisplayDataSpec(self.net_total_cooling_capacity,"Net","Total","Cooling","Capacity"),
+            DisplayDataSpec(self.net_sensible_cooling_capacity,"Net","Sensible","Cooling","Capacity"),
+            DisplayDataSpec(self.net_cooling_power,"Net","","Cooling","Power"),
+            DisplayDataSpec(self.net_total_cooling_cop,"Net","Total","Cooling","COP"),
+            DisplayDataSpec(self.net_sensible_cooling_cop,"Net","Sensible","Cooling","COP"),
+            DisplayDataSpec(self.gross_steady_state_heating_capacity,"Gross","Steady State","Heating","Capacity"),
+            DisplayDataSpec(self.gross_integrated_heating_capacity,"Gross","Integrated","Heating","Capacity"),
+            DisplayDataSpec(self.gross_steady_state_heating_power,"Gross","Steady State","Heating","Power"),
+            DisplayDataSpec(self.gross_integrated_heating_power,"Gross","Integrated","Heating","Power"),
+            DisplayDataSpec(self.gross_steady_state_heating_cop,"Gross","Steady State","Heating","COP"),
+            DisplayDataSpec(self.gross_integrated_heating_cop,"Gross","Integrated","Heating","COP"),
+            DisplayDataSpec(self.gross_total_cooling_capacity,"Gross","Total","Cooling","Capacity"),
+            DisplayDataSpec(self.gross_sensible_cooling_capacity,"Gross","Sensible","Cooling","Capacity"),
+            DisplayDataSpec(self.gross_cooling_power,"Gross","","Cooling","Power"),
+            DisplayDataSpec(self.gross_total_cooling_cop,"Gross","Total","Cooling","COP"),
+            DisplayDataSpec(self.gross_sensible_cooling_cop,"Gross","Sensible","Cooling","COP"),
+        ]
+        # fmt:on
+
+        heating_conditions = [
+            [
+                self.make_condition(
+                    HeatingConditions,
+                    compressor_speed=speed,
+                    outdoor=PsychState(drybulb=tdb, rel_hum=0.4),
+                )
+                for tdb in heating_temperatures.data_values
+            ]
+            for speed in range(self.number_of_heating_speeds)
+        ]
+        cooling_conditions = [
+            [
+                self.make_condition(
+                    CoolingConditions,
+                    compressor_speed=speed,
+                    outdoor=PsychState(drybulb=tdb, rel_hum=0.4),
+                )
+                for tdb in cooling_temperatures.data_values
+            ]
+            for speed in range(self.number_of_cooling_speeds)
+        ]
+
+        for display_spec in display_specs:
+            if display_spec.mode == "Heating":
+                number_of_speeds = self.number_of_heating_speeds
+                conditions = heating_conditions
+                pallette = "oranges"
+                temperatures = heating_temperatures
+                speed_names = {
+                    self.heating_boost_speed: "Max",
+                    self.heating_full_load_speed: "Rated",
+                    self.heating_intermediate_speed: "Int.",
+                    self.heating_low_speed: "Min",
+                }
+            elif display_spec.mode == "Cooling":
+                number_of_speeds = self.number_of_cooling_speeds
+                conditions = cooling_conditions
+                pallette = "blues"
+                temperatures = cooling_temperatures
+                speed_names = {
+                    self.cooling_boost_speed: "Max",
+                    self.cooling_full_load_speed: "Rated",
+                    self.cooling_intermediate_speed: "Int.",
+                    self.cooling_low_speed: "Min",
+                }
+            else:
+                assert False
+
+            if display_spec.quantity == "Capacity":
+                subplot_number = 1
+                units = "W"
+                display_units = "kBtu/h"
+            elif display_spec.quantity == "Power":
+                subplot_number = 2
+                units = "W"
+                display_units = "kW"
+            elif display_spec.quantity == "COP":
+                subplot_number = 3
+                units = "W/W"
+                display_units = "W/W"
+            else:
+                assert False
+
+            is_visible = True
+            if display_spec.net_or_gross == "Gross":
+                is_visible = False
+
+            line_type = "solid"
+            if display_spec.version in ["Integrated", "Sensible"]:
+                line_type = "dot"
+
+            for speed in range(number_of_speeds):
+
+                color_ratio = (number_of_speeds - speed) / number_of_speeds
+                line_color = sample_colorscale(pallette, color_ratio)[0]
+                if display_spec.version != "":
+                    version_string = f"{display_spec.version} "
+                else:
+                    version_string = ""
+                plot.add_display_data(
+                    DisplayData(
+                        [
+                            display_spec.function(condition)
+                            for condition in conditions[speed]
+                        ],
+                        name=f"{display_spec.net_or_gross} {version_string}{display_spec.mode} {display_spec.quantity} ({speed_names[speed]} Speed)",
+                        native_units=units,
+                        display_units=display_units,
+                        x_axis=temperatures,
+                        line_properties=LineProperties(
+                            color=line_color, line_type=line_type, is_visible=is_visible
+                        ),
+                    ),
+                    subplot_number=subplot_number,
+                    axis_name=display_spec.quantity,
+                )
+
+        plot.write_html_plot(output_path)
