@@ -9,7 +9,7 @@ seer2 = 14.3
 hspf2 = 7.5
 cop_c, solution_c = optimize.newton(
     lambda x: resdx.DXUnit(
-        number_of_cooling_speeds=2,
+        staging_type=resdx.StagingType.TWO_STAGE,
         rated_gross_cooling_cop=x,
         input_seer=seer2,
         rating_standard=resdx.AHRIVersion.AHRI_210_240_2023,
@@ -20,7 +20,7 @@ cop_c, solution_c = optimize.newton(
 )
 cop_h, solution_h = optimize.newton(
     lambda x: resdx.DXUnit(
-        number_of_heating_speeds=2,
+        staging_type=resdx.StagingType.TWO_STAGE,
         rated_gross_heating_cop=x,
         input_hspf=hspf2,
         rating_standard=resdx.AHRIVersion.AHRI_210_240_2023,
@@ -30,7 +30,7 @@ cop_h, solution_h = optimize.newton(
     full_output=True,
 )
 dx_unit = resdx.DXUnit(
-    number_of_cooling_speeds=2,
+    staging_type=resdx.StagingType.TWO_STAGE,
     rated_gross_cooling_cop=cop_c,
     rated_gross_heating_cop=cop_h,
     input_seer=seer2,

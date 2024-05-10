@@ -13,7 +13,6 @@ from .base_model import DXModel
 
 
 class NRELDXModel(DXModel):
-
     """Based on Cutler et al, but also includes internal EnergyPlus calculations"""
 
     """Also, some assumptions from: https://github.com/NREL/OpenStudio-ERI/blob/master/hpxml-measures/HPXMLtoOpenStudio/resources/hvac.rb"""
@@ -70,8 +69,12 @@ class NRELDXModel(DXModel):
 
     def gross_total_cooling_capacity(self, conditions):
         """From Cutler et al."""
-        T_iwb = to_u(conditions.indoor.get_wb(), "°F")  # Cutler curves use °F
-        T_odb = to_u(conditions.outdoor.db, "°F")  # Cutler curves use °F
+        T_iwb = bracket(
+            to_u(conditions.indoor.get_wb(), "°F"), min=57.0, max=72.0
+        )  # Cutler curves use °F
+        T_odb = bracket(
+            to_u(conditions.outdoor.db, "°F"), min=75.0
+        )  # Cutler curves use °F
         cap_FT = calc_biquad(
             [
                 3.68637657,
@@ -213,8 +216,8 @@ class NRELDXModel(DXModel):
                 ),  # 60 F at ~40% RH
                 indoor=PsychState(drybulb=fr_u(70.0, "°F"), wetbulb=fr_u(60.0, "°F")),
             )  # Use H1 indoor conditions (since we're still heating)
-            self.system.model_data["cooling_cop60"] = self.system.gross_cooling_cop(
-                condition
+            self.system.model_data["cooling_cop60"] = (
+                self.system.gross_total_cooling_cop(condition)
             )
             return self.system.model_data["cooling_cop60"]
 
@@ -466,7 +469,7 @@ class NRELDXModel(DXModel):
 
     def set_rated_net_total_cooling_capacity(self, input):
         # No default, but need to set to list (and default lower speeds)
-        if type(input) is list:
+        if isinstance(input, list):
             self.system.rated_net_total_cooling_capacity = input
         else:
             if self.system.number_of_cooling_speeds == 1:
@@ -559,19 +562,15 @@ class NRELDXModel(DXModel):
 
     @staticmethod
     def cooling_cop_low(cooling_cop_high):
-        eir_high = 1.0 / cooling_cop_high
-        eir_low = 0.8887 * (eir_high) + 0.0083
-        return 1.0 / eir_low
+        return cooling_cop_high / 0.91
 
     @staticmethod
     def heating_cop_low(heating_cop_high):
-        eir_high = 1.0 / heating_cop_high
-        eir_low = 0.6241 * (eir_high) + 0.0681
-        return 1.0 / eir_low
+        return heating_cop_high / 0.87
 
     def set_rated_net_cooling_cop(self, input):
         # No default, but need to set to list (and default lower speeds)
-        if type(input) is list:
+        if isinstance(input, list):
             self.system.rated_net_cooling_cop = input
             self.system.rated_net_cooling_power = [
                 self.system.rated_net_total_cooling_capacity[i]
@@ -622,7 +621,7 @@ class NRELDXModel(DXModel):
 
     def set_rated_gross_cooling_cop(self, input):
         # No default, but need to set to list (and default lower speeds)
-        if type(input) is list:
+        if isinstance(input, list):
             self.system.rated_gross_cooling_cop = input
         else:
             self.system.rated_gross_cooling_cop[0] = input
@@ -649,7 +648,7 @@ class NRELDXModel(DXModel):
 
     def set_rated_net_heating_cop(self, input):
         # No default, but need to set to list (and default lower speeds)
-        if type(input) is list:
+        if isinstance(input, list):
             self.system.rated_net_heating_cop = input
             self.system.rated_net_heating_power = [
                 self.system.rated_net_heating_capacity[i]
@@ -700,7 +699,7 @@ class NRELDXModel(DXModel):
 
     def set_rated_gross_heating_cop(self, input):
         # No default, but need to set to list (and default lower speeds)
-        if type(input) is list:
+        if isinstance(input, list):
             self.system.rated_gross_heating_cop = input
         else:
             self.system.rated_gross_heating_cop[0] = input

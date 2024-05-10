@@ -1,36 +1,48 @@
 from enum import Enum
 import math
-from scipy import optimize
-from typing import Union, List
-
-from .psychrometrics import PsychState, psychrolib, STANDARD_CONDITIONS
-from .conditions import HeatingConditions, CoolingConditions
-from .defrost import Defrost, DefrostControl
-from koozie import fr_u, to_u
-from .util import find_nearest, limit_check
-from .models import RESNETDXModel, DXModel
-from .fan import Fan
-from numpy import linspace
 import uuid
 import datetime
 from random import Random
+from typing import Union, List, Callable
+from pathlib import Path
+from dataclasses import dataclass
+from csv import DictWriter
+
+from scipy import optimize
+from numpy import linspace
+
+from koozie import fr_u, to_u
+
+from dimes import (
+    DimensionalData,
+    DimensionalPlot,
+    DisplayData,
+    LineProperties,
+    sample_colorscale,
+)
+
+from .psychrometrics import PsychState, psychrolib, STANDARD_CONDITIONS
+from .conditions import HeatingConditions, CoolingConditions, OperatingConditions
+from .defrost import Defrost, DefrostControl
+from .util import find_nearest, limit_check
+from .models import RESNETDXModel, DXModel
+from .fan import Fan, FanMotorType
+from .enums import StagingType
+
+
+def interpolate_separate(f, f2, cond_1, cond_2, x):
+    return f(cond_1) + (f2(cond_2) - f(cond_1)) / (
+        cond_2.outdoor.db - cond_1.outdoor.db
+    ) * (x - cond_1.outdoor.db)
 
 
 def interpolate(f, cond_1, cond_2, x):
-    return f(cond_1) + (f(cond_2) - f(cond_1)) / (
-        cond_2.outdoor.db - cond_1.outdoor.db
-    ) * (x - cond_1.outdoor.db)
+    return interpolate_separate(f, f, cond_1, cond_2, x)
 
 
 class CyclingMethod(Enum):
     BETWEEN_LOW_FULL = 1
     BETWEEN_OFF_FULL = 2
-
-
-class StagingType(Enum):
-    SINGLE_STAGE = 1
-    TWO_STAGE = 2
-    VARIABLE_SPEED = 3
 
 
 class AHRIVersion(Enum):
@@ -127,17 +139,17 @@ class DXUnit:
     ] + [(fr_u(50000, "Btu/h") + i * fr_u(10000, "Btu/h")) for i in range(0, 9)]
 
     def __init__(
+        # defaults of None are defaulted within this function based on other argument values
         self,
         model: Union[DXModel, None] = None,
-        # defaults of None are defaulted within this function based on other argument values
-        number_of_cooling_speeds=None,
-        number_of_heating_speeds=None,
+        staging_type=None,  # Allow default based on inputs
         # Cooling (rating = AHRI A conditions)
         rated_net_total_cooling_capacity=fr_u(3.0, "ton_ref"),
         rated_gross_cooling_cop=3.72,
         rated_net_cooling_cop=None,
         rated_cooling_airflow_per_rated_net_capacity=None,
         c_d_cooling=None,
+        cooling_off_temperature=fr_u(125.0, "°F"),
         # Heating (rating = AHRI H1 conditions)
         rated_net_heating_capacity=None,
         rated_gross_heating_cop=3.82,
@@ -164,11 +176,12 @@ class DXUnit:
         cooling_intermediate_speed=None,
         heating_full_load_speed=0,  # The first entry (index = 0) in arrays reflects AHRI "full" speed.
         heating_intermediate_speed=None,
-        staging_type=None,  # Allow default based on inputs
-        rating_standard=AHRIVersion.AHRI_210_240_2017,
+        is_ducted=True,
+        rating_standard=AHRIVersion.AHRI_210_240_2023,
         # Used for comparisons and to inform some defaults
-        input_seer=None,
-        input_hspf=None,
+        input_seer=None,  # SEER value input (may not match calculated SEER of the model)
+        input_eer=None,  # EER value input (may not match calculated EER of the model)
+        input_hspf=None,  # HSPF value input (may not match calculated HSPF of the model)
         metadata=None,
         **kwargs,
     ):  # Additional inputs used for specific models
@@ -181,9 +194,18 @@ class DXUnit:
 
         self.model.set_system(self)
 
+        # Inputs used by some models
+        # Ratings
         self.input_seer = input_seer
         self.input_hspf = input_hspf
+        self.input_eer = input_eer
+
+        self.input_rated_net_heating_cop = rated_net_heating_cop
+
         self.cycling_method = cycling_method
+        self.is_ducted = is_ducted
+
+        self.cooling_off_temperature = cooling_off_temperature
 
         if defrost is None:
             self.defrost = Defrost()
@@ -203,33 +225,21 @@ class DXUnit:
         self.model_data: dict = {}
 
         # Number of stages/speeds
-        if number_of_cooling_speeds is not None:
-            self.number_of_cooling_speeds = number_of_cooling_speeds
-            if type(rated_net_total_cooling_capacity) is list:
-                num_capacities = len(rated_net_total_cooling_capacity)
-                if num_capacities != number_of_cooling_speeds:
-                    raise Exception(
-                        f"Length of 'rated_net_total_cooling_capacity' ({num_capacities}) != 'number_of_cooling_speeds' ({number_of_cooling_speeds})."
-                    )
-        elif type(rated_net_total_cooling_capacity) is list:
+        if type(rated_net_total_cooling_capacity) is list:
             self.number_of_cooling_speeds = len(rated_net_total_cooling_capacity)
-        elif number_of_heating_speeds is not None:
-            self.number_of_cooling_speeds = number_of_heating_speeds
+        elif staging_type is not None:
+            self.number_of_cooling_speeds = (
+                staging_type.value if staging_type != StagingType.VARIABLE_SPEED else 4
+            )
         else:
             self.number_of_cooling_speeds = 1
 
-        if number_of_heating_speeds is not None:
-            self.number_of_heating_speeds = number_of_heating_speeds
-            if type(rated_net_heating_capacity) is list:
-                num_capacities = len(rated_net_heating_capacity)
-                if num_capacities != number_of_heating_speeds:
-                    raise Exception(
-                        f"Length of 'rated_net_heating_capacity' ({num_capacities}) != 'number_of_cooling_speeds' ({number_of_heating_speeds})."
-                    )
-        elif type(rated_net_heating_capacity) is list:
+        if type(rated_net_heating_capacity) is list:
             self.number_of_heating_speeds = len(rated_net_heating_capacity)
-        elif number_of_cooling_speeds is not None:
-            self.number_of_heating_speeds = number_of_cooling_speeds
+        elif staging_type is not None:
+            self.number_of_heating_speeds = (
+                staging_type.value if staging_type != StagingType.VARIABLE_SPEED else 4
+            )
         else:
             self.number_of_heating_speeds = 1
 
@@ -331,12 +341,12 @@ class DXUnit:
 
         # COP determinations
         if rated_net_cooling_cop is None and rated_gross_cooling_cop is None:
-            raise Exception(
+            raise RuntimeError(
                 "Must define either 'rated_net_cooling_cop' or 'rated_gross_cooling_cop'."
             )
 
         if rated_net_heating_cop is None and rated_gross_heating_cop is None:
-            raise Exception(
+            raise RuntimeError(
                 "Must define either 'rated_net_heating_cop' or 'rated_gross_heating_cop'."
             )
 
@@ -361,7 +371,7 @@ class DXUnit:
         self.check_array_order(self.rated_net_total_cooling_capacity)
         self.check_array_order(self.rated_net_heating_capacity)
 
-    def set_rating_conditions(self):
+    def set_rating_conditions(self) -> None:
         self.rated_full_flow_external_static_pressure = (
             self.get_rated_full_flow_rated_pressure()
         )
@@ -440,7 +450,7 @@ class DXUnit:
                 compressor_speed=self.heating_low_speed,
             )
             self.H1_low_cond: HeatingConditions = self.make_condition(
-                HeatingConditions, compressor_speed=1
+                HeatingConditions, compressor_speed=self.heating_low_speed
             )
             self.H2_low_cond: HeatingConditions = self.make_condition(
                 HeatingConditions,
@@ -543,7 +553,7 @@ class DXUnit:
 
     def check_array_length(self, array, expected_length):
         if len(array) != expected_length:
-            raise Exception(
+            raise RuntimeError(
                 f"Unexpected array length ({len(array)}). Number of speeds is {expected_length}. Array items are {array}."
             )
 
@@ -563,7 +573,7 @@ class DXUnit:
 
     def check_array_order(self, array):
         if not all(earlier >= later for earlier, later in zip(array, array[1:])):
-            raise Exception(
+            raise RuntimeError(
                 f"Arrays must be in order of decreasing capacity. Array items are {array}."
             )
 
@@ -626,6 +636,8 @@ class DXUnit:
         return condition
 
     def get_rated_full_flow_rated_pressure(self):
+        if not self.is_ducted:
+            return 0.0
         if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
             # TODO: Add Small-duct, High-velocity Systems
             if self.rated_net_total_cooling_capacity[0] <= fr_u(29000, "Btu/h"):
@@ -709,13 +721,23 @@ class DXUnit:
     def net_cooling_power(self, conditions=None):
         return self.gross_cooling_power(conditions) + self.cooling_fan_power(conditions)
 
-    def gross_cooling_cop(self, conditions=None):
+    def gross_total_cooling_cop(self, conditions=None):
         return self.gross_total_cooling_capacity(conditions) / self.gross_cooling_power(
             conditions
         )
 
-    def net_cooling_cop(self, conditions=None):
+    def gross_sensible_cooling_cop(self, conditions=None):
+        return self.gross_sensible_cooling_capacity(
+            conditions
+        ) / self.gross_cooling_power(conditions)
+
+    def net_total_cooling_cop(self, conditions=None):
         return self.net_total_cooling_capacity(conditions) / self.net_cooling_power(
+            conditions
+        )
+
+    def net_sensible_cooling_cop(self, conditions=None):
+        return self.net_sensible_cooling_capacity(conditions) / self.net_cooling_power(
             conditions
         )
 
@@ -785,13 +807,13 @@ class DXUnit:
         return self.calculate_adp_state(conditions.indoor, outlet_state)
 
     def eer(self, conditions=None):
-        return to_u(self.net_cooling_cop(conditions), "Btu/Wh")
+        return to_u(self.net_total_cooling_cop(conditions), "Btu/Wh")
 
     def seer(self):
         """Based on AHRI 210/240 2023 (unless otherwise noted)"""
         if self.staging_type == StagingType.SINGLE_STAGE:
             plf = 1.0 - 0.5 * self.c_d_cooling  # eq. 11.56
-            seer = plf * self.net_cooling_cop(
+            seer = plf * self.net_total_cooling_cop(
                 self.B_full_cond
             )  # eq. 11.55 (using COP to keep things in SI units for now)
         else:  # if self.staging_type == StagingType.TWO_STAGE or self.staging_type == StagingType.VARIABLE_SPEED:
@@ -848,11 +870,14 @@ class DXUnit:
             for i in range(self.cooling_distribution.number_of_bins):
                 t = self.cooling_distribution.outdoor_drybulbs[i]
                 n = self.cooling_distribution.fractional_hours[i]
-                bl = (
-                    (t - fr_u(65.0, "°F"))
-                    / (fr_u(95, "°F") - fr_u(65.0, "°F"))
-                    * self.net_total_cooling_capacity(self.A_full_cond)
-                    / sizing_factor
+                bl = max(
+                    (
+                        (t - fr_u(65.0, "°F"))
+                        / (fr_u(95, "°F") - fr_u(65.0, "°F"))
+                        * self.net_total_cooling_capacity(self.A_full_cond)
+                        / sizing_factor,
+                        0.0,
+                    )
                 )  # eq. 11.60
                 q_low = interpolate(
                     self.net_total_cooling_capacity, self.F_low_cond, self.B_low_cond, t
@@ -1051,7 +1076,7 @@ class DXUnit:
         if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
             c = 0.77  # eq. 11.110 (agreement factor)
             dhr_min = (
-                self.net_integrated_heating_capacity(self.H1_full_cond)
+                self.net_steady_state_heating_capacity(self.H1_full_cond)
                 * (fr_u(65, "°F") - t_od)
                 / (fr_u(60, "°R"))
             )  # eq. 11.111
@@ -1062,18 +1087,19 @@ class DXUnit:
             else:
                 c_x = heating_distribution.c
             t_zl = heating_distribution.zero_load_temperature
+            q_A_full = self.net_total_cooling_capacity(self.A_full_cond)
 
         if self.staging_type == StagingType.VARIABLE_SPEED:
             # Intermediate capacity
-            q_H0_low = self.net_integrated_heating_capacity(self.H0_low_cond)
-            q_H1_low = self.net_integrated_heating_capacity(self.H1_low_cond)
+            q_H0_low = self.net_steady_state_heating_capacity(self.H0_low_cond)
+            q_H1_low = self.net_steady_state_heating_capacity(self.H1_low_cond)
             q_H2_int = self.net_integrated_heating_capacity(self.H2_int_cond)
-            q_H1_full = self.net_integrated_heating_capacity(self.H1_full_cond)
+            q_H1_full = self.net_steady_state_heating_capacity(self.H1_full_cond)
             q_H2_full = self.net_integrated_heating_capacity(self.H2_full_cond)
-            q_H3_full = self.net_integrated_heating_capacity(self.H3_full_cond)
-            q_H4_full = self.net_integrated_heating_capacity(self.H4_full_cond)
+            q_H3_full = self.net_steady_state_heating_capacity(self.H3_full_cond)
+            q_H4_full = self.net_steady_state_heating_capacity(self.H4_full_cond)
             q_35_low = interpolate(
-                self.net_integrated_heating_capacity,
+                self.net_steady_state_heating_capacity,
                 self.H0_low_cond,
                 self.H1_low_cond,
                 fr_u(35.0, "°F"),
@@ -1084,57 +1110,58 @@ class DXUnit:
             ) + (q_H2_full - q_H3_full) / (fr_u(35, "°F") - fr_u(17.0, "°F")) * N_Hq
 
             # Intermediate power
-            p_H0_low = self.net_integrated_heating_power(self.H0_low_cond)
-            p_H1_low = self.net_integrated_heating_power(self.H1_low_cond)
+            p_H0_low = self.net_steady_state_heating_power(self.H0_low_cond)
+            p_H1_low = self.net_steady_state_heating_power(self.H1_low_cond)
             p_H2_int = self.net_integrated_heating_power(self.H2_int_cond)
-            p_H1_full = self.net_integrated_heating_power(self.H1_full_cond)
+            p_H1_full = self.net_steady_state_heating_power(self.H1_full_cond)
             p_H2_full = self.net_integrated_heating_power(self.H2_full_cond)
-            p_H3_full = self.net_integrated_heating_power(self.H3_full_cond)
-            p_H4_full = self.net_integrated_heating_power(self.H4_full_cond)
+            p_H3_full = self.net_steady_state_heating_power(self.H3_full_cond)
+            p_H4_full = self.net_steady_state_heating_power(self.H4_full_cond)
             p_35_low = interpolate(
-                self.net_integrated_heating_power,
+                self.net_steady_state_heating_power,
                 self.H0_low_cond,
                 self.H1_low_cond,
                 fr_u(35.0, "°F"),
             )
             N_HE = (p_H2_int - p_35_low) / (p_H2_full - p_35_low)
             M_HE = (p_H0_low - p_H1_low) / (fr_u(62, "°F") - fr_u(47.0, "°F")) * (
-                1.0 - N_Hq
-            ) + (p_H2_full - p_H3_full) / (fr_u(35, "°F") - fr_u(17.0, "°F")) * N_Hq
+                1.0 - N_HE
+            ) + (p_H2_full - p_H3_full) / (fr_u(35, "°F") - fr_u(17.0, "°F")) * N_HE
 
         for i in range(heating_distribution.number_of_bins):
             t = heating_distribution.outdoor_drybulbs[i]
             n = heating_distribution.fractional_hours[i]
             if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
-                bl = (
-                    (fr_u(65, "°F") - t) / (fr_u(65, "°F") - t_od) * c * dhr_min
+                bl = max(
+                    (fr_u(65, "°F") - t) / (fr_u(65, "°F") - t_od) * c * dhr_min, 0.0
                 )  # eq. 11.109
             else:  # if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
-                q_A_full = self.net_total_cooling_capacity(self.A_full_cond)
-                bl = (t_zl - t) / (t_zl - t_od) * c_x * q_A_full
+                bl = max((t_zl - t) / (t_zl - t_od) * c_x * q_A_full, 0.0)
 
             t_ob = fr_u(45, "°F")  # eq. 11.119
             if t >= t_ob or t <= fr_u(17, "°F"):
                 q_full = interpolate(
-                    self.net_integrated_heating_capacity,
+                    self.net_steady_state_heating_capacity,
                     self.H3_full_cond,
                     self.H1_full_cond,
                     t,
                 )  # eq. 11.117
                 p_full = interpolate(
-                    self.net_integrated_heating_power,
+                    self.net_steady_state_heating_power,
                     self.H3_full_cond,
                     self.H1_full_cond,
                     t,
                 )  # eq. 11.117
             else:  # elif t > fr_u(17,"°F") and t < t_ob
-                q_full = interpolate(
+                q_full = interpolate_separate(
+                    self.net_steady_state_heating_capacity,
                     self.net_integrated_heating_capacity,
                     self.H3_full_cond,
                     self.H2_full_cond,
                     t,
                 )  # eq. 11.118
-                p_full = interpolate(
+                p_full = interpolate_separate(
+                    self.net_steady_state_heating_power,
                     self.net_integrated_heating_power,
                     self.H3_full_cond,
                     self.H2_full_cond,
@@ -1164,39 +1191,41 @@ class DXUnit:
                 t_ob = fr_u(40, "°F")  # eq. 11.134
                 if t >= t_ob:
                     q_low = interpolate(
-                        self.net_integrated_heating_capacity,
+                        self.net_steady_state_heating_capacity,
                         self.H0_low_cond,
                         self.H1_low_cond,
                         t,
                     )  # eq. 11.135
                     p_low = interpolate(
-                        self.net_integrated_heating_power,
+                        self.net_steady_state_heating_power,
                         self.H0_low_cond,
                         self.H1_low_cond,
                         t,
                     )  # eq. 11.138
                 elif t <= fr_u(17.0, "°F"):
                     q_low = interpolate(
-                        self.net_integrated_heating_capacity,
+                        self.net_steady_state_heating_capacity,
                         self.H1_low_cond,
                         self.H3_low_cond,
                         t,
                     )  # eq. 11.137
                     p_low = interpolate(
-                        self.net_integrated_heating_power,
+                        self.net_steady_state_heating_power,
                         self.H1_low_cond,
                         self.H3_low_cond,
                         t,
                     )  # eq. 11.140
                 else:
-                    q_low = interpolate(
+                    q_low = interpolate_separate(
                         self.net_integrated_heating_capacity,
+                        self.net_steady_state_heating_capacity,
                         self.H2_low_cond,
                         self.H3_low_cond,
                         t,
                     )  # eq. 11.136
-                    p_low = interpolate(
+                    p_low = interpolate_separate(
                         self.net_integrated_heating_power,
+                        self.net_steady_state_heating_power,
                         self.H2_low_cond,
                         self.H3_low_cond,
                         t,
@@ -1242,13 +1271,13 @@ class DXUnit:
             else:  # if self.staging_type == StagingType.VARIABLE_SPEED:
                 # Note: this is strange that there is no defrost cut in the low speed and doesn't use H2 or H3 low
                 q_low = interpolate(
-                    self.net_integrated_heating_capacity,
+                    self.net_steady_state_heating_capacity,
                     self.H0_low_cond,
                     self.H1_low_cond,
                     t,
                 )  # eq. 11.177
                 p_low = interpolate(
-                    self.net_integrated_heating_power,
+                    self.net_steady_state_heating_power,
                     self.H0_low_cond,
                     self.H1_low_cond,
                     t,
@@ -1297,13 +1326,13 @@ class DXUnit:
                     # Note: builds on previously defined q_full / p_full
                     if t > fr_u(5, "°F") or t <= fr_u(17, "°F"):
                         q_full = interpolate(
-                            self.net_integrated_heating_capacity,
+                            self.net_steady_state_heating_capacity,
                             self.H4_full_cond,
                             self.H3_full_cond,
                             t,
                         )  # eq. 11.203
                         p_full = interpolate(
-                            self.net_integrated_heating_power,
+                            self.net_steady_state_heating_power,
                             self.H4_full_cond,
                             self.H3_full_cond,
                             t,
@@ -1326,15 +1355,7 @@ class DXUnit:
             e_sum += e
             rh_sum += rh
 
-        t_test = max(self.defrost.period, fr_u(90, "min"))
-        t_max = min(self.defrost.max_time, fr_u(720.0, "min"))
-
-        if self.defrost.control == DefrostControl.DEMAND:
-            f_def = 1 + 0.03 * (
-                1 - (t_test - fr_u(90.0, "min")) / (t_max - fr_u(90.0, "min"))
-            )  # eq. 11.129
-        else:
-            f_def = 1  # eq. 11.130
+        f_def = 1 + self.defrost.demand_credit()
 
         hspf = q_sum / (e_sum + rh_sum) * f_def  # eq. 11.133
         return to_u(hspf, "Btu/Wh")
@@ -1351,7 +1372,7 @@ class DXUnit:
             )
             print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions):.2f}")
             print(
-                f"Gross cooling COP for stage {speed + 1} : {self.gross_cooling_cop(conditions):.3f}"
+                f"Gross cooling COP for stage {speed + 1} : {self.gross_total_cooling_cop(conditions):.3f}"
             )
             print(f"Net SHR for stage {speed + 1} : {self.net_shr(conditions):.3f}")
         print("")
@@ -1382,7 +1403,7 @@ class DXUnit:
         # RS0004 DX Coil
 
         coil_capacity = to_u(self.gross_total_cooling_capacity(), "kBtu/h")
-        coil_cop = self.gross_cooling_cop()
+        coil_cop = self.gross_total_cooling_cop()
         coil_shr = self.gross_shr()
 
         metadata_dx = {
@@ -1537,3 +1558,335 @@ class DXUnit:
         representation = {"metadata": metadata, "performance": performance}
 
         return representation
+
+    def plot(self, output_path: Union[Path, str]):
+        """Generate an HTML plot for this system."""
+
+        # Heating Temperatures
+        heating_temperatures = DimensionalData(
+            [
+                self.heating_off_temperature,
+                fr_u(5.0, "degF"),
+                fr_u(17.0, "degF"),
+                fr_u(35.0, "degF"),
+                fr_u(47.0, "degF"),
+                fr_u(60.0, "degF"),
+            ],
+            "Heating Temperatures",
+            "K",
+            "°F",
+        )
+
+        # Cooling Temperatures
+        cooling_temperatures = DimensionalData(
+            [
+                fr_u(60.0, "degF"),
+                fr_u(82.0, "degF"),
+                fr_u(95.0, "degF"),
+                self.cooling_off_temperature,
+            ],
+            "Cooling Temperatures",
+            "K",
+            "°F",
+        )
+
+        plot = DimensionalPlot(
+            DimensionalData(
+                heating_temperatures.data_values + cooling_temperatures.data_values[1:],
+                "Outdoor Drybulb Temperature",
+                "K",
+                "°F",
+            )
+        )
+
+        @dataclass
+        class DisplayDataSpec:
+            function: Callable[[OperatingConditions], float]
+            net_or_gross: str
+            version: str
+            mode: str
+            quantity: str
+
+        # fmt:off
+        display_specs = [
+            DisplayDataSpec(self.net_steady_state_heating_capacity,"Net","Steady State","Heating","Capacity"),
+            DisplayDataSpec(self.net_integrated_heating_capacity,"Net","Integrated","Heating","Capacity"),
+            DisplayDataSpec(self.net_steady_state_heating_power,"Net","Steady State","Heating","Power"),
+            DisplayDataSpec(self.net_integrated_heating_power,"Net","Integrated","Heating","Power"),
+            DisplayDataSpec(self.net_steady_state_heating_cop,"Net","Steady State","Heating","COP"),
+            DisplayDataSpec(self.net_integrated_heating_cop,"Net","Integrated","Heating","COP"),
+            DisplayDataSpec(self.net_total_cooling_capacity,"Net","Total","Cooling","Capacity"),
+            DisplayDataSpec(self.net_sensible_cooling_capacity,"Net","Sensible","Cooling","Capacity"),
+            DisplayDataSpec(self.net_cooling_power,"Net","","Cooling","Power"),
+            DisplayDataSpec(self.net_total_cooling_cop,"Net","Total","Cooling","COP"),
+            DisplayDataSpec(self.net_sensible_cooling_cop,"Net","Sensible","Cooling","COP"),
+            DisplayDataSpec(self.gross_steady_state_heating_capacity,"Gross","Steady State","Heating","Capacity"),
+            DisplayDataSpec(self.gross_integrated_heating_capacity,"Gross","Integrated","Heating","Capacity"),
+            DisplayDataSpec(self.gross_steady_state_heating_power,"Gross","Steady State","Heating","Power"),
+            DisplayDataSpec(self.gross_integrated_heating_power,"Gross","Integrated","Heating","Power"),
+            DisplayDataSpec(self.gross_steady_state_heating_cop,"Gross","Steady State","Heating","COP"),
+            DisplayDataSpec(self.gross_integrated_heating_cop,"Gross","Integrated","Heating","COP"),
+            DisplayDataSpec(self.gross_total_cooling_capacity,"Gross","Total","Cooling","Capacity"),
+            DisplayDataSpec(self.gross_sensible_cooling_capacity,"Gross","Sensible","Cooling","Capacity"),
+            DisplayDataSpec(self.gross_cooling_power,"Gross","","Cooling","Power"),
+            DisplayDataSpec(self.gross_total_cooling_cop,"Gross","Total","Cooling","COP"),
+            DisplayDataSpec(self.gross_sensible_cooling_cop,"Gross","Sensible","Cooling","COP"),
+        ]
+        # fmt:on
+
+        heating_conditions = [
+            [
+                self.make_condition(
+                    HeatingConditions,
+                    compressor_speed=speed,
+                    outdoor=PsychState(drybulb=tdb, rel_hum=0.4),
+                )
+                for tdb in heating_temperatures.data_values
+            ]
+            for speed in range(self.number_of_heating_speeds)
+        ]
+        cooling_conditions = [
+            [
+                self.make_condition(
+                    CoolingConditions,
+                    compressor_speed=speed,
+                    outdoor=PsychState(drybulb=tdb, rel_hum=0.4),
+                )
+                for tdb in cooling_temperatures.data_values
+            ]
+            for speed in range(self.number_of_cooling_speeds)
+        ]
+
+        for display_spec in display_specs:
+            if display_spec.mode == "Heating":
+                number_of_speeds = self.number_of_heating_speeds
+                conditions = heating_conditions
+                pallette = "oranges"
+                temperatures = heating_temperatures
+                speed_names = {
+                    self.heating_boost_speed: "Max",
+                    self.heating_full_load_speed: "Rated",
+                    self.heating_intermediate_speed: "Int.",
+                    self.heating_low_speed: "Min",
+                }
+            elif display_spec.mode == "Cooling":
+                number_of_speeds = self.number_of_cooling_speeds
+                conditions = cooling_conditions
+                pallette = "blues"
+                temperatures = cooling_temperatures
+                speed_names = {
+                    self.cooling_boost_speed: "Max",
+                    self.cooling_full_load_speed: "Rated",
+                    self.cooling_intermediate_speed: "Int.",
+                    self.cooling_low_speed: "Min",
+                }
+            else:
+                assert False
+
+            if display_spec.quantity == "Capacity":
+                subplot_number = 1
+                units = "W"
+                display_units = "kBtu/h"
+            elif display_spec.quantity == "Power":
+                subplot_number = 2
+                units = "W"
+                display_units = "kW"
+            elif display_spec.quantity == "COP":
+                subplot_number = 3
+                units = "W/W"
+                display_units = "W/W"
+            else:
+                assert False
+
+            is_visible = True
+            if display_spec.net_or_gross == "Gross":
+                is_visible = False
+
+            line_type = "solid"
+            if display_spec.version in ["Integrated", "Sensible"]:
+                line_type = "dot"
+
+            for speed in range(number_of_speeds):
+
+                color_ratio = (number_of_speeds - speed) / number_of_speeds
+                line_color = sample_colorscale(pallette, color_ratio)[0]
+                if display_spec.version != "":
+                    version_string = f"{display_spec.version} "
+                else:
+                    version_string = ""
+                group_name = f"{display_spec.net_or_gross} {version_string}{display_spec.mode} {display_spec.quantity}"
+                plot.add_display_data(
+                    DisplayData(
+                        [
+                            display_spec.function(condition)
+                            for condition in conditions[speed]
+                        ],
+                        name=f"{speed_names[speed]} Speed",
+                        native_units=units,
+                        display_units=display_units,
+                        x_axis=temperatures,
+                        line_properties=LineProperties(
+                            color=line_color, line_type=line_type
+                        ),
+                        is_visible=is_visible,
+                        legend_group=group_name,
+                    ),
+                    subplot_number=subplot_number,
+                    axis_name=display_spec.quantity,
+                )
+
+        plot.write_html_plot(output_path)
+
+    def write_validation_tables(self, output_dir: Union[Path, str], file_name: str):
+        """
+        Create inputs used to verify rating calculations at https://seerhspf2.ahrianalytics.org/app/seerhspf2.
+        Work in progress...
+        """
+
+        fan_motor_type = (
+            "Fixed Speed/PSC"
+            if self.fan.fan_motor_type == FanMotorType.PSC
+            else (
+                "Fixed Speed/Constant Torque"
+                if self.fan.fan_motor_type == FanMotorType.BPM
+                else None
+            )
+        )
+
+        if self.staging_type == StagingType.SINGLE_STAGE:
+            pass
+        elif self.staging_type == StagingType.TWO_STAGE:
+            pass
+        elif self.staging_type == StagingType.VARIABLE_SPEED:
+            heating_data = {
+                "compressorDesignStage": "Variable Speed",
+                "indoorBlowerType": fan_motor_type,
+                "needCoilOnlyAdjust": False,
+                "isNonCommunicating": False,
+                "isMobileHomeAndSpaceConstrained": False,
+                "isNonmobileHomeAndNonSpaceConstrained": False,
+                "isSplit": True,
+                "minSpeedLimiting": False,
+                "H12Tested": True,
+                "H22Tested": True,
+                "H42Tested": True,
+                "H1NspeedMax17": False,
+                "T_off": to_u(self.heating_off_temperature, "degF"),
+                "T_on": to_u(self.heating_on_temperature, "degF"),
+                "isDemandDefrost": self.defrost.control == DefrostControl.DEMAND,
+                "demandDefrostCredit": self.defrost.demand_credit(),
+                "degCoeffHeat": self.c_d_heating,
+                "coolCapacity95Full": to_u(
+                    self.net_total_cooling_capacity(self.A_full_cond), "Btu/h"
+                ),
+                "heatCapacity62min": to_u(
+                    self.net_steady_state_heating_capacity(self.H0_low_cond),
+                    "Btu/h",
+                ),
+                "heatCapacity47full": to_u(
+                    self.net_steady_state_heating_capacity(self.H1_full_cond),
+                    "Btu/h",
+                ),
+                "heatCapacity47min": to_u(
+                    self.net_steady_state_heating_capacity(self.H1_full_cond),
+                    "Btu/h",
+                ),
+                "heatCapacity47nominal": to_u(
+                    self.net_steady_state_heating_capacity(self.H1_full_cond),
+                    "Btu/h",
+                ),  # TODO: Confirm
+                "heatCapacity35full": to_u(
+                    self.net_integrated_heating_capacity(self.H2_full_cond), "Btu/h"
+                ),
+                "heatCapacity35inter": to_u(
+                    self.net_integrated_heating_capacity(self.H2_int_cond), "Btu/h"
+                ),
+                "heatCapacity35min": to_u(
+                    self.net_integrated_heating_capacity(self.H2_low_cond), "Btu/h"
+                ),
+                "heatCapacity17full": to_u(
+                    self.net_steady_state_heating_capacity(self.H3_full_cond),
+                    "Btu/h",
+                ),
+                "heatCapacity17min": to_u(
+                    self.net_steady_state_heating_capacity(self.H3_low_cond),
+                    "Btu/h",
+                ),
+                "heatCapacity5full": to_u(
+                    self.net_steady_state_heating_capacity(self.H4_full_cond),
+                    "Btu/h",
+                ),
+                "powerConsumption62min": self.net_steady_state_heating_power(
+                    self.H0_low_cond
+                ),
+                "powerConsumption47full": self.net_steady_state_heating_power(
+                    self.H0_low_cond
+                ),
+                "powerConsumption47min": self.net_steady_state_heating_power(
+                    self.H1_full_cond
+                ),
+                "powerConsumption47nominal": self.net_steady_state_heating_power(
+                    self.H1_full_cond
+                ),  # TODO: Confirm
+                "powerConsumption35full": self.net_integrated_heating_power(
+                    self.H2_full_cond
+                ),
+                "powerConsumption35inter": self.net_integrated_heating_power(
+                    self.H2_int_cond
+                ),
+                "powerConsumption35min": self.net_integrated_heating_power(
+                    self.H2_low_cond
+                ),
+                "powerConsumption17full": self.net_steady_state_heating_power(
+                    self.H3_full_cond
+                ),
+                "powerConsumption17min": self.net_steady_state_heating_power(
+                    self.H3_low_cond
+                ),
+                "powerConsumption5full": self.net_steady_state_heating_power(
+                    self.H4_full_cond
+                ),
+                "scfm95full": to_u(
+                    self.A_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm62min": to_u(
+                    self.H0_low_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm47full": to_u(
+                    self.H1_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm47min": to_u(
+                    self.H1_low_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm47nominal": to_u(
+                    self.H1_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm35full": to_u(
+                    self.H2_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm35inter": to_u(
+                    self.H2_int_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm35min": to_u(
+                    self.H2_low_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm17full": to_u(
+                    self.H3_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm17min": to_u(
+                    self.H3_low_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm5full": to_u(
+                    self.H4_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+            }
+
+        with open(Path(output_dir, f"{file_name}-heating.csv"), "w") as heating_file:
+            writer = DictWriter(heating_file, fieldnames=[k for k in heating_data])
+            writer.writeheader()
+            writer.writerows([heating_data])
+
+        # with open(Path(output_dir, f"{file_name}-cooling.csv"), "w") as cooling_file:
+        #     writer = DictWriter(cooling_file, fieldnames=[k for k in cooling_data])
+        #     writer.writeheader()
+        #     writer.writerows([cooling_data])
