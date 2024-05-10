@@ -58,3 +58,14 @@ class Defrost:
             if conditions.outdoor.db < self.high_temperature:
                 return True
         return False
+
+    def demand_credit(self) -> float:
+        """Defrost credit as defined by AHRI 210/240."""
+        if self.control == DefrostControl.DEMAND:
+            t_test = max(self.period, fr_u(90, "min"))
+            t_max = min(self.max_time, fr_u(720.0, "min"))
+
+            return 0.03 * (
+                1 - (t_test - fr_u(90.0, "min")) / (t_max - fr_u(90.0, "min"))
+            )  # eq. 11.129
+        return 0.0  # eq. 11.130

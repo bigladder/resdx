@@ -2,6 +2,7 @@ import uuid
 import datetime
 from random import Random
 from typing import List, Tuple
+from enum import Enum
 
 from math import exp, log, inf
 from scipy import optimize  # Used for finding system/fan curve intersection
@@ -27,6 +28,12 @@ class FanMetadata:
         self.data_version = data_version
 
 
+class FanMotorType(Enum):
+    UNKNOWN = 0
+    PSC = 1
+    BPM = 2
+
+
 class Fan:
     """Base class for fan models"""
 
@@ -44,6 +51,7 @@ class Fan:
         self.number_of_speeds = 0
         self.design_airflow = []
         self.design_airflow_ratio = []
+        self.fan_motor_type = FanMotorType.UNKNOWN
 
         if metadata is None:
             self.metadata = FanMetadata()
@@ -440,6 +448,7 @@ class PSCFan(Fan):
         super().__init__(
             design_airflow, design_external_static_pressure, design_efficacy
         )
+        self.fan_motor_type = FanMotorType.PSC
 
     def add_speed(self, airflow, external_static_pressure=None):
         if external_static_pressure is not None:
@@ -536,7 +545,7 @@ class ECMFlowFan(Fan):
             design_airflow[0] if type(design_airflow) is list else design_airflow
         ) * design_efficacy
         if design_power > maximum_power:
-            raise Exception(
+            raise RuntimeError(
                 f"Design power ({design_power} W) is greater than the maximum power ({maximum_power}) W"
             )
         self.maximum_power = maximum_power
@@ -547,6 +556,7 @@ class ECMFlowFan(Fan):
         super().__init__(
             design_airflow, design_external_static_pressure, design_efficacy
         )
+        self.fan_motor_type = FanMotorType.BPM
 
     def add_speed(self, airflow, external_static_pressure=None):
         super().add_speed(airflow, external_static_pressure)
@@ -714,9 +724,17 @@ class EEREBaselinePSCFan(EEREFan):
         fr_u(0.19, "(W/cfm)/in_H2O**2"),
     )
 
+    def __init__(self, design_airflow, design_external_static_pressure):
+        super().__init__(design_airflow, design_external_static_pressure)
+        self.fan_motor_type = FanMotorType.PSC
+
 
 class EEREImprovedPSCFan(EEREBaselinePSCFan):
     BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.44, 0.47, 0.49, 0.52)]
+
+    def __init__(self, design_airflow, design_external_static_pressure):
+        super().__init__(design_airflow, design_external_static_pressure)
+        self.fan_motor_type = FanMotorType.PSC
 
 
 class EEREPSCWithControlsFan(EEREFan):
@@ -727,6 +745,10 @@ class EEREPSCWithControlsFan(EEREFan):
         fr_u(0.06, "(W/cfm)/in_H2O**2"),
     )
 
+    def __init__(self, design_airflow, design_external_static_pressure):
+        super().__init__(design_airflow, design_external_static_pressure)
+        self.fan_motor_type = FanMotorType.PSC
+
 
 class EEREBPMSingleStageConstantTorqueFan(EEREFan):
     FLOW_COEFFICIENTS = (fr_u(-456.0, "cfm/in_H2O"), fr_u(8.0, "cfm/in_H2O**2"))
@@ -736,9 +758,17 @@ class EEREBPMSingleStageConstantTorqueFan(EEREFan):
         fr_u(0.07, "(W/cfm)/in_H2O**2"),
     )
 
+    def __init__(self, design_airflow, design_external_static_pressure):
+        super().__init__(design_airflow, design_external_static_pressure)
+        self.fan_motor_type = FanMotorType.BPM
+
 
 class EEREBPMMultiStageConstantTorqueFan(EEREBPMSingleStageConstantTorqueFan):
     BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.14, 0.15, 0.17, 0.16)]
+
+    def __init__(self, design_airflow, design_external_static_pressure):
+        super().__init__(design_airflow, design_external_static_pressure)
+        self.fan_motor_type = FanMotorType.BPM
 
 
 class EEREBPMMultiStageConstantAirflowFan(EEREFan):
@@ -749,11 +779,19 @@ class EEREBPMMultiStageConstantAirflowFan(EEREFan):
         fr_u(-0.01, "(W/cfm)/in_H2O**2"),
     )
 
+    def __init__(self, design_airflow, design_external_static_pressure):
+        super().__init__(design_airflow, design_external_static_pressure)
+        self.fan_motor_type = FanMotorType.BPM
+
 
 class EEREBPMMultiStageBackwardCurvedImpellerConstantAirflowFan(
     EEREBPMMultiStageConstantAirflowFan
 ):
     BASE_EFFICACIES = [fr_u(v, "W/cfm") for v in (0.09, 0.10, 0.11, 0.12)]
+
+    def __init__(self, design_airflow, design_external_static_pressure):
+        super().__init__(design_airflow, design_external_static_pressure)
+        self.fan_motor_type = FanMotorType.BPM
 
 
 # RESNET Fan Models
@@ -770,6 +808,7 @@ class RESNETPSCFan(RESNETFan):
         design_airflow,
     ):
         super().__init__(design_airflow, fr_u(0.5, "in_H2O"), fr_u(0.414, "W/cfm"))
+        self.fan_motor_type = FanMotorType.PSC
 
     def efficacy(self, speed_setting, external_static_pressure=None):
         return self.design_efficacy * (
@@ -790,6 +829,7 @@ class RESNETBPMFan(RESNETFan):
         super().__init__(
             design_airflow, fr_u(0.5, "in_H2O"), self.DUCTED_DESIGN_EFFICACY
         )
+        self.fan_motor_type = FanMotorType.BPM
 
     def efficacy(self, speed_setting, external_static_pressure=None):
         ducted_external_static_pressure = self.operating_pressure(speed_setting)

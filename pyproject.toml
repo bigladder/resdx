@@ -9,7 +9,7 @@ python = "^3.9"
 koozie = "^1.2.2"
 PsychroLib = "^2.5.0"
 scipy = "^1.6.3"
-dimes = { git = "https://github.com/bigladder/dimes.git", branch = "add-multidemensional-plots"} # { path = "../dimes/", develop = true }
+dimes = { git = "https://github.com/bigladder/dimes.git", branch = "main"} # { git = "https://github.com/bigladder/dimes.git", branch = ""} { path = "../dimes/", develop = true }
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.1.3"

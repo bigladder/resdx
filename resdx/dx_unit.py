@@ -6,6 +6,7 @@ from random import Random
 from typing import Union, List, Callable
 from pathlib import Path
 from dataclasses import dataclass
+from csv import DictWriter
 
 from scipy import optimize
 from numpy import linspace
@@ -25,7 +26,7 @@ from .conditions import HeatingConditions, CoolingConditions, OperatingCondition
 from .defrost import Defrost, DefrostControl
 from .util import find_nearest, limit_check
 from .models import RESNETDXModel, DXModel
-from .fan import Fan
+from .fan import Fan, FanMotorType
 from .enums import StagingType
 
 
@@ -1354,15 +1355,7 @@ class DXUnit:
             e_sum += e
             rh_sum += rh
 
-        t_test = max(self.defrost.period, fr_u(90, "min"))
-        t_max = min(self.defrost.max_time, fr_u(720.0, "min"))
-
-        if self.defrost.control == DefrostControl.DEMAND:
-            f_def = 1 + 0.03 * (
-                1 - (t_test - fr_u(90.0, "min")) / (t_max - fr_u(90.0, "min"))
-            )  # eq. 11.129
-        else:
-            f_def = 1  # eq. 11.130
+        f_def = 1 + self.defrost.demand_credit()
 
         hspf = q_sum / (e_sum + rh_sum) * f_def  # eq. 11.133
         return to_u(hspf, "Btu/Wh")
@@ -1566,7 +1559,7 @@ class DXUnit:
 
         return representation
 
-    def plot(self, output_path: Path):
+    def plot(self, output_path: Union[Path, str]):
         """Generate an HTML plot for this system."""
 
         # Heating Temperatures
@@ -1721,22 +1714,179 @@ class DXUnit:
                     version_string = f"{display_spec.version} "
                 else:
                     version_string = ""
+                group_name = f"{display_spec.net_or_gross} {version_string}{display_spec.mode} {display_spec.quantity}"
                 plot.add_display_data(
                     DisplayData(
                         [
                             display_spec.function(condition)
                             for condition in conditions[speed]
                         ],
-                        name=f"{display_spec.net_or_gross} {version_string}{display_spec.mode} {display_spec.quantity} ({speed_names[speed]} Speed)",
+                        name=f"{speed_names[speed]} Speed",
                         native_units=units,
                         display_units=display_units,
                         x_axis=temperatures,
                         line_properties=LineProperties(
-                            color=line_color, line_type=line_type, is_visible=is_visible
+                            color=line_color, line_type=line_type
                         ),
+                        is_visible=is_visible,
+                        legend_group=group_name,
                     ),
                     subplot_number=subplot_number,
                     axis_name=display_spec.quantity,
                 )
 
         plot.write_html_plot(output_path)
+
+    def write_validation_tables(self, output_dir: Union[Path, str], file_name: str):
+        """
+        Create inputs used to verify rating calculations at https://seerhspf2.ahrianalytics.org/app/seerhspf2.
+        Work in progress...
+        """
+
+        fan_motor_type = (
+            "Fixed Speed/PSC"
+            if self.fan.fan_motor_type == FanMotorType.PSC
+            else (
+                "Fixed Speed/Constant Torque"
+                if self.fan.fan_motor_type == FanMotorType.BPM
+                else None
+            )
+        )
+
+        if self.staging_type == StagingType.SINGLE_STAGE:
+            pass
+        elif self.staging_type == StagingType.TWO_STAGE:
+            pass
+        elif self.staging_type == StagingType.VARIABLE_SPEED:
+            heating_data = {
+                "compressorDesignStage": "Variable Speed",
+                "indoorBlowerType": fan_motor_type,
+                "needCoilOnlyAdjust": False,
+                "isNonCommunicating": False,
+                "isMobileHomeAndSpaceConstrained": False,
+                "isNonmobileHomeAndNonSpaceConstrained": False,
+                "isSplit": True,
+                "minSpeedLimiting": False,
+                "H12Tested": True,
+                "H22Tested": True,
+                "H42Tested": True,
+                "H1NspeedMax17": False,
+                "T_off": to_u(self.heating_off_temperature, "degF"),
+                "T_on": to_u(self.heating_on_temperature, "degF"),
+                "isDemandDefrost": self.defrost.control == DefrostControl.DEMAND,
+                "demandDefrostCredit": self.defrost.demand_credit(),
+                "degCoeffHeat": self.c_d_heating,
+                "coolCapacity95Full": to_u(
+                    self.net_total_cooling_capacity(self.A_full_cond), "Btu/h"
+                ),
+                "heatCapacity62min": to_u(
+                    self.net_steady_state_heating_capacity(self.H0_low_cond),
+                    "Btu/h",
+                ),
+                "heatCapacity47full": to_u(
+                    self.net_steady_state_heating_capacity(self.H1_full_cond),
+                    "Btu/h",
+                ),
+                "heatCapacity47min": to_u(
+                    self.net_steady_state_heating_capacity(self.H1_full_cond),
+                    "Btu/h",
+                ),
+                "heatCapacity47nominal": to_u(
+                    self.net_steady_state_heating_capacity(self.H1_full_cond),
+                    "Btu/h",
+                ),  # TODO: Confirm
+                "heatCapacity35full": to_u(
+                    self.net_integrated_heating_capacity(self.H2_full_cond), "Btu/h"
+                ),
+                "heatCapacity35inter": to_u(
+                    self.net_integrated_heating_capacity(self.H2_int_cond), "Btu/h"
+                ),
+                "heatCapacity35min": to_u(
+                    self.net_integrated_heating_capacity(self.H2_low_cond), "Btu/h"
+                ),
+                "heatCapacity17full": to_u(
+                    self.net_steady_state_heating_capacity(self.H3_full_cond),
+                    "Btu/h",
+                ),
+                "heatCapacity17min": to_u(
+                    self.net_steady_state_heating_capacity(self.H3_low_cond),
+                    "Btu/h",
+                ),
+                "heatCapacity5full": to_u(
+                    self.net_steady_state_heating_capacity(self.H4_full_cond),
+                    "Btu/h",
+                ),
+                "powerConsumption62min": self.net_steady_state_heating_power(
+                    self.H0_low_cond
+                ),
+                "powerConsumption47full": self.net_steady_state_heating_power(
+                    self.H0_low_cond
+                ),
+                "powerConsumption47min": self.net_steady_state_heating_power(
+                    self.H1_full_cond
+                ),
+                "powerConsumption47nominal": self.net_steady_state_heating_power(
+                    self.H1_full_cond
+                ),  # TODO: Confirm
+                "powerConsumption35full": self.net_integrated_heating_power(
+                    self.H2_full_cond
+                ),
+                "powerConsumption35inter": self.net_integrated_heating_power(
+                    self.H2_int_cond
+                ),
+                "powerConsumption35min": self.net_integrated_heating_power(
+                    self.H2_low_cond
+                ),
+                "powerConsumption17full": self.net_steady_state_heating_power(
+                    self.H3_full_cond
+                ),
+                "powerConsumption17min": self.net_steady_state_heating_power(
+                    self.H3_low_cond
+                ),
+                "powerConsumption5full": self.net_steady_state_heating_power(
+                    self.H4_full_cond
+                ),
+                "scfm95full": to_u(
+                    self.A_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm62min": to_u(
+                    self.H0_low_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm47full": to_u(
+                    self.H1_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm47min": to_u(
+                    self.H1_low_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm47nominal": to_u(
+                    self.H1_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm35full": to_u(
+                    self.H2_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm35inter": to_u(
+                    self.H2_int_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm35min": to_u(
+                    self.H2_low_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm17full": to_u(
+                    self.H3_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm17min": to_u(
+                    self.H3_low_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+                "scfm5full": to_u(
+                    self.H4_full_cond.rated_standard_volumetric_airflow, "cfm"
+                ),
+            }
+
+        with open(Path(output_dir, f"{file_name}-heating.csv"), "w") as heating_file:
+            writer = DictWriter(heating_file, fieldnames=[k for k in heating_data])
+            writer.writeheader()
+            writer.writerows([heating_data])
+
+        # with open(Path(output_dir, f"{file_name}-cooling.csv"), "w") as cooling_file:
+        #     writer = DictWriter(cooling_file, fieldnames=[k for k in cooling_data])
+        #     writer.writeheader()
+        #     writer.writerows([cooling_data])

@@ -204,8 +204,8 @@ plotly = "*"
 [package.source]
 type = "git"
 url = "https://github.com/bigladder/dimes.git"
-reference = "add-multidemensional-plots"
-resolved_reference = "4b4109fd43c183c7dbdcbcbdf87b22648487c034"
+reference = "main"
+resolved_reference = "b9aacbf33de19511b164b98461b2be4975f8c71b"
 
 [[package]]
 name = "doit"
@@ -1041,4 +1041,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "437fc4f52a1db4d02d6c3e273c1e41348aca28cbd532c582bcd7a86146dcb8e1"
+content-hash = "8e24d00084a0700fd09f2612096ef0fbef5c863c8ace13e9b41e8fa6af9cd0d6"
