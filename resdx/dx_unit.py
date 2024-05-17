@@ -748,7 +748,7 @@ class DXUnit:
             gross_sensible_capacity = self.gross_sensible_cooling_capacity(conditions)
 
         T_idb = conditions.indoor.db
-        h_i = conditions.indoor.get_h()
+        h_i = conditions.indoor.h
         m_dot_rated = conditions.mass_airflow
         h_o = h_i - self.gross_total_cooling_capacity(conditions) / m_dot_rated
         T_odb = T_idb - gross_sensible_capacity / (m_dot_rated * conditions.indoor.C_p)
@@ -756,9 +756,9 @@ class DXUnit:
 
     def calculate_adp_state(self, inlet_state, outlet_state):
         T_idb = inlet_state.db_C
-        w_i = inlet_state.get_hr()
+        w_i = inlet_state.hr
         T_odb = outlet_state.db_C
-        w_o = outlet_state.get_hr()
+        w_o = outlet_state.hr
 
         def root_function(T_ADP):
             return psychrolib.GetHumRatioFromRelHum(T_ADP, 1.0, inlet_state.p) - (
@@ -784,9 +784,9 @@ class DXUnit:
             conditions, gross_sensible_capacity=Q_s_rated
         )
         ADP_state = self.calculate_adp_state(conditions.indoor, outlet_state)
-        h_i = conditions.indoor.get_h()
-        h_o = outlet_state.get_h()
-        h_ADP = ADP_state.get_h()
+        h_i = conditions.indoor.h
+        h_o = outlet_state.h
+        h_ADP = ADP_state.h
         self.rated_bypass_factor[conditions.compressor_speed] = (h_o - h_ADP) / (
             h_i - h_ADP
         )
@@ -1059,7 +1059,7 @@ class DXUnit:
             conditions
         ) / (conditions.mass_airflow * conditions.indoor.C_p)
         return PsychState(
-            T_odb, pressure=conditions.indoor.p, hum_rat=conditions.indoor.get_hr()
+            T_odb, pressure=conditions.indoor.p, hum_rat=conditions.indoor.hr
         )
 
     def hspf(self, region=4):
@@ -1437,10 +1437,10 @@ class DXUnit:
         indoor_coil_air_mass_flow_rates = linspace(
             fr_u(280.0, "cfm/ton_ref")
             * self.rated_net_total_cooling_capacity[-1]
-            * STANDARD_CONDITIONS.get_rho(),
+            * STANDARD_CONDITIONS.rho(),
             fr_u(500.0, "cfm/ton_ref")
             * self.rated_net_total_cooling_capacity[0]
-            * STANDARD_CONDITIONS.get_rho(),
+            * STANDARD_CONDITIONS.rho(),
             number_of_points,
         ).tolist()
         compressor_sequence_numbers = list(range(1, self.number_of_cooling_speeds + 1))

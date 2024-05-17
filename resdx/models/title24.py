@@ -37,7 +37,7 @@ class Title24DXModel(DXModel):
         )
 
     def gross_shr(self, conditions):
-        T_iwb = to_u(conditions.indoor.get_wb(), "°F")  # Cutler curves use °F
+        T_iwb = to_u(conditions.indoor.wb, "°F")  # Cutler curves use °F
         T_odb = to_u(conditions.outdoor.db, "°F")  # Title 24 curves use °F
         T_idb = to_u(conditions.indoor.db, "°F")  # Title 24 curves use °F
         CFM_per_ton = to_u(
@@ -83,7 +83,7 @@ class Title24DXModel(DXModel):
 
     def gross_total_cooling_capacity(self, conditions):
         shr = self.gross_shr(conditions)
-        T_iwb = to_u(conditions.indoor.get_wb(), "°F")  # Title 24 curves use °F
+        T_iwb = to_u(conditions.indoor.wb, "°F")  # Title 24 curves use °F
         T_odb = to_u(conditions.outdoor.db, "°F")  # Title 24 curves use °F
         T_idb = to_u(conditions.indoor.db, "°F")  # Title 24 curves use °F
         CFM_per_ton = to_u(
@@ -133,7 +133,7 @@ class Title24DXModel(DXModel):
 
     def gross_cooling_power(self, conditions):
         shr = self.gross_shr(conditions)
-        T_iwb = to_u(conditions.indoor.get_wb(), "°F")  # Title 24 curves use °F
+        T_iwb = to_u(conditions.indoor.wb, "°F")  # Title 24 curves use °F
         T_odb = to_u(conditions.outdoor.db, "°F")  # Title 24 curves use °F
         T_idb = to_u(conditions.indoor.db, "°F")  # Title 24 curves use °F
         CFM_per_ton = to_u(
@@ -297,9 +297,9 @@ class Title24DXModel(DXModel):
             # If not already in the model data then...
             if "cap17" in self.system.kwargs:
                 # Read from model kwargs (if provided)
-                self.system.model_data["cap17"][
-                    conditions.compressor_speed
-                ] = self.system.kwargs["cap17"][conditions.compressor_speed]
+                self.system.model_data["cap17"][conditions.compressor_speed] = (
+                    self.system.kwargs["cap17"][conditions.compressor_speed]
+                )
             else:
                 # or use the Title 24 default calculation
                 cap47 = self.system.rated_net_heating_capacity[
@@ -320,9 +320,9 @@ class Title24DXModel(DXModel):
             return self.system.model_data["cap35"][conditions.compressor_speed]
         else:
             if "cap35" in self.system.kwargs:
-                self.system.model_data["cap35"][
-                    conditions.compressor_speed
-                ] = self.system.kwargs["cap35"][conditions.compressor_speed]
+                self.system.model_data["cap35"][conditions.compressor_speed] = (
+                    self.system.kwargs["cap35"][conditions.compressor_speed]
+                )
             else:
                 cap47 = self.system.rated_net_heating_capacity[
                     conditions.compressor_speed

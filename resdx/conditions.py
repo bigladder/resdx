@@ -25,19 +25,17 @@ class OperatingConditions:
         self.rated_standard_volumetric_airflow = rated_volumetric_airflow
         self.rated_volumetric_airflow = (
             self.rated_standard_volumetric_airflow
-            * STANDARD_CONDITIONS.get_rho()
-            / self.indoor.get_rho()
+            * STANDARD_CONDITIONS.rho
+            / self.indoor.rho
         )
-        self.rated_mass_airflow = self.rated_volumetric_airflow * self.indoor.get_rho()
+        self.rated_mass_airflow = self.rated_volumetric_airflow * self.indoor.rho
         self.rated_airflow_set = True
         self.set_volumetric_airflow(self.rated_volumetric_airflow)
 
     def set_volumetric_airflow(self, volumetric_airflow):
         self.volumetric_airflow = volumetric_airflow
-        self.mass_airflow = volumetric_airflow * self.indoor.get_rho()
-        self.standard_volumetric_airflow = (
-            self.mass_airflow / STANDARD_CONDITIONS.get_rho()
-        )
+        self.mass_airflow = volumetric_airflow * self.indoor.rho
+        self.standard_volumetric_airflow = self.mass_airflow / STANDARD_CONDITIONS.rho
         if self.rated_airflow_set:
             self.mass_airflow_ratio = self.mass_airflow / self.rated_mass_airflow
             self.standard_volumetric_airflow_per_capacity = (
@@ -52,11 +50,9 @@ class OperatingConditions:
     def set_standard_volumetric_airflow(self, volumetric_airflow):
         self.standard_volumetric_airflow = volumetric_airflow
         self.volumetric_airflow = (
-            self.standard_volumetric_airflow
-            * STANDARD_CONDITIONS.get_rho()
-            / self.indoor.get_rho()
+            self.standard_volumetric_airflow * STANDARD_CONDITIONS.rho / self.indoor.rho
         )
-        self.mass_airflow = self.volumetric_airflow * self.indoor.get_rho()
+        self.mass_airflow = self.volumetric_airflow * self.indoor.rho
         if self.rated_airflow_set:
             self.mass_airflow_ratio = self.mass_airflow / self.rated_mass_airflow
             self.standard_volumetric_airflow_per_capacity = (
@@ -77,9 +73,9 @@ class OperatingConditions:
             )
         if self.rated_airflow_set:
             self.mass_airflow_ratio = self.rated_mass_airflow / self.mass_airflow
-            self.volumetric_airflow = self.mass_airflow / self.indoor.get_rho()
+            self.volumetric_airflow = self.mass_airflow / self.indoor.rho
             self.standard_volumetric_airflow = (
-                self.mass_airflow / STANDARD_CONDITIONS.get_rho()
+                self.mass_airflow / STANDARD_CONDITIONS.rho
             )
             self.standard_volumetric_airflow_per_capacity = (
                 self.standard_volumetric_airflow / self.rated_net_capacity
@@ -94,9 +90,9 @@ class OperatingConditions:
             )
         if self.rated_airflow_set:
             self.mass_airflow = self.mass_airflow_ratio * self.rated_mass_airflow
-            self.volumetric_airflow = self.mass_airflow / self.indoor.get_rho()
+            self.volumetric_airflow = self.mass_airflow / self.indoor.rho
             self.standard_volumetric_airflow = (
-                self.mass_airflow / STANDARD_CONDITIONS.get_rho()
+                self.mass_airflow / STANDARD_CONDITIONS.rho
             )
             self.standard_volumetric_airflow_per_capacity = (
                 self.standard_volumetric_airflow / self.rated_net_capacity

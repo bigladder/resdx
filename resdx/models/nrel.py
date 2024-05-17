@@ -20,7 +20,7 @@ class NRELDXModel(DXModel):
     def gross_cooling_power(self, conditions):
         """From Cutler et al."""
         T_iwb = bracket(
-            to_u(conditions.indoor.get_wb(), "°F"), min=57.0, max=72.0
+            to_u(conditions.indoor.wb, "°F"), min=57.0, max=72.0
         )  # Cutler curves use °F
         T_odb = bracket(
             to_u(conditions.outdoor.db, "°F"), min=75.0
@@ -70,7 +70,7 @@ class NRELDXModel(DXModel):
     def gross_total_cooling_capacity(self, conditions):
         """From Cutler et al."""
         T_iwb = bracket(
-            to_u(conditions.indoor.get_wb(), "°F"), min=57.0, max=72.0
+            to_u(conditions.indoor.wb, "°F"), min=57.0, max=72.0
         )  # Cutler curves use °F
         T_odb = bracket(
             to_u(conditions.outdoor.db, "°F"), min=75.0
@@ -256,25 +256,27 @@ class NRELDXModel(DXModel):
         else:
             return self.system.gross_steady_state_heating_power(conditions)
 
+    @staticmethod
     def epri_defrost_time_fraction(conditions):
         """EPRI algorithm as described in EnergyPlus documentation"""
         return 1 / (
             1 + (0.01446 / NRELDXModel.coil_diff_outdoor_air_humidity(conditions))
         )
 
-    def coil_diff_outdoor_air_humidity(conditions):
+    @staticmethod
+    def coil_diff_outdoor_air_humidity(conditions: HeatingConditions) -> float:
         """EPRI algorithm as described in EnergyPlus documentation"""
         T_coil_outdoor = 0.82 * to_u(conditions.outdoor.db, "°C") - 8.589  # In C
-        saturated_air_himidity_ratio = psychrolib.GetSatHumRatio(
+        saturated_air_humidity_ratio = psychrolib.GetSatHumRatio(
             T_coil_outdoor, conditions.outdoor.p
         )  # pressure in Pa already
-        humidity_diff = conditions.outdoor.get_hr() - saturated_air_himidity_ratio
+        humidity_diff = conditions.outdoor.hr - saturated_air_humidity_ratio
         return max(1.0e-6, humidity_diff)
 
     def gross_sensible_cooling_capacity(self, conditions):
         """EnergyPlus algorithm"""
         Q_t = self.system.gross_total_cooling_capacity(conditions)
-        h_i = conditions.indoor.get_h()
+        h_i = conditions.indoor.h
         m_dot = conditions.mass_airflow
         h_ADP = h_i - Q_t / (m_dot * (1 - self.system.bypass_factor(conditions)))
         root_fn = (
