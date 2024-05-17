@@ -1437,10 +1437,10 @@ class DXUnit:
         indoor_coil_air_mass_flow_rates = linspace(
             fr_u(280.0, "cfm/ton_ref")
             * self.rated_net_total_cooling_capacity[-1]
-            * STANDARD_CONDITIONS.rho(),
+            * STANDARD_CONDITIONS.rho,
             fr_u(500.0, "cfm/ton_ref")
             * self.rated_net_total_cooling_capacity[0]
-            * STANDARD_CONDITIONS.rho(),
+            * STANDARD_CONDITIONS.rho,
             number_of_points,
         ).tolist()
         compressor_sequence_numbers = list(range(1, self.number_of_cooling_speeds + 1))
