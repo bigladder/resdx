@@ -157,6 +157,57 @@ dx_units[f"{name}-Statistical"] = resdx.DXUnit(
     input_hspf=hspf2,
 )
 
+# Mitsubishi Electric M-Series
+# PUZ-A24NHA7 AHRI Certification #: 201754318 https://ashp.neep.org/#!/product/28914/7/25000/95/7500/0///0
+
+name = "PUZ-A24NHA7"
+Q95rated = 24000
+Q47rated = 29000
+seer2 = 24.7
+eer2 = 14.3
+hspf2 = 9.3
+
+cooling_capacities = [
+    [9600, None, 25900],  # 82
+    [10000, Q95rated, 24000],  # 95
+]
+
+cooling_powers = [
+    [0.33, None, 1.42],  # 82
+    [0.43, 1.67, 1.67],  # 95
+]
+
+heating_capacities = [
+    [4500, None, 13000],  # 5
+    [5100, 14900, 16600],  # 17
+    [9000, Q47rated, 29000],  # 47
+]
+
+heating_powers = [
+    [0.4, None, 1.4],  # 5
+    [0.42, 1.6, 1.9],  # 17
+    [0.45, 2.07, 2.07],  # 47
+]
+
+dx_units[name] = resdx.DXUnit(
+    neep_data=resdx.models.neep_data.make_neep_model_data(
+        cooling_capacities, cooling_powers, heating_capacities, heating_powers
+    ),
+    input_seer=seer2,
+    input_eer=eer2,
+    input_hspf=hspf2,
+)
+
+dx_units[f"{name}-Statistical"] = resdx.DXUnit(
+    staging_type=resdx.StagingType.VARIABLE_SPEED,
+    rated_net_heating_capacity=fr_u(Q47rated, "Btu/h"),
+    rated_net_total_cooling_capacity=fr_u(Q95rated, "Btu/h"),
+    input_seer=seer2,
+    input_eer=eer2,
+    input_hspf=hspf2,
+)
+
+
 for name, unit in dx_units.items():
     print(f"Cooling info for {name}:")
     unit.print_cooling_info()

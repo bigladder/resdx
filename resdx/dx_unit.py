@@ -1788,7 +1788,7 @@ class DXUnit:
                     "Btu/h",
                 ),
                 "heatCapacity47min": to_u(
-                    self.net_steady_state_heating_capacity(self.H1_full_cond),
+                    self.net_steady_state_heating_capacity(self.H1_low_cond),
                     "Btu/h",
                 ),
                 "heatCapacity47nominal": to_u(
@@ -1823,7 +1823,7 @@ class DXUnit:
                     self.H0_low_cond
                 ),
                 "powerConsumption47min": self.net_steady_state_heating_power(
-                    self.H1_full_cond
+                    self.H1_low_cond
                 ),
                 "powerConsumption47nominal": self.net_steady_state_heating_power(
                     self.H1_full_cond
