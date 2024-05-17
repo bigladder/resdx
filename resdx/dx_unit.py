@@ -1355,7 +1355,7 @@ class DXUnit:
             e_sum += e
             rh_sum += rh
 
-        f_def = 1 + self.defrost.demand_credit()
+        f_def = self.defrost.demand_credit()
 
         hspf = q_sum / (e_sum + rh_sum) * f_def  # eq. 11.133
         return to_u(hspf, "Btu/Wh")

@@ -65,7 +65,7 @@ class Defrost:
             t_test = max(self.period, fr_u(90, "min"))
             t_max = min(self.max_time, fr_u(720.0, "min"))
 
-            return 0.03 * (
+            return 1.0 + 0.03 * (
                 1 - (t_test - fr_u(90.0, "min")) / (t_max - fr_u(90.0, "min"))
             )  # eq. 11.129
-        return 0.0  # eq. 11.130
+        return 1.0  # eq. 11.130
