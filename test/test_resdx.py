@@ -263,7 +263,7 @@ def test_neep_vchp_regression():
     ]
 
     vchp_unit = resdx.DXUnit(
-        neep_data=resdx.models.neep_data.make_neep_model_data(
+        tabular_data=resdx.models.tabular_data.make_neep_model_data(
             cooling_capacities, cooling_powers, heating_capacities, heating_powers
         ),
         rating_standard=AHRIVersion.AHRI_210_240_2017,

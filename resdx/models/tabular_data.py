@@ -9,7 +9,7 @@ from koozie import fr_u
 from ..util import bracket
 
 
-class NEEPPerformanceTable:
+class TemperatureSpeedPerformanceTable:
     def __init__(
         self,
         temperatures: List[float],
@@ -159,7 +159,7 @@ class NEEPPerformanceTable:
         self.set_interpolator()
 
 
-class NEEPCoolingPerformanceTable(NEEPPerformanceTable):
+class TemperatureSpeedCoolingPerformanceTable(TemperatureSpeedPerformanceTable):
     def set_by_maintenance(
         self, speed: int, temperature: float, reference_temperature: float, ratio: float
     ) -> None:
@@ -176,7 +176,7 @@ class NEEPCoolingPerformanceTable(NEEPPerformanceTable):
             )
 
 
-class NEEPHeatingPerformanceTable(NEEPPerformanceTable):
+class TemperatureSpeedHeatingPerformanceTable(TemperatureSpeedPerformanceTable):
     def set_by_maintenance(
         self, speed: int, temperature: float, reference_temperature: float, ratio: float
     ) -> None:
@@ -193,14 +193,14 @@ class NEEPHeatingPerformanceTable(NEEPPerformanceTable):
             )
 
 
-class NEEPPerformance:
+class TemperatureSpeedPerformance:
 
     def __init__(
         self,
-        cooling_capacities: NEEPCoolingPerformanceTable,
-        cooling_powers: NEEPCoolingPerformanceTable,
-        heating_capacities: NEEPHeatingPerformanceTable,
-        heating_powers: NEEPHeatingPerformanceTable,
+        cooling_capacities: TemperatureSpeedCoolingPerformanceTable,
+        cooling_powers: TemperatureSpeedCoolingPerformanceTable,
+        heating_capacities: TemperatureSpeedHeatingPerformanceTable,
+        heating_powers: TemperatureSpeedHeatingPerformanceTable,
     ) -> None:
 
         self.number_of_cooling_speeds = len(cooling_capacities.speeds)
@@ -267,11 +267,11 @@ def make_neep_statistical_model_data(
     heating_capacity_17: float,
     hspf2: float,
     max_cooling_temperature: float = fr_u(125, "degF"),
-    min_heating_temperature: float = fr_u(0, "degF"),
+    min_heating_temperature: float = fr_u(-20, "degF"),
     cooling_capacity_ratio: Union[float, None] = None,  # min/max capacity ratio at 95F
     cooling_eir_ratio: Union[float, None] = None,  # min/max eir ratio at 82F
     heating_cop_47: Union[float, None] = None,
-) -> NEEPPerformance:
+) -> TemperatureSpeedPerformance:
 
     Qmin = 1
     Qrated = 2
@@ -306,8 +306,8 @@ def make_neep_statistical_model_data(
             0.510 - 0.119 * (EIRr82min - 1.305) / (-0.324), 0.1, Qr95rated
         )
 
-    Q_c = NEEPCoolingPerformanceTable(t_c, 3)
-    P_c = NEEPCoolingPerformanceTable(t_c, 3)
+    Q_c = TemperatureSpeedCoolingPerformanceTable(t_c, 3)
+    P_c = TemperatureSpeedCoolingPerformanceTable(t_c, 3)
 
     # Net Total Capacity
 
@@ -382,8 +382,8 @@ def make_neep_statistical_model_data(
     else:
         Qm17rated = 0.689
 
-    Q_h = NEEPHeatingPerformanceTable(t_h, 3)
-    P_h = NEEPHeatingPerformanceTable(t_h, 3)
+    Q_h = TemperatureSpeedHeatingPerformanceTable(t_h, 3)
+    P_h = TemperatureSpeedHeatingPerformanceTable(t_h, 3)
 
     # Net Total Capacity
 
@@ -460,7 +460,7 @@ def make_neep_statistical_model_data(
     Q_h.set_interpolator()
     P_h.set_interpolator()
 
-    return NEEPPerformance(Q_c, P_c, Q_h, P_h)
+    return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
 
 
 def make_neep_model_data(
@@ -508,10 +508,18 @@ def make_neep_model_data(
         t_lct = fr_u(lct, "degF")
         heating_temperatures = [t_lct] + heating_temperatures
 
-    Q_c = NEEPCoolingPerformanceTable(cooling_temperatures, 3, cooling_capacities)
-    P_c = NEEPCoolingPerformanceTable(cooling_temperatures, 3, cooling_powers)
-    Q_h = NEEPHeatingPerformanceTable(heating_temperatures, 3, heating_capacities)
-    P_h = NEEPHeatingPerformanceTable(heating_temperatures, 3, heating_powers)
+    Q_c = TemperatureSpeedCoolingPerformanceTable(
+        cooling_temperatures, 3, cooling_capacities
+    )
+    P_c = TemperatureSpeedCoolingPerformanceTable(
+        cooling_temperatures, 3, cooling_powers
+    )
+    Q_h = TemperatureSpeedHeatingPerformanceTable(
+        heating_temperatures, 3, heating_capacities
+    )
+    P_h = TemperatureSpeedHeatingPerformanceTable(
+        heating_temperatures, 3, heating_powers
+    )
 
     # Interpolate for missing rated conditions, and extrapolate to extreme temperatures
     Q_c.set_by_interpolation(2, t_82)

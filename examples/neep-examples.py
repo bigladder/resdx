@@ -40,7 +40,7 @@ heating_powers = [
 
 
 dx_units[name] = resdx.DXUnit(
-    neep_data=resdx.models.neep_data.make_neep_model_data(
+    tabular_data=resdx.models.tabular_data.make_neep_model_data(
         cooling_capacities, cooling_powers, heating_capacities, heating_powers
     ),
     input_seer=seer2,
@@ -90,7 +90,7 @@ heating_powers = [
 ]
 
 dx_units[name] = resdx.DXUnit(
-    neep_data=resdx.models.neep_data.make_neep_model_data(
+    tabular_data=resdx.models.tabular_data.make_neep_model_data(
         cooling_capacities, cooling_powers, heating_capacities, heating_powers
     ),
     input_seer=seer2,
@@ -140,7 +140,7 @@ heating_powers = [
 ]
 
 dx_units[name] = resdx.DXUnit(
-    neep_data=resdx.models.neep_data.make_neep_model_data(
+    tabular_data=resdx.models.tabular_data.make_neep_model_data(
         cooling_capacities, cooling_powers, heating_capacities, heating_powers
     ),
     input_seer=seer2,
@@ -190,7 +190,7 @@ heating_powers = [
 ]
 
 dx_units[name] = resdx.DXUnit(
-    neep_data=resdx.models.neep_data.make_neep_model_data(
+    tabular_data=resdx.models.tabular_data.make_neep_model_data(
         cooling_capacities, cooling_powers, heating_capacities, heating_powers
     ),
     input_seer=seer2,
