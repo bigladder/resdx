@@ -294,6 +294,12 @@ class DXUnit:
             rated_heating_airflow_per_rated_net_capacity
         )
 
+        # Degradation coefficients
+        self.c_d_cooling: float
+        self.c_d_heating: float
+        self.model.set_c_d_cooling(c_d_cooling)
+        self.model.set_c_d_heating(c_d_heating)
+
         # Set net capacities and fan
         self.rated_net_total_cooling_capacity: List[float]
         self.rated_net_heating_capacity: List[float]
@@ -301,12 +307,6 @@ class DXUnit:
         self.model.set_net_capacities_and_fan(
             rated_net_total_cooling_capacity, rated_net_heating_capacity, fan
         )
-
-        # Degradation coefficients
-        self.c_d_cooling: float
-        self.c_d_heating: float
-        self.model.set_c_d_cooling(c_d_cooling)
-        self.model.set_c_d_heating(c_d_heating)
 
         self.rated_full_flow_external_static_pressure = (
             self.get_rated_full_flow_rated_pressure()

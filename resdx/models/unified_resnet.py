@@ -9,7 +9,12 @@ from .nrel import NRELDXModel
 from .title24 import Title24DXModel
 from .carrier_defrost_model import CarrierDefrostModel
 from ..fan import RESNETPSCFan, RESNETBPMFan
-from .tabular_data import TemperatureSpeedPerformance, make_neep_statistical_model_data
+from .tabular_data import (
+    TemperatureSpeedPerformance,
+    make_neep_statistical_model_data,
+    make_single_speed_model_data,
+    make_two_speed_model_data,
+)
 from ..enums import StagingType
 from ..conditions import CoolingConditions, HeatingConditions
 from ..psychrometrics import PsychState
@@ -26,8 +31,8 @@ class RESNETDXModel(DXModel):
         super().__init__()
         self.allowed_kwargs += [
             "rated_net_heating_capacity_17",
+            "rated_net_total_cooling_cop_82_min",
             "min_net_total_cooling_capacity_ratio_95",
-            "min_net_total_cooling_eir_ratio_82",
             "tabular_data",
             "motor_type",
         ]
@@ -36,12 +41,12 @@ class RESNETDXModel(DXModel):
         self.motor_type: Union[FanMotorType, None] = None
         self.rated_net_heating_capacity_17: Union[float, None] = None
         self.min_net_total_cooling_capacity_ratio_95: Union[float, None] = None
-        self.min_net_total_cooling_eir_ratio_82: Union[float, None] = None
+        self.rated_net_total_cooling_cop_82_min: Union[float, None] = None
 
-        self.neep_cooling_speed_map: Dict[int, float]
-        self.neep_heating_speed_map: Dict[int, float]
-        self.inverse_neep_cooling_speed_map: Dict[int, int]
-        self.inverse_neep_heating_speed_map: Dict[int, int]
+        self.tabular_cooling_speed_map: Dict[int, float]
+        self.tabular_heating_speed_map: Dict[int, float]
+        self.inverse_tabular_cooling_speed_map: Dict[int, int]
+        self.inverse_tabular_heating_speed_map: Dict[int, int]
 
     def process_kwargs(self) -> None:
         self.net_tabular_data = self.get_kwarg_value("tabular_data")
@@ -55,12 +60,15 @@ class RESNETDXModel(DXModel):
         self.min_net_total_cooling_eir_ratio_82 = self.get_kwarg_value(
             "min_net_total_cooling_eir_ratio_82"
         )
+        self.rated_net_total_cooling_cop_82_min = self.get_kwarg_value(
+            "rated_net_total_cooling_cop_82_min"
+        )
 
     # Power and capacity
     def gross_cooling_power(self, conditions: CoolingConditions):
         if self.net_tabular_data is not None:
             return self.gross_tabular_data.cooling_power(
-                self.neep_cooling_speed_map[conditions.compressor_speed],
+                self.tabular_cooling_speed_map[conditions.compressor_speed],
                 conditions.outdoor.db,
             ) * self.get_cooling_correction_factor(
                 conditions, NRELDXModel.gross_cooling_power
@@ -71,7 +79,7 @@ class RESNETDXModel(DXModel):
     def gross_total_cooling_capacity(self, conditions: CoolingConditions):
         if self.net_tabular_data is not None:
             return self.gross_tabular_data.cooling_capacity(
-                self.neep_cooling_speed_map[conditions.compressor_speed],
+                self.tabular_cooling_speed_map[conditions.compressor_speed],
                 conditions.outdoor.db,
             ) * self.get_cooling_correction_factor(
                 conditions, NRELDXModel.gross_total_cooling_capacity
@@ -88,7 +96,7 @@ class RESNETDXModel(DXModel):
     def gross_steady_state_heating_capacity(self, conditions):
         if self.net_tabular_data is not None:
             return self.gross_tabular_data.heating_capacity(
-                self.neep_heating_speed_map[conditions.compressor_speed],
+                self.tabular_heating_speed_map[conditions.compressor_speed],
                 conditions.outdoor.db,
             ) * self.get_heating_correction_factor(
                 conditions, NRELDXModel.gross_steady_state_heating_capacity
@@ -110,7 +118,7 @@ class RESNETDXModel(DXModel):
     def gross_steady_state_heating_power(self, conditions):
         if self.net_tabular_data is not None:
             return self.gross_tabular_data.heating_power(
-                self.neep_heating_speed_map[conditions.compressor_speed],
+                self.tabular_heating_speed_map[conditions.compressor_speed],
                 conditions.outdoor.db,
             ) * self.get_heating_correction_factor(
                 conditions, NRELDXModel.gross_steady_state_heating_power
@@ -161,45 +169,87 @@ class RESNETDXModel(DXModel):
             )
             self.system.set_placeholder_arrays()
 
-        if self.system.staging_type != StagingType.VARIABLE_SPEED:
-            # Set high speed capacities
-            self.system.rated_net_total_cooling_capacity = self.make_list(
-                rated_net_total_cooling_capacity
-            )
+        if not isinstance(rated_net_heating_capacity, list):
+            if self.system.staging_type != StagingType.VARIABLE_SPEED:
+                self.system.rated_net_total_cooling_capacity = self.make_list(
+                    rated_net_total_cooling_capacity
+                )
+                rated_net_heating_capacity = self.set_heating_default(
+                    rated_net_heating_capacity,
+                    self.system.rated_net_total_cooling_capacity[0] * 0.98
+                    + fr_u(180.0, "Btu/h"),
+                )  # From Title24
+                self.system.rated_net_heating_capacity = self.make_list(
+                    rated_net_heating_capacity
+                )
+                if self.system.staging_type == StagingType.SINGLE_STAGE:
+                    if self.net_tabular_data is None:
+                        self.net_tabular_data = make_single_speed_model_data(
+                            cooling_capacity_95=rated_net_total_cooling_capacity,
+                            seer2=self.system.input_seer,
+                            eer2=self.system.input_eer,
+                            heating_capacity_47=rated_net_heating_capacity,
+                            heating_capacity_17=self.rated_net_heating_capacity_17,
+                            hspf2=self.system.input_hspf,
+                            max_cooling_temperature=self.system.cooling_off_temperature,
+                            min_heating_temperature=self.system.heating_off_temperature,
+                            heating_cop_47=self.system.input_rated_net_heating_cop,
+                            cycling_degradation_coefficient=self.system.c_d_cooling,
+                        )
 
-            ## Heating
-            rated_net_heating_capacity = self.set_heating_default(
-                rated_net_heating_capacity,
-                self.system.rated_net_total_cooling_capacity[0] * 0.98
-                + fr_u(180.0, "Btu/h"),
-            )  # From Title24
-            self.system.rated_net_heating_capacity = self.make_list(
-                rated_net_heating_capacity
-            )
+                    self.system.cooling_full_load_speed = 0
+                    self.system.heating_full_load_speed = 0
 
-        else:
-            if not isinstance(rated_net_heating_capacity, list):
+                    self.tabular_cooling_speed_map = self.tabular_heating_speed_map = {
+                        0: 1.0,
+                    }
+                elif self.system.staging_type == StagingType.TWO_STAGE:
+                    if self.net_tabular_data is None:
+                        self.net_tabular_data = make_two_speed_model_data(
+                            cooling_capacity_95=rated_net_total_cooling_capacity,
+                            seer2=self.system.input_seer,
+                            eer2=self.system.input_eer,
+                            heating_capacity_47=rated_net_heating_capacity,
+                            heating_capacity_17=self.rated_net_heating_capacity_17,
+                            hspf2=self.system.input_hspf,
+                            max_cooling_temperature=self.system.cooling_off_temperature,
+                            min_heating_temperature=self.system.heating_off_temperature,
+                            cooling_cop_82_min=self.rated_net_total_cooling_cop_82_min,
+                            heating_cop_47=self.system.input_rated_net_heating_cop,
+                        )
+
+                    self.system.cooling_full_load_speed = 0
+                    self.system.cooling_low_speed = 1
+
+                    self.system.heating_full_load_speed = 0
+                    self.system.heating_low_speed = 1
+
+                    self.tabular_cooling_speed_map = self.tabular_heating_speed_map = {
+                        0: 2.0,
+                        1: 1.0,
+                    }
+            else:
                 rated_net_heating_capacity = self.set_heating_default(
                     rated_net_heating_capacity,
                     rated_net_total_cooling_capacity * 1.022 + fr_u(607.0, "Btu/h"),
-                )
+                )  # From NEEP Database regression
                 if self.rated_net_heating_capacity_17 is None:
                     self.rated_net_heating_capacity_17 = (
                         0.689 * rated_net_heating_capacity
                     )
                 if self.net_tabular_data is None:
                     self.net_tabular_data = make_neep_statistical_model_data(
-                        rated_net_total_cooling_capacity,
-                        self.system.input_seer,
-                        self.system.input_eer,
-                        rated_net_heating_capacity,
-                        self.rated_net_heating_capacity_17,
-                        self.system.input_hspf,
-                        self.system.cooling_off_temperature,
-                        self.system.heating_off_temperature,
-                        self.min_net_total_cooling_capacity_ratio_95,
-                        self.min_net_total_cooling_eir_ratio_82,
-                        self.system.input_rated_net_heating_cop,
+                        cooling_capacity_95=rated_net_total_cooling_capacity,
+                        seer2=self.system.input_seer,
+                        eer2=self.system.input_eer,
+                        heating_capacity_47=rated_net_heating_capacity,
+                        heating_capacity_17=self.rated_net_heating_capacity_17,
+                        hspf2=self.system.input_hspf,
+                        max_cooling_temperature=self.system.cooling_off_temperature,
+                        min_heating_temperature=self.system.heating_off_temperature,
+                        cooling_capacity_ratio=self.min_net_total_cooling_capacity_ratio_95,
+                        cooling_cop_82_min=self.rated_net_total_cooling_cop_82_min,
+                        heating_cop_47=self.system.input_rated_net_heating_cop,
                     )
 
                 self.system.cooling_boost_speed = 0
@@ -212,62 +262,61 @@ class RESNETDXModel(DXModel):
                 self.system.heating_intermediate_speed = 2
                 self.system.heating_low_speed = 3
 
-                self.neep_cooling_speed_map = self.neep_heating_speed_map = {
+                self.tabular_cooling_speed_map = self.tabular_heating_speed_map = {
                     0: 3.0,
                     1: 2.0,
                     2: 1.5,
                     3: 1.0,
                 }
 
-                self.inverse_neep_cooling_speed_map = {
-                    v: k
-                    for k, v in self.neep_cooling_speed_map.items()
-                    if v.is_integer()
-                }
-                self.inverse_neep_heating_speed_map = {
-                    v: k
-                    for k, v in self.neep_heating_speed_map.items()
-                    if v.is_integer()
-                }
+            self.inverse_tabular_cooling_speed_map = {
+                v: k
+                for k, v in self.tabular_cooling_speed_map.items()
+                if v.is_integer()
+            }
+            self.inverse_tabular_heating_speed_map = {
+                v: k
+                for k, v in self.tabular_heating_speed_map.items()
+                if v.is_integer()
+            }
 
-                self.system.rated_net_total_cooling_capacity = [
-                    self.net_tabular_data.cooling_capacity(
-                        self.neep_cooling_speed_map[i]
-                    )
-                    for i in range(4)
-                ]
-
-                self.system.rated_net_heating_capacity = [
-                    self.net_tabular_data.heating_capacity(
-                        self.neep_heating_speed_map[i]
-                    )
-                    for i in range(4)
-                ]
-
-            else:
-                self.system.rated_net_total_cooling_capacity = (
-                    rated_net_total_cooling_capacity
+            self.system.rated_net_total_cooling_capacity = [
+                self.net_tabular_data.cooling_capacity(
+                    self.tabular_cooling_speed_map[i]
                 )
-                self.system.rated_net_heating_capacity = rated_net_heating_capacity
+                for i in range(len(self.tabular_cooling_speed_map))
+            ]
+
+            self.system.rated_net_heating_capacity = [
+                self.net_tabular_data.heating_capacity(
+                    self.tabular_heating_speed_map[i]
+                )
+                for i in range(len(self.tabular_heating_speed_map))
+            ]
+        else:
+            self.system.rated_net_total_cooling_capacity = (
+                rated_net_total_cooling_capacity
+            )
+            self.system.rated_net_heating_capacity = rated_net_heating_capacity
 
         self.set_fan(fan)
 
-        # Setup gross neep data
+        # Setup gross tabular data
         if self.net_tabular_data is not None:
             self.gross_tabular_data = deepcopy(self.net_tabular_data)
 
             cooling_fan_powers = []
             for s_i in range(self.net_tabular_data.number_of_cooling_speeds):
-                i = self.inverse_neep_cooling_speed_map[s_i + 1]
+                i = self.inverse_tabular_cooling_speed_map[s_i + 1]
                 cooling_fan_powers.append(self.system.rated_cooling_fan_power[i])
             heating_fan_powers = []
             for s_i in range(self.net_tabular_data.number_of_heating_speeds):
-                i = self.inverse_neep_heating_speed_map[s_i + 1]
+                i = self.inverse_tabular_heating_speed_map[s_i + 1]
                 heating_fan_powers.append(self.system.rated_heating_fan_power[i])
 
             self.gross_tabular_data.make_gross(cooling_fan_powers, heating_fan_powers)
 
-            for i, speed in self.neep_cooling_speed_map.items():
+            for i, speed in self.tabular_cooling_speed_map.items():
                 self.system.rated_net_cooling_cop[i] = (
                     self.net_tabular_data.cooling_cop(speed)
                 )
@@ -275,7 +324,7 @@ class RESNETDXModel(DXModel):
                     self.gross_tabular_data.cooling_cop(speed)
                 )
 
-            for i, speed in self.neep_heating_speed_map.items():
+            for i, speed in self.tabular_heating_speed_map.items():
                 self.system.rated_net_heating_cop[i] = (
                     self.net_tabular_data.heating_cop(speed)
                 )

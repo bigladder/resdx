@@ -105,57 +105,21 @@ def make_plot(target_range, systems, axis_title, figure_name):
 
 
 # Cooling
-
-cooling_systems = {
-    "Single Speed": {
-        "calculation": lambda cop, seer: resdx.DXUnit(
-            rated_gross_cooling_cop=cop, input_seer=seer
-        ).seer(),
-        "initial_guess": lambda x: x / 3.0,
-        "curve_fit": {
-            "function": quadratic,
-            "string": quadratic_string,
-            "guesses": (1, 1, 1),
-        },
-    },
-    "Two Speed": {
-        "calculation": lambda cop, seer: resdx.DXUnit(
-            staging_type=resdx.StagingType.TWO_STAGE,
-            rated_gross_cooling_cop=cop,
-            input_seer=seer,
-        ).seer(),
-        "initial_guess": lambda x: x / 3.0,
-        "curve_fit": {
-            "function": quadratic,
-            "string": quadratic_string,
-            "guesses": (1, 1, 1),
-        },
-    },
-}
-
-
-make_plot(
-    DimensionalData(np.linspace(6, 26.5, 10), name="SEER2", native_units="Btu/Wh"),
-    cooling_systems,
-    "Gross COP (at Afull conditions)",
-    "cooling-cop-v-seer",
-)
-
 seer_eer_ratio_range = np.linspace(1.2, 2.0, 10)
 
-
+ts_cooling_systems = {}
 vs_cooling_systems = {}
 
 for seer_eer_ratio in seer_eer_ratio_range:
-    vs_cooling_systems[f"SEER2/EER2={seer_eer_ratio:.2}"] = {
-        "calculation": lambda eir_r, seer, ratio=seer_eer_ratio: resdx.DXUnit(
-            staging_type=resdx.StagingType.VARIABLE_SPEED,
-            min_net_total_cooling_eir_ratio_82=eir_r,
+    ts_cooling_systems[f"Two Speed (SEER2/EER2={seer_eer_ratio:.2})"] = {
+        "calculation": lambda cop_82_min, seer, ratio=seer_eer_ratio: resdx.DXUnit(
+            staging_type=resdx.StagingType.TWO_STAGE,
+            rated_net_total_cooling_cop_82_min=cop_82_min,
             input_eer=seer / ratio,
             input_seer=seer,
             input_hspf=10.0,
         ).seer(),
-        "initial_guess": lambda _: 0.75,
+        "initial_guess": lambda x: x / 3.0,
         "curve_fit": {
             "function": linear,
             "string": linear_string,
@@ -163,60 +127,86 @@ for seer_eer_ratio in seer_eer_ratio_range:
         },
     }
 
+    vs_cooling_systems[f"Variable Speed (SEER2/EER2={seer_eer_ratio:.2})"] = {
+        "calculation": lambda cop_82_min, seer, ratio=seer_eer_ratio: resdx.DXUnit(
+            staging_type=resdx.StagingType.VARIABLE_SPEED,
+            rated_net_total_cooling_cop_82_min=cop_82_min,
+            input_eer=seer / ratio,
+            input_seer=seer,
+            input_hspf=10.0,
+        ).seer(),
+        "initial_guess": lambda x: x / 3.0,
+        "curve_fit": {
+            "function": linear,
+            "string": linear_string,
+            "guesses": (1, 1),
+        },
+    }
+
+
 make_plot(
-    DimensionalData(np.linspace(14, 35, 10), name="SEER2", native_units="Btu/Wh"),
+    DimensionalData(
+        np.linspace(6, 26.5, 2), name="SEER2", native_units="Btu/Wh"
+    ),  # All straight lines don't need more than two points
+    ts_cooling_systems,
+    "Net COP (at B low conditions)",
+    "cooling-2s-cop-v-seer",
+)
+
+
+make_plot(
+    DimensionalData(
+        np.linspace(14, 35, 3), name="SEER2", native_units="Btu/Wh"
+    ),  # All straight lines don't need more than two points
     vs_cooling_systems,
-    "Net COP 82 max / Net COP 82 min",
+    "Net COP (at B low conditions)",
     "cooling-vs-eir_r-v-seer",
-)
-
-# Heating
-heating_systems = {
-    "Single Speed": {
-        "calculation": lambda cop, hspf: resdx.DXUnit(
-            rated_gross_heating_cop=cop, input_hspf=hspf
-        ).hspf(),
-        "initial_guess": lambda x: x / 2.0,
-        "curve_fit": {
-            "function": quartic,
-            "string": quartic_string,
-            "guesses": (1, 1, 1, 1, 1),
-        },
-    },
-    "Two Speed": {
-        "calculation": lambda cop, hspf: resdx.DXUnit(
-            staging_type=resdx.StagingType.TWO_STAGE,
-            rated_gross_heating_cop=cop,
-            input_hspf=hspf,
-        ).hspf(),
-        "initial_guess": lambda x: x / 2.0,
-        "curve_fit": {
-            "function": cubic,
-            "string": cubic_string,
-            "guesses": (1, 1, 1, 1),
-        },
-    },
-}
-
-hspf_range = DimensionalData(
-    np.linspace(5, 16, 10), name="HSPF2", native_units="Btu/Wh"
-)
-
-
-make_plot(
-    hspf_range,
-    heating_systems,
-    "Gross COP (at H1full conditions)",
-    "heating-cop-v-hspf",
 )
 
 cap_17_maintenance_range = [0.5, 0.55, 0.6, 0.7, 0.8, 1.1]
 
-
+ss_heating_systems = {}
+ts_heating_systems = {}
 vs_heating_systems = {}
 
 for cap_17_maintenance in cap_17_maintenance_range:
-    vs_heating_systems[f"Q17/Q47={cap_17_maintenance:.2}"] = {
+    ss_heating_systems[f"Single Speed (Q17/Q47={cap_17_maintenance:.2})"] = {
+        "calculation": lambda cop, hspf, cap_m=cap_17_maintenance: resdx.DXUnit(
+            staging_type=resdx.StagingType.SINGLE_STAGE,
+            rated_net_heating_capacity=fr_u(3.0, "ton_ref"),
+            rated_net_heating_capacity_17=fr_u(3.0, "ton_ref") * cap_m,
+            rated_net_heating_cop=cop,
+            input_eer=10,
+            input_seer=19.0,
+            input_hspf=hspf,
+        ).hspf(),
+        "initial_guess": lambda x: x / 2.0,
+        "curve_fit": {
+            "function": quadratic,
+            "string": quadratic_string,
+            "guesses": (1, 1, 1),
+        },
+    }
+
+    ts_heating_systems[f"Two Speed (Q17/Q47={cap_17_maintenance:.2})"] = {
+        "calculation": lambda cop, hspf, cap_m=cap_17_maintenance: resdx.DXUnit(
+            staging_type=resdx.StagingType.TWO_STAGE,
+            rated_net_heating_capacity=fr_u(3.0, "ton_ref"),
+            rated_net_heating_capacity_17=fr_u(3.0, "ton_ref") * cap_m,
+            rated_net_heating_cop=cop,
+            input_eer=10,
+            input_seer=19.0,
+            input_hspf=hspf,
+        ).hspf(),
+        "initial_guess": lambda x: x / 2.0,
+        "curve_fit": {
+            "function": quadratic,
+            "string": quadratic_string,
+            "guesses": (1, 1, 1),
+        },
+    }
+
+    vs_heating_systems[f"Variable Speed (Q17/Q47={cap_17_maintenance:.2})"] = {
         "calculation": lambda cop, hspf, cap_m=cap_17_maintenance: resdx.DXUnit(
             staging_type=resdx.StagingType.VARIABLE_SPEED,
             rated_net_heating_capacity=fr_u(3.0, "ton_ref"),
@@ -234,9 +224,29 @@ for cap_17_maintenance in cap_17_maintenance_range:
         },
     }
 
+hspf_range = DimensionalData(np.linspace(5, 11, 5), name="HSPF2", native_units="Btu/Wh")
+
+
+make_plot(
+    hspf_range,
+    ss_heating_systems,
+    "Net COP (at H1 full conditions)",
+    "heating-1s-cop-v-hspf",
+)
+
+make_plot(
+    hspf_range,
+    ts_heating_systems,
+    "Net COP (at H1 full conditions)",
+    "heating-2s-cop-v-hspf",
+)
+
+hspf_range = DimensionalData(np.linspace(5, 16, 5), name="HSPF2", native_units="Btu/Wh")
+
+
 make_plot(
     hspf_range,
     vs_heating_systems,
-    "Net COP (at H1full conditions)",
+    "Net COP (at H1 full conditions)",
     "heating-vs-cop-v-hspf",
 )

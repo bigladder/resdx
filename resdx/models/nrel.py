@@ -17,6 +17,50 @@ class NRELDXModel(DXModel):
 
     """Also, some assumptions from: https://github.com/NREL/OpenStudio-ERI/blob/master/hpxml-measures/HPXMLtoOpenStudio/resources/hvac.rb"""
 
+    COOLING_EIR_FT_COEFFICIENTS = [
+        -3.400341169,
+        0.135184783,
+        -0.001037932,
+        -0.007852322,
+        0.000183438,
+        -0.000142548,
+    ]
+
+    COOLING_EIR_FF_COEFFICIENTS = [1.143487507, -0.13943972, -0.004047787]
+
+    COOLING_CAP_FT_COEFFICIENTS = [
+        3.717717741,
+        -0.09918866,
+        0.000964488,
+        0.005887776,
+        -1.2808e-05,
+        -0.000132822,
+    ]
+
+    COOLING_CAP_FF_COEFFICIENTS = [0.718664047, 0.41797409, -0.136638137]
+
+    HEATING_EIR_FT_COEFFICIENTS = [
+        0.722917608,
+        0.003520184,
+        0.000143097,
+        -0.005760341,
+        0.000141736,
+        -0.000216676,
+    ]
+
+    HEATING_EIR_FF_COEFFICIENTS = [2.185418751, -1.942827919, 0.757409168]
+
+    HEATING_CAP_FT_COEFFICIENTS = [
+        0.568706266,
+        -0.000747282,
+        -1.03432e-05,
+        0.00945408,
+        5.0812e-05,
+        -6.77828e-06,
+    ]
+
+    HEATING_CAP_FF_COEFFICIENTS = [0.694045465, 0.474207981, -0.168253446]
+
     def gross_cooling_power(self, conditions):
         """From Cutler et al."""
         T_iwb = bracket(
@@ -26,34 +70,20 @@ class NRELDXModel(DXModel):
             to_u(conditions.outdoor.db, "°F"), min=75.0
         )  # Cutler curves use °F
         eir_FT = calc_biquad(
-            [
-                -3.437356399,
-                0.136656369,
-                -0.001049231,
-                -0.0079378,
-                0.000185435,
-                -0.0001441,
-            ],
+            NRELDXModel.COOLING_EIR_FT_COEFFICIENTS,
             T_iwb,
             T_odb,
         )
         eir_FF = calc_quad(
-            [1.143487507, -0.13943972, -0.004047787], conditions.mass_airflow_ratio
+            NRELDXModel.COOLING_EIR_FF_COEFFICIENTS, conditions.mass_airflow_ratio
         )
         cap_FT = calc_biquad(
-            [
-                3.68637657,
-                -0.098352478,
-                0.000956357,
-                0.005838141,
-                -0.0000127,
-                -0.000131702,
-            ],
+            NRELDXModel.COOLING_CAP_FT_COEFFICIENTS,
             T_iwb,
             T_odb,
         )
         cap_FF = calc_quad(
-            [0.718664047, 0.41797409, -0.136638137], conditions.mass_airflow_ratio
+            NRELDXModel.COOLING_CAP_FF_COEFFICIENTS, conditions.mass_airflow_ratio
         )
         return limit_check(
             eir_FF
@@ -76,19 +106,12 @@ class NRELDXModel(DXModel):
             to_u(conditions.outdoor.db, "°F"), min=75.0
         )  # Cutler curves use °F
         cap_FT = calc_biquad(
-            [
-                3.68637657,
-                -0.098352478,
-                0.000956357,
-                0.005838141,
-                -0.0000127,
-                -0.000131702,
-            ],
+            NRELDXModel.COOLING_CAP_FT_COEFFICIENTS,
             T_iwb,
             T_odb,
         )  # Note: Equals 0.9915 at rating conditions (not 1.0)
         cap_FF = calc_quad(
-            [0.718664047, 0.41797409, -0.136638137], conditions.mass_airflow_ratio
+            NRELDXModel.COOLING_CAP_FF_COEFFICIENTS, conditions.mass_airflow_ratio
         )
         return (
             cap_FF
@@ -103,34 +126,20 @@ class NRELDXModel(DXModel):
         T_idb = to_u(conditions.indoor.db, "°F")  # Cutler curves use °F
         T_odb = to_u(conditions.outdoor.db, "°F")  # Cutler curves use °F
         eir_FT = calc_biquad(
-            [
-                0.718398423,
-                0.003498178,
-                0.000142202,
-                -0.005724331,
-                0.00014085,
-                -0.000215321,
-            ],
+            NRELDXModel.HEATING_EIR_FT_COEFFICIENTS,
             T_idb,
             T_odb,
         )
         eir_FF = calc_quad(
-            [2.185418751, -1.942827919, 0.757409168], conditions.mass_airflow_ratio
+            NRELDXModel.HEATING_EIR_FF_COEFFICIENTS, conditions.mass_airflow_ratio
         )
         cap_FT = calc_biquad(
-            [
-                0.566333415,
-                -0.000744164,
-                -0.0000103,
-                0.009414634,
-                0.0000506,
-                -0.00000675,
-            ],
+            NRELDXModel.HEATING_CAP_FT_COEFFICIENTS,
             T_idb,
             T_odb,
         )
         cap_FF = calc_quad(
-            [0.694045465, 0.474207981, -0.168253446], conditions.mass_airflow_ratio
+            NRELDXModel.HEATING_CAP_FF_COEFFICIENTS, conditions.mass_airflow_ratio
         )
         return (
             eir_FF
@@ -146,19 +155,12 @@ class NRELDXModel(DXModel):
         T_idb = to_u(conditions.indoor.db, "°F")  # Cutler curves use °F
         T_odb = to_u(conditions.outdoor.db, "°F")  # Cutler curves use °F
         cap_FT = calc_biquad(
-            [
-                0.566333415,
-                -0.000744164,
-                -0.0000103,
-                0.009414634,
-                0.0000506,
-                -0.00000675,
-            ],
+            NRELDXModel.HEATING_CAP_FT_COEFFICIENTS,
             T_idb,
             T_odb,
         )
         cap_FF = calc_quad(
-            [0.694045465, 0.474207981, -0.168253446], conditions.mass_airflow_ratio
+            NRELDXModel.HEATING_CAP_FF_COEFFICIENTS, conditions.mass_airflow_ratio
         )
         return (
             cap_FF
