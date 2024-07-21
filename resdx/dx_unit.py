@@ -156,7 +156,7 @@ class DXUnit:
         rated_net_heating_cop=None,
         rated_heating_airflow_per_rated_net_capacity=None,
         c_d_heating=None,
-        heating_off_temperature=fr_u(0.0, "°F"),
+        heating_off_temperature=None,
         heating_on_temperature=None,  # default to heating_off_temperature
         defrost=None,
         # Fan
@@ -200,6 +200,14 @@ class DXUnit:
         self.input_hspf = input_hspf
         self.input_eer = input_eer
 
+        if self.input_seer is not None:
+            if self.input_eer is None:
+                self.input_eer = (
+                    10.0 + 0.84 * (self.input_seer - 11.5)
+                    if self.input_seer < 13.0
+                    else 11.3 + 0.57 * (self.input_seer - 13.0)
+                )
+
         self.input_rated_net_heating_cop = rated_net_heating_cop
 
         self.cycling_method = cycling_method
@@ -216,10 +224,7 @@ class DXUnit:
             crankcase_heater_setpoint_temperature
         )
         self.rating_standard = rating_standard
-        self.heating_off_temperature = heating_off_temperature
         self.refrigerant_charge_deviation = refrigerant_charge_deviation
-        if heating_on_temperature == None:
-            self.heating_on_temperature = self.heating_off_temperature
 
         # Placeholder for additional data set specific to the model
         self.model_data: dict = {}
@@ -278,6 +283,16 @@ class DXUnit:
             self.staging_type = StagingType(min(self.number_of_heating_speeds, 3))
         else:
             self.staging_type = staging_type
+
+        if heating_off_temperature is None:
+            if self.staging_type == StagingType.VARIABLE_SPEED:
+                self.heating_off_temperature = fr_u(-20.0, "degF")
+            else:
+                self.heating_off_temperature = fr_u(0.0, "degF")
+        else:
+            self.heating_off_temperature = heating_off_temperature
+        if heating_on_temperature is None:
+            self.heating_on_temperature = self.heating_off_temperature
 
         # Placeholders for derived staging array values
         self.set_placeholder_arrays()

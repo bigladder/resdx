@@ -18,8 +18,8 @@ dx_unit = resdx.DXUnit(
     rated_gross_cooling_cop=None,
     rated_net_heating_cop=heating_cop,
     rated_gross_heating_cop=None,
-    rated_net_total_cooling_capacity=fr_u(cooling_capacity, "Btu/h"),
-    rated_net_heating_capacity=fr_u(heating_capacity, "Btu/h"),
+    rated_net_total_cooling_capacity=[fr_u(cooling_capacity, "Btu/h")],
+    rated_net_heating_capacity=[fr_u(heating_capacity, "Btu/h")],
     rating_standard=AHRIVersion.AHRI_210_240_2017,
 )
 
