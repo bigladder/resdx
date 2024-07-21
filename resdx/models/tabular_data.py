@@ -6,10 +6,12 @@ from scipy.interpolate import RegularGridInterpolator
 
 from koozie import fr_u
 
-from ..util import bracket
+from ..util import bracket, calc_biquad
+
+from .nrel import NRELDXModel
 
 
-class NEEPPerformanceTable:
+class TemperatureSpeedPerformanceTable:
     def __init__(
         self,
         temperatures: List[float],
@@ -76,7 +78,16 @@ class NEEPPerformanceTable:
             self.data[t1][s2] - self.data[t1][s0]
         )
 
-    def add_temperature(self, temperature: float, extrapolate: bool = True) -> None:
+    def add_temperature(
+        self,
+        temperature: float,
+        extrapolate: bool = True,
+        extrapolation_limit: Union[float, None] = None,
+    ) -> None:
+        if temperature in self.temperatures:
+            raise RuntimeError(
+                f"Temperature, {temperature:.2f}, already exists. Unable to add temperature."
+            )
         insort(self.temperatures, temperature)
         t_i = self.temperatures.index(temperature)  # temperature index
 
@@ -90,11 +101,17 @@ class NEEPPerformanceTable:
             for speed in self.speeds:
                 s_i = speed - 1  # speed index
                 if extrapolate:
-                    self.data[t_i][s_i] = self.data[t_i + 1][s_i] - (
+                    value = self.data[t_i + 1][s_i] - (
                         self.data[t_i + 2][s_i] - self.data[t_i + 1][s_i]
                     ) / (t_2 - t_1) * (t_1 - t_0)
+                    if extrapolation_limit is not None:
+                        value = max(
+                            value, self.data[t_i + 1][s_i] * extrapolation_limit
+                        )
                 else:
-                    self.data[t_i][s_i] = self.data[t_i + 1][s_i]
+                    value = self.data[t_i + 1][s_i]
+
+                self.data[t_i][s_i] = value
 
         elif t_i == len(self.temperatures) - 1:
             # Extrapolate above
@@ -104,11 +121,17 @@ class NEEPPerformanceTable:
             for speed in self.speeds:
                 s_i = speed - 1  # speed index
                 if extrapolate:
-                    self.data[t_i][s_i] = self.data[t_i - 1][s_i] + (
+                    value = self.data[t_i - 1][s_i] + (
                         self.data[t_i - 1][s_i] - self.data[t_i - 2][s_i]
                     ) / (t_m1 - t_m2) * (t - t_m1)
+                    if extrapolation_limit is not None:
+                        value = min(
+                            value, self.data[t_i - 1][s_i] * extrapolation_limit
+                        )
                 else:
-                    self.data[t_i][s_i] = self.data[t_i - 1][s_i]
+                    value = self.data[t_i - 1][s_i]
+
+                self.data[t_i][s_i] = value
 
         else:
             # Interpolate
@@ -159,7 +182,7 @@ class NEEPPerformanceTable:
         self.set_interpolator()
 
 
-class NEEPCoolingPerformanceTable(NEEPPerformanceTable):
+class TemperatureSpeedCoolingPerformanceTable(TemperatureSpeedPerformanceTable):
     def set_by_maintenance(
         self, speed: int, temperature: float, reference_temperature: float, ratio: float
     ) -> None:
@@ -176,7 +199,7 @@ class NEEPCoolingPerformanceTable(NEEPPerformanceTable):
             )
 
 
-class NEEPHeatingPerformanceTable(NEEPPerformanceTable):
+class TemperatureSpeedHeatingPerformanceTable(TemperatureSpeedPerformanceTable):
     def set_by_maintenance(
         self, speed: int, temperature: float, reference_temperature: float, ratio: float
     ) -> None:
@@ -193,14 +216,14 @@ class NEEPHeatingPerformanceTable(NEEPPerformanceTable):
             )
 
 
-class NEEPPerformance:
+class TemperatureSpeedPerformance:
 
     def __init__(
         self,
-        cooling_capacities: NEEPCoolingPerformanceTable,
-        cooling_powers: NEEPCoolingPerformanceTable,
-        heating_capacities: NEEPHeatingPerformanceTable,
-        heating_powers: NEEPHeatingPerformanceTable,
+        cooling_capacities: TemperatureSpeedCoolingPerformanceTable,
+        cooling_powers: TemperatureSpeedCoolingPerformanceTable,
+        heating_capacities: TemperatureSpeedHeatingPerformanceTable,
+        heating_powers: TemperatureSpeedHeatingPerformanceTable,
     ) -> None:
 
         self.number_of_cooling_speeds = len(cooling_capacities.speeds)
@@ -267,30 +290,27 @@ def make_neep_statistical_model_data(
     heating_capacity_17: float,
     hspf2: float,
     max_cooling_temperature: float = fr_u(125, "degF"),
-    min_heating_temperature: float = fr_u(0, "degF"),
+    min_heating_temperature: float = fr_u(-20, "degF"),
     cooling_capacity_ratio: Union[float, None] = None,  # min/max capacity ratio at 95F
-    cooling_eir_ratio: Union[float, None] = None,  # min/max eir ratio at 82F
+    cooling_cop_82_min: Union[float, None] = None,
     heating_cop_47: Union[float, None] = None,
-) -> NEEPPerformance:
+) -> TemperatureSpeedPerformance:
 
     Qmin = 1
     Qrated = 2
     Qmax = 3
 
+    t_60 = fr_u(60.0, "degF")
+
     # COOLING
 
-    t_82 = fr_u(82, "degF")
-    t_95 = fr_u(95, "degF")
+    t_82 = fr_u(82.0, "degF")
+    t_95 = fr_u(95.0, "degF")
 
     t_c = [
         t_82,
         t_95,
     ]
-
-    if cooling_eir_ratio is not None:
-        EIRr82min = max(cooling_eir_ratio, 0.2)
-    else:
-        EIRr82min = bracket(1.305 - 0.324 * seer2 / eer2, 0.2, 1.0)
 
     Qr95rated = 0.934
     Qm95max = 0.940
@@ -299,31 +319,21 @@ def make_neep_statistical_model_data(
     EIRm95max = 1.326
     EIRm95min = 1.315
 
-    if cooling_capacity_ratio is not None:
-        Qr95min = cooling_capacity_ratio
-    else:
-        Qr95min = bracket(
-            0.510 - 0.119 * (EIRr82min - 1.305) / (-0.324), 0.1, Qr95rated
-        )
-
-    Q_c = NEEPCoolingPerformanceTable(t_c, 3)
-    P_c = NEEPCoolingPerformanceTable(t_c, 3)
+    Q_c = TemperatureSpeedCoolingPerformanceTable(t_c, 3)
+    P_c = TemperatureSpeedCoolingPerformanceTable(t_c, 3)
 
     # Net Total Capacity
 
     # 95 F
     Q_c.set(Qrated, t_95, cooling_capacity_95)
     Q_c.set_by_ratio(Qmax, t_95, Qr95rated)
-    Q_c.set_by_ratio(Qmin, t_95, Qr95min)
 
     # 82 F
     Q_c.set_by_maintenance(Qmax, t_82, t_95, Qm95max)
-    Q_c.set_by_maintenance(Qmin, t_82, t_95, Qm95min)
-    Q_c.set_by_interpolation(Qrated, t_82)
+    # Other speeds calculated later
 
     # Net Power
     Pr95rated = Qr95rated * EIRr95rated
-    Pr82min = Q_c.get_ratio(Qmin, t_82) * EIRr82min
     Pm95min = Qm95min * EIRm95min
     Pm95max = Qm95max * EIRm95max
 
@@ -331,13 +341,34 @@ def make_neep_statistical_model_data(
     P_c.set(Qrated, t_95, Q_c.get(Qrated, t_95) / fr_u(eer2, "Btu/Wh"))
     P_c.set_by_ratio(Qmax, t_95, Pr95rated)
     P_c.set_by_maintenance(Qmax, t_82, t_95, Pm95max)
-    P_c.set_by_ratio(Qmin, t_82, Pr82min)
+    if cooling_cop_82_min is None:
+        EIRr82min = bracket(
+            1.305 - 0.324 * seer2 / eer2, 0.2, 1.0
+        )  # TODO: Replace with new regression
+        cooling_cop_82_min = (Q_c.get(Qmax, t_82) / P_c.get(Qmax, t_82)) / EIRr82min
+    else:
+        EIRr82min = (Q_c.get(Qmax, t_82) / P_c.get(Qmax, t_82)) / cooling_cop_82_min
+
+    if cooling_capacity_ratio is not None:
+        Qr95min = cooling_capacity_ratio
+    else:
+        Qr95min = bracket(
+            0.510 - 0.119 * (EIRr82min - 1.305) / (-0.324), 0.1, Qr95rated
+        )
+
+    # Back to capacities
+    Q_c.set_by_ratio(Qmin, t_95, Qr95min)
+    Q_c.set_by_maintenance(Qmin, t_82, t_95, Qm95min)
+    Q_c.set_by_interpolation(Qrated, t_82)
+
+    P_c.set(Qmin, t_82, Q_c.get(Qmin, t_82) / cooling_cop_82_min)
+
     P_c.set_by_maintenance(Qmin, t_95, t_82, Pm95min)
     P_c.set_by_interpolation(Qrated, t_82)
 
     # Tmin
-    Q_c.add_temperature(fr_u(60.0, "degF"))
-    P_c.add_temperature(fr_u(60.0, "degF"))
+    Q_c.add_temperature(t_60, extrapolation_limit=0.5)
+    P_c.add_temperature(t_60, extrapolation_limit=0.5)
 
     # Tmax
     Q_c.add_temperature(max_cooling_temperature)
@@ -382,8 +413,8 @@ def make_neep_statistical_model_data(
     else:
         Qm17rated = 0.689
 
-    Q_h = NEEPHeatingPerformanceTable(t_h, 3)
-    P_h = NEEPHeatingPerformanceTable(t_h, 3)
+    Q_h = TemperatureSpeedHeatingPerformanceTable(t_h, 3)
+    P_h = TemperatureSpeedHeatingPerformanceTable(t_h, 3)
 
     # Net Total Capacity
 
@@ -411,7 +442,7 @@ def make_neep_statistical_model_data(
     Q_h.set_by_interpolation(Qrated, t_min)
 
     # Tmax
-    Q_h.add_temperature(fr_u(60.0, "degF"), False)
+    Q_h.add_temperature(t_60, False)
 
     # Net Power
     if heating_cop_47 is None:
@@ -453,14 +484,14 @@ def make_neep_statistical_model_data(
     P_h.set_by_interpolation(Qrated, t_min)
 
     # Tmax
-    P_h.add_temperature(fr_u(60.0, "degF"), False)
+    P_h.add_temperature(t_60, False)
 
     Q_c.set_interpolator()
     P_c.set_interpolator()
     Q_h.set_interpolator()
     P_h.set_interpolator()
 
-    return NEEPPerformance(Q_c, P_c, Q_h, P_h)
+    return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
 
 
 def make_neep_model_data(
@@ -508,17 +539,25 @@ def make_neep_model_data(
         t_lct = fr_u(lct, "degF")
         heating_temperatures = [t_lct] + heating_temperatures
 
-    Q_c = NEEPCoolingPerformanceTable(cooling_temperatures, 3, cooling_capacities)
-    P_c = NEEPCoolingPerformanceTable(cooling_temperatures, 3, cooling_powers)
-    Q_h = NEEPHeatingPerformanceTable(heating_temperatures, 3, heating_capacities)
-    P_h = NEEPHeatingPerformanceTable(heating_temperatures, 3, heating_powers)
+    Q_c = TemperatureSpeedCoolingPerformanceTable(
+        cooling_temperatures, 3, cooling_capacities
+    )
+    P_c = TemperatureSpeedCoolingPerformanceTable(
+        cooling_temperatures, 3, cooling_powers
+    )
+    Q_h = TemperatureSpeedHeatingPerformanceTable(
+        heating_temperatures, 3, heating_capacities
+    )
+    P_h = TemperatureSpeedHeatingPerformanceTable(
+        heating_temperatures, 3, heating_powers
+    )
 
     # Interpolate for missing rated conditions, and extrapolate to extreme temperatures
     Q_c.set_by_interpolation(2, t_82)
     P_c.set_by_interpolation(2, t_82)
 
-    Q_c.add_temperature(t_60)
-    P_c.add_temperature(t_60)
+    Q_c.add_temperature(t_60, extrapolation_limit=0.5)
+    P_c.add_temperature(t_60, extrapolation_limit=0.5)
 
     Q_c.add_temperature(max_cooling_temperature)
     P_c.add_temperature(max_cooling_temperature)
@@ -547,4 +586,271 @@ def make_neep_model_data(
     Q_h.set_interpolator()
     P_h.set_interpolator()
 
-    return NEEPPerformance(Q_c, P_c, Q_h, P_h)
+    return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
+
+
+def make_single_speed_model_data(
+    cooling_capacity_95: float,  # Net total cooling capacity at 95F and rated speed
+    seer2: float,
+    eer2: float,
+    heating_capacity_47: float,
+    heating_capacity_17: Union[float, None],
+    hspf2: float,
+    max_cooling_temperature: float = fr_u(125, "degF"),
+    min_heating_temperature: float = fr_u(-20, "degF"),
+    heating_cop_47: Union[float, None] = None,
+    cycling_degradation_coefficient: float = 0.15,
+) -> TemperatureSpeedPerformance:
+    Qrated = 1
+
+    t_60 = fr_u(60.0, "degF")
+
+    # COOLING
+
+    t_82 = fr_u(82.0, "degF")
+    t_95 = fr_u(95.0, "degF")
+
+    t_c = [
+        t_82,
+        t_95,
+    ]
+
+    Qm95rated = 1.0 / calc_biquad(NRELDXModel.COOLING_CAP_FT_COEFFICIENTS, 67.0, 82.0)
+
+    Q_c = TemperatureSpeedCoolingPerformanceTable(t_c, 1)
+    P_c = TemperatureSpeedCoolingPerformanceTable(t_c, 1)
+
+    # Net Total Capacity
+
+    # 95 F
+    Q_c.set(Qrated, t_95, cooling_capacity_95)
+
+    # 82 F
+    Q_c.set_by_maintenance(Qrated, t_82, t_95, Qm95rated)
+
+    # Net Power
+
+    # 95/82 F
+    P_c.set(Qrated, t_95, Q_c.get(Qrated, t_95) / fr_u(eer2, "Btu/Wh"))
+    eer2_b = seer2 / (
+        1.0 - 0.5 * cycling_degradation_coefficient
+    )  # EER2 at B (82F) conditions
+    P_c.set(Qrated, t_82, Q_c.get(Qrated, t_82) / fr_u(eer2_b, "Btu/Wh"))
+
+    # Tmin
+    Q_c.add_temperature(t_60, extrapolation_limit=0.5)
+    P_c.add_temperature(t_60, extrapolation_limit=0.5)
+
+    # Tmax
+    Q_c.add_temperature(max_cooling_temperature)
+    P_c.add_temperature(max_cooling_temperature)
+
+    # HEATING
+
+    t_min = min_heating_temperature
+    t_5 = fr_u(5, "degF")
+    t_17 = fr_u(17, "degF")
+    t_47 = fr_u(47, "degF")
+
+    t_h = [
+        t_17,
+        t_47,
+    ]
+
+    EIRm17rated = calc_biquad(NRELDXModel.HEATING_EIR_FT_COEFFICIENTS, 70.0, 17.0)
+
+    if heating_capacity_17 is not None:
+        Qm17rated = heating_capacity_17 / heating_capacity_47
+    else:
+        Qm17rated = (
+            0.626  # Based on AHRI directory units believed to be single speed (4/4/24)
+        )
+
+    Q_h = TemperatureSpeedHeatingPerformanceTable(t_h, 1)
+    P_h = TemperatureSpeedHeatingPerformanceTable(t_h, 1)
+
+    # Net Total Capacity
+
+    # 47 F
+    Q_h.set(Qrated, t_47, heating_capacity_47)
+
+    # 17 F
+    Q_h.set_by_maintenance(Qrated, t_17, t_47, Qm17rated)
+
+    # 5 F
+    Q_h.add_temperature(t_5, True)
+
+    # Tmin
+    Q_h.add_temperature(t_min, True)
+
+    # Tmax
+    Q_h.add_temperature(t_60, False)
+
+    # Net Power
+    if heating_cop_47 is None:
+        heating_cop_47 = 2.837 + 0.066 * hspf2  # TODO: Replace with inverse correlation
+
+    Pm17rated = Qm17rated * EIRm17rated
+
+    # 47 F
+    P_h.set(Qrated, t_47, Q_h.get(Qrated, t_47) / heating_cop_47)
+
+    # 17 F
+    P_h.set_by_maintenance(Qrated, t_17, t_47, Pm17rated)
+
+    # 5 F
+    P_h.add_temperature(t_5)
+
+    # Tmin
+    P_h.add_temperature(t_min)
+
+    # Tmax
+    P_h.add_temperature(t_60, extrapolate=False)
+
+    Q_c.set_interpolator()
+    P_c.set_interpolator()
+    Q_h.set_interpolator()
+    P_h.set_interpolator()
+
+    return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
+
+
+def make_two_speed_model_data(
+    cooling_capacity_95: float,  # Net total cooling capacity at 95F and rated speed
+    seer2: float,
+    eer2: float,
+    heating_capacity_47: float,
+    heating_capacity_17: Union[float, None],
+    hspf2: float,
+    max_cooling_temperature: float = fr_u(125, "degF"),
+    min_heating_temperature: float = fr_u(-20, "degF"),
+    cooling_cop_82_min: Union[float, None] = None,
+    heating_cop_47: Union[float, None] = None,
+) -> TemperatureSpeedPerformance:
+    Qmin = 1
+    Qrated = 2
+
+    t_60 = fr_u(60.0, "degF")
+
+    # COOLING
+
+    t_82 = fr_u(82.0, "degF")
+    t_95 = fr_u(95.0, "degF")
+
+    t_c = [
+        t_82,
+        t_95,
+    ]
+
+    Qm95rated = 1.0 / calc_biquad(NRELDXModel.COOLING_CAP_FT_COEFFICIENTS, 67.0, 82.0)
+    EIRm95rated = 1.0 / calc_biquad(NRELDXModel.COOLING_EIR_FT_COEFFICIENTS, 67.0, 82.0)
+
+    QrCmin = 0.728  # Converted from gross 0.72
+    # EIRrCmin = 0.869  # Converted from gross 0.91 (Not used. Kept for completeness.)
+
+    Q_c = TemperatureSpeedCoolingPerformanceTable(t_c, 2)
+    P_c = TemperatureSpeedCoolingPerformanceTable(t_c, 2)
+
+    # Net Total Capacity
+
+    # 95 F
+    Q_c.set(Qrated, t_95, cooling_capacity_95)
+    Q_c.set_by_ratio(Qmin, t_95, QrCmin)
+
+    # 82 F
+    Q_c.set_by_maintenance(Qrated, t_82, t_95, Qm95rated)
+    Q_c.set_by_ratio(Qmin, t_82, QrCmin)
+
+    # Net Power
+    Pm95rated = Qm95rated * EIRm95rated
+
+    if cooling_cop_82_min is None:
+        cooling_cop_82_min = seer2 / 2.0  # TODO: Replace with regression
+
+    # 82 / 95 F
+    P_c.set(Qrated, t_95, Q_c.get(Qrated, t_95) / fr_u(eer2, "Btu/Wh"))
+    P_c.set_by_maintenance(Qrated, t_82, t_95, Pm95rated)
+    P_c.set(Qmin, t_82, Q_c.get(Qmin, t_82) / cooling_cop_82_min)
+    P_c.set_by_maintenance(Qmin, t_95, t_82, Pm95rated)
+
+    # Tmin
+    Q_c.add_temperature(t_60, extrapolation_limit=0.5)
+    P_c.add_temperature(t_60, extrapolation_limit=0.5)
+
+    # Tmax
+    Q_c.add_temperature(max_cooling_temperature)
+    P_c.add_temperature(max_cooling_temperature)
+
+    # HEATING
+
+    t_min = min_heating_temperature
+    t_5 = fr_u(5, "degF")
+    t_17 = fr_u(17, "degF")
+    t_47 = fr_u(47, "degF")
+
+    t_h = [
+        t_17,
+        t_47,
+    ]
+
+    QrHmin = 0.712  # Converted from gross 0.72
+    EIRrHmin = 0.850  # Converted from gross 0.87
+    EIRm17rated = calc_biquad(NRELDXModel.HEATING_EIR_FT_COEFFICIENTS, 70.0, 17.0)
+
+    if heating_capacity_17 is not None:
+        Qm17rated = heating_capacity_17 / heating_capacity_47
+    else:
+        Qm17rated = 0.626  # Based on AHRI directory units believed to be single speed (4/4/24) TODO: Switch to Cutler curve
+
+    Q_h = TemperatureSpeedHeatingPerformanceTable(t_h, 2)
+    P_h = TemperatureSpeedHeatingPerformanceTable(t_h, 2)
+
+    # Net Total Capacity
+
+    # 47 F
+    Q_h.set(Qrated, t_47, heating_capacity_47)
+    Q_h.set_by_ratio(Qmin, t_47, QrHmin)
+
+    # 17 F
+    Q_h.set_by_maintenance(Qrated, t_17, t_47, Qm17rated)
+    Q_h.set_by_ratio(Qmin, t_17, QrHmin)
+
+    # 5 F
+    Q_h.add_temperature(t_5, True)
+
+    # Tmin
+    Q_h.add_temperature(t_min, True)
+
+    # Tmax
+    Q_h.add_temperature(t_60, False)
+
+    # Net Power
+    if heating_cop_47 is None:
+        heating_cop_47 = 2.837 + 0.066 * hspf2  # TODO: Replace with inverse correlation
+
+    Pm17rated = Qm17rated * EIRm17rated
+    PrHmin = QrHmin * EIRrHmin
+
+    # 47 F
+    P_h.set(Qrated, t_47, Q_h.get(Qrated, t_47) / heating_cop_47)
+    P_h.set_by_ratio(Qmin, t_47, PrHmin)
+
+    # 17 F
+    P_h.set_by_maintenance(Qrated, t_17, t_47, Pm17rated)
+    P_h.set_by_ratio(Qmin, t_17, PrHmin)
+
+    # 5 F
+    P_h.add_temperature(t_5)
+
+    # Tmin
+    P_h.add_temperature(t_min)
+
+    # Tmax
+    P_h.add_temperature(t_60, extrapolate=False)
+
+    Q_c.set_interpolator()
+    P_c.set_interpolator()
+    Q_h.set_interpolator()
+    P_h.set_interpolator()
+
+    return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)

@@ -5,36 +5,13 @@ from scipy import optimize
 # import cbor2
 import json
 
+import resdx.rating_solver
+
 seer2 = 14.3
 hspf2 = 7.5
-cop_c, solution_c = optimize.newton(
-    lambda x: resdx.DXUnit(
-        staging_type=resdx.StagingType.TWO_STAGE,
-        rated_gross_cooling_cop=x,
-        input_seer=seer2,
-        rating_standard=resdx.AHRIVersion.AHRI_210_240_2023,
-    ).seer()
-    - seer2,
-    seer2 / 3.33,
-    full_output=True,
-)
-cop_h, solution_h = optimize.newton(
-    lambda x: resdx.DXUnit(
-        staging_type=resdx.StagingType.TWO_STAGE,
-        rated_gross_heating_cop=x,
-        input_hspf=hspf2,
-        rating_standard=resdx.AHRIVersion.AHRI_210_240_2023,
-    ).hspf()
-    - hspf2,
-    hspf2 / 2.0,
-    full_output=True,
-)
-dx_unit = resdx.DXUnit(
-    staging_type=resdx.StagingType.TWO_STAGE,
-    rated_gross_cooling_cop=cop_c,
-    rated_gross_heating_cop=cop_h,
-    input_seer=seer2,
-    input_hspf=hspf2,
+
+dx_unit = resdx.rating_solver.make_rating_unit(
+    staging_type=resdx.StagingType.TWO_STAGE, seer=seer2, hspf=hspf2
 )
 
 size = resdx.to_u(dx_unit.rated_net_total_cooling_capacity[0], "ton_ref")

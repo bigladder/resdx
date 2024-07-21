@@ -4,6 +4,7 @@ from koozie import fr_u
 from scipy import optimize
 
 from resdx.dx_unit import AHRIVersion
+from resdx.rating_solver import make_rating_unit
 
 import numpy as np
 
@@ -18,40 +19,20 @@ CoolingConditions = resdx.dx_unit.CoolingConditions
 
 
 # Single speed gross COP values used for regression testing
-COP_C = 4.277
-COP_H = 3.462
+COP_C = 3.312
+COP_H = 3.121
 
 
 # Tests
 def test_1_speed_regression():
     # Single speed, SEER 13, HSPF 8
-    seer_1 = 13.0
-    hspf_1 = 8.0
-    cop_1_c, solution_1_c = optimize.newton(
-        lambda x: DXUnit(
-            rated_gross_cooling_cop=x,
-            input_seer=seer_1,
-            rating_standard=AHRIVersion.AHRI_210_240_2017,
-        ).seer()
-        - seer_1,
-        seer_1 / 3.33,
-        full_output=True,
-    )
-    cop_1_h, solution_1_h = optimize.newton(
-        lambda x: DXUnit(
-            rated_gross_heating_cop=x,
-            input_hspf=hspf_1,
-            rating_standard=AHRIVersion.AHRI_210_240_2017,
-        ).hspf()
-        - hspf_1,
-        hspf_1 / 2.0,
-        full_output=True,
-    )
-    dx_unit_1_speed = DXUnit(
-        rated_gross_cooling_cop=cop_1_c,
-        rated_gross_heating_cop=cop_1_h,
-        input_seer=seer_1,
-        input_hspf=hspf_1,
+    seer = 13.0
+    hspf = 8.0
+
+    dx_unit_1_speed = make_rating_unit(
+        StagingType.SINGLE_STAGE,
+        seer,
+        hspf,
         rating_standard=AHRIVersion.AHRI_210_240_2017,
     )
 
@@ -66,44 +47,24 @@ def test_1_speed_regression():
     assert dx_unit_1_speed.net_total_cooling_capacity() == approx(
         dx_unit_1_speed.rated_net_total_cooling_capacity[0], 0.01
     )
-    assert dx_unit_1_speed.seer() == approx(seer_1, 0.0001)
-    assert dx_unit_1_speed.hspf() == approx(hspf_1, 0.0001)
-    assert dx_unit_1_speed.rated_gross_cooling_cop[0] == approx(COP_C, 0.001)
-    assert dx_unit_1_speed.rated_gross_heating_cop[0] == approx(COP_H, 0.001)
+    assert dx_unit_1_speed.seer() == approx(seer, 0.0001)
+    assert dx_unit_1_speed.hspf() == approx(hspf, 0.0001)
+    assert dx_unit_1_speed.rated_net_cooling_cop[0] == approx(COP_C, 0.001)
+    assert dx_unit_1_speed.rated_net_heating_cop[0] == approx(COP_H, 0.001)
 
 
 def test_1_speed_refrigerant_charge_regression():
     # Single speed, SEER 13, HSPF 8
-    seer_1 = 13.0
-    hspf_1 = 8.0
-    cop_1_c, solution_1_c = optimize.newton(
-        lambda x: DXUnit(
-            rated_gross_cooling_cop=x,
-            input_seer=seer_1,
-            rating_standard=AHRIVersion.AHRI_210_240_2017,
-        ).seer()
-        - seer_1,
-        seer_1 / 3.33,
-        full_output=True,
-    )
-    cop_1_h, solution_1_h = optimize.newton(
-        lambda x: DXUnit(
-            rated_gross_heating_cop=x,
-            input_hspf=hspf_1,
-            rating_standard=AHRIVersion.AHRI_210_240_2017,
-        ).hspf()
-        - hspf_1,
-        hspf_1 / 2.0,
-        full_output=True,
-    )
-    dx_unit_1_speed = DXUnit(
-        rated_gross_cooling_cop=cop_1_c,
-        rated_gross_heating_cop=cop_1_h,
-        input_seer=seer_1,
-        input_hspf=hspf_1,
+    seer = 13.0
+    hspf = 8.0
+
+    dx_unit_1_speed = make_rating_unit(
+        StagingType.SINGLE_STAGE,
+        seer,
+        hspf,
         rating_standard=AHRIVersion.AHRI_210_240_2017,
-        refrigerant_charge_deviation=-0.25,
     )
+    dx_unit_1_speed.refrigerant_charge_deviation = -0.25
 
     dx_unit_1_speed.print_cooling_info()
     dx_unit_1_speed.print_heating_info()
@@ -113,38 +74,44 @@ def test_1_speed_refrigerant_charge_regression():
 
 def test_1_speed_2023_regression():
     # Single speed, SEER 13, HSPF 8
-    seer_1 = 13.0
-    hspf_1 = 8.0
-    dx_unit_1_speed = DXUnit(
-        rated_gross_cooling_cop=COP_C,
-        rated_gross_heating_cop=COP_H,
-        input_seer=seer_1,
-        input_hspf=hspf_1,
+    seer = 13.0
+    hspf = 8.0
+
+    dx_unit_1_speed = make_rating_unit(
+        StagingType.SINGLE_STAGE,
+        seer,
+        hspf,
+        rating_standard=AHRIVersion.AHRI_210_240_2017,
     )
+
+    dx_unit_1_speed.set_rating_standard(AHRIVersion.AHRI_210_240_2023)
 
     dx_unit_1_speed.print_cooling_info()
     dx_unit_1_speed.print_heating_info()
     assert dx_unit_1_speed.seer() == approx(12.999, 0.001)  # SEER2
-    assert dx_unit_1_speed.hspf() == approx(7.197, 0.001)  # HSPF2
+    assert dx_unit_1_speed.hspf() == approx(7.172, 0.001)  # HSPF2
 
 
 def test_1_speed_rating_version():
     # Single speed, SEER 13, HSPF 8
     seer_1 = 13.0
     hspf_1 = 8.0
+    eer_1 = seer_1 / 1.2
     dx_unit_2017 = DXUnit(
-        rated_gross_cooling_cop=COP_C,
-        rated_gross_heating_cop=COP_H,
+        rated_net_cooling_cop=COP_C,
+        rated_net_heating_cop=COP_H,
         rating_standard=AHRIVersion.AHRI_210_240_2017,
         input_seer=seer_1,
         input_hspf=hspf_1,
+        input_eer=eer_1,
     )
     dx_unit_2023 = DXUnit(
-        rated_gross_cooling_cop=COP_C,
-        rated_gross_heating_cop=COP_H,
+        rated_net_cooling_cop=COP_C,
+        rated_net_heating_cop=COP_H,
         rating_standard=AHRIVersion.AHRI_210_240_2023,
         input_seer=seer_1,
         input_hspf=hspf_1,
+        input_eer=eer_1,
     )
 
     assert dx_unit_2017.rated_cooling_airflow[0] == approx(
@@ -158,35 +125,11 @@ def test_2_speed_regression():
     # Two speed, SEER 17, HSPF 10
     seer_2 = 17.0
     hspf_2 = 10.0
-    cop_2_c, solution_2_c = optimize.newton(
-        lambda x: DXUnit(
-            staging_type=resdx.StagingType.TWO_STAGE,
-            rated_gross_cooling_cop=x,
-            input_seer=seer_2,
-            rating_standard=AHRIVersion.AHRI_210_240_2017,
-        ).seer()
-        - seer_2,
-        seer_2 / 3.33,
-        full_output=True,
-    )
-    cop_2_h, solution_2_h = optimize.newton(
-        lambda x: DXUnit(
-            staging_type=resdx.StagingType.TWO_STAGE,
-            rated_gross_heating_cop=x,
-            input_hspf=hspf_2,
-            rating_standard=AHRIVersion.AHRI_210_240_2017,
-        ).hspf()
-        - hspf_2,
-        hspf_2 / 2.0,
-        full_output=True,
-    )
 
-    dx_unit_2_speed = DXUnit(
-        staging_type=resdx.StagingType.TWO_STAGE,
-        rated_gross_cooling_cop=cop_2_c,
-        rated_gross_heating_cop=cop_2_h,
-        input_seer=seer_2,
-        input_hspf=hspf_2,
+    dx_unit_2_speed = make_rating_unit(
+        resdx.StagingType.TWO_STAGE,
+        seer_2,
+        hspf_2,
         rating_standard=AHRIVersion.AHRI_210_240_2017,
     )
 
@@ -198,11 +141,11 @@ def test_2_speed_regression():
         dx_unit_2_speed.rated_gross_total_cooling_capacity[0], 0.01
     )
     assert dx_unit_2_speed.seer() == approx(seer_2, 0.01)
-    assert dx_unit_2_speed.rated_gross_cooling_cop[0] == approx(4.343, 0.001)
-    assert dx_unit_2_speed.rated_gross_cooling_cop[1] == approx(4.772, 0.001)
+    assert dx_unit_2_speed.rated_net_cooling_cop[0] == approx(3.980, 0.001)
+    assert dx_unit_2_speed.rated_net_cooling_cop[1] == approx(4.284, 0.001)
     assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
-    assert dx_unit_2_speed.rated_gross_heating_cop[0] == approx(3.61, 0.001)
-    assert dx_unit_2_speed.rated_gross_heating_cop[1] == approx(4.146, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(3.424, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(4.029, 0.001)
 
 
 def test_neep_statistical_vchp_regression():
@@ -263,7 +206,7 @@ def test_neep_vchp_regression():
     ]
 
     vchp_unit = resdx.DXUnit(
-        neep_data=resdx.models.neep_data.make_neep_model_data(
+        tabular_data=resdx.models.tabular_data.make_neep_model_data(
             cooling_capacities, cooling_powers, heating_capacities, heating_powers
         ),
         rating_standard=AHRIVersion.AHRI_210_240_2017,
@@ -297,19 +240,12 @@ def test_plot():
     # Single speed, SEER 13, HSPF 8
     seer_1 = 13.0
     hspf_1 = 8.0
-    cop_1_c, solution_1_c = optimize.newton(
+    eer_1 = seer_1 / 1.2
+    cop_1_h, _ = optimize.newton(
         lambda x: DXUnit(
-            rated_gross_cooling_cop=x,
+            rated_net_heating_cop=x,
             input_seer=seer_1,
-            rating_standard=AHRIVersion.AHRI_210_240_2017,
-        ).seer()
-        - seer_1,
-        seer_1 / 3.33,
-        full_output=True,
-    )
-    cop_1_h, solution_1_h = optimize.newton(
-        lambda x: DXUnit(
-            rated_gross_heating_cop=x,
+            input_eer=eer_1,
             input_hspf=hspf_1,
             rating_standard=AHRIVersion.AHRI_210_240_2017,
         ).hspf()
@@ -318,9 +254,9 @@ def test_plot():
         full_output=True,
     )
     dx_unit_1_speed = DXUnit(
-        rated_gross_cooling_cop=cop_1_c,
-        rated_gross_heating_cop=cop_1_h,
+        rated_net_heating_cop=cop_1_h,
         input_seer=seer_1,
+        input_eer=eer_1,
         input_hspf=hspf_1,
         rating_standard=AHRIVersion.AHRI_210_240_2017,
     )
