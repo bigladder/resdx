@@ -14,6 +14,7 @@ from .tabular_data import (
     make_neep_statistical_model_data,
     make_single_speed_model_data,
     make_two_speed_model_data,
+    neep_cap47_from_cap95,
 )
 from ..enums import StagingType
 from ..conditions import CoolingConditions, HeatingConditions
@@ -231,12 +232,12 @@ class RESNETDXModel(DXModel):
             else:
                 rated_net_heating_capacity = self.set_heating_default(
                     rated_net_heating_capacity,
-                    rated_net_total_cooling_capacity * 1.022 + fr_u(607.0, "Btu/h"),
-                )  # From NEEP Database regression
+                    neep_cap47_from_cap95(rated_net_total_cooling_capacity),
+                )
                 if self.rated_net_heating_capacity_17 is None:
                     self.rated_net_heating_capacity_17 = (
                         0.689 * rated_net_heating_capacity
-                    )
+                    ) # Qm17rated from NEEP Statistics
                 if self.net_tabular_data is None:
                     self.net_tabular_data = make_neep_statistical_model_data(
                         cooling_capacity_95=rated_net_total_cooling_capacity,

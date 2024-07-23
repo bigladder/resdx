@@ -222,10 +222,10 @@ two_speed_cooling_regression = RatingRegression(
     input_title="Net COP (at B low conditions)",
     initial_guess=lambda target: target / 3.0,
     rating_range=DimensionalData(
-        list(linspace(6, 26.5, 2)), name="SEER2", native_units="Btu/Wh"
+        list(linspace(6, 22, 2)), name="SEER2", native_units="Btu/Wh"
     ),  # All straight lines don't need more than two points
     secondary_range=DimensionalData(
-        list(linspace(1.2, 2.0, 2)), name="SEER2/EER2", native_units="W/W"
+        list(linspace(1.0, 2.4, 2)), name="SEER2/EER2", native_units="W/W"
     ),  # Also straight line
     curve_fit=linear_curve_fit,
 )
@@ -236,16 +236,21 @@ variable_speed_cooling_regression.rating_range = DimensionalData(
     list(linspace(14, 35, 3)), name="SEER2", native_units="Btu/Wh"
 )  # Slight inflection, three points should suffice
 variable_speed_cooling_regression.secondary_range = DimensionalData(
-    list(geometric_space(1.2, 2.0, 5, 0.5)), name="SEER2/EER2", native_units="W/W"
+    list(geometric_space(1.0, 2.4, 5, 0.5)), name="SEER2/EER2", native_units="W/W"
 )  # Exponential variation 5 values
 
 
 # Heating
 def hspf_function(cop_47, hspf, staging_type, cap17m):
+    # Note: results are sensitive to cap95 since it is used to set the building load and external static pressure.
+    cap95 = fr_u(3.0, "ton_ref")
+    cap47 = resdx.models.tabular_data.neep_cap47_from_cap95(cap95)
+    cap17 = cap47 * cap17m
     return resdx.DXUnit(
         staging_type=staging_type,
-        rated_net_heating_capacity=fr_u(3.0, "ton_ref"),
-        rated_net_heating_capacity_17=fr_u(3.0, "ton_ref") * cap17m,
+        rated_net_total_cooling_capacity=cap95,
+        rated_net_heating_capacity=cap47,
+        rated_net_heating_capacity_17=cap17,
         rated_net_heating_cop=cop_47,
         input_hspf=hspf,
         input_seer=14.3,
@@ -262,7 +267,7 @@ single_speed_heating_regression = RatingRegression(
         list(linspace(5, 11, 5)), name="HSPF2", native_units="Btu/Wh"
     ),
     secondary_range=DimensionalData(
-        list(geometric_space(0.5, 1.1, 5, 2.0)), name="Q17/Q47", native_units="Btu/Btu"
+        list(geometric_space(0.5, 1.0, 5, 2.0)), name="Q17/Q47", native_units="Btu/Btu"
     ),
     curve_fit=quadratic_curve_fit,
 )
@@ -274,6 +279,9 @@ variable_speed_heating_regression = deepcopy(single_speed_heating_regression)
 variable_speed_heating_regression.staging_type = resdx.StagingType.VARIABLE_SPEED
 variable_speed_heating_regression.rating_range = DimensionalData(
     list(linspace(7, 16, 5)), name="HSPF2", native_units="Btu/Wh"
+)
+variable_speed_heating_regression.secondary_range = DimensionalData(
+    list(geometric_space(0.5, 1.1, 5, 2.0)), name="Q17/Q47", native_units="Btu/Btu"
 )
 
 two_speed_cooling_regression.evaluate("cooling-two-speed-cop82-v-seer")

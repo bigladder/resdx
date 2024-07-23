@@ -858,3 +858,6 @@ def make_two_speed_model_data(
     P_h.set_interpolator()
 
     return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
+
+def neep_cap47_from_cap95(cap95: float):
+    return cap95*1.022 + fr_u(607.0, "Btu/h")
