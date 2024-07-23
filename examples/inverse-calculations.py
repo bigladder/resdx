@@ -78,7 +78,7 @@ class RatingRegression:
         }
         self.input_data = []
         for secondary_value in self.secondary_range.data_values:
-            series_name = f"{self.secondary_range.name}={secondary_value:.2}"
+            series_name = f"{self.secondary_range.name}={secondary_value:.2f}"
 
             print(f"Evaluating {self.staging_type.name} ({series_name})")
             try:
@@ -180,7 +180,7 @@ def get_inverse_values(
 ):
     inverse_values = []
     for target in target_range.data_values:
-        print(f"    {target_range.name}={target:.2f}")
+        print(f"    {target_range.name}={target:.1f}")
         try:
             inverse_values.append(
                 optimize.newton(
@@ -212,7 +212,7 @@ def seer_function(cop_82_min, seer, staging_type, seer_eer_ratio):
         input_seer=seer,
         input_eer=seer / seer_eer_ratio,
         rated_net_total_cooling_cop_82_min=cop_82_min,
-        input_hspf=7.5,  # TODO: Change to 7.5
+        input_hspf=7.5,
     ).seer()
 
 

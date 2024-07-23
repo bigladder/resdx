@@ -23,9 +23,9 @@ def cop_47_h1_full(
         ratio_range = {{ heating_vs.secondary_range.data_values }}
         input_data = {{ heating_vs.input_data }}
 
-    return RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")(
+    return float(RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")(
         (capacity_maintenance_17, hspf)
-    )
+    ))
 
 
 def cop_82_b_low(
@@ -43,6 +43,6 @@ def cop_82_b_low(
         ratio_range = {{ cooling_vs.secondary_range.data_values }}
         input_data = {{ cooling_vs.input_data }}
 
-    return RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")(
+    return float(RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")(
         (seer_eer_ratio, seer)
-    )
+    ))

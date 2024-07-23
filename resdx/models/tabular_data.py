@@ -290,7 +290,7 @@ def make_neep_statistical_model_data(
     seer2: float,
     eer2: float,
     heating_capacity_47: float,
-    heating_capacity_17: float,
+    heating_capacity_17: Union[float, None],
     hspf2: float,
     max_cooling_temperature: float = fr_u(125, "degF"),
     min_heating_temperature: float = fr_u(-20, "degF"),
@@ -348,8 +348,6 @@ def make_neep_statistical_model_data(
         cooling_cop_82_min = cop_82_b_low(
             StagingType.VARIABLE_SPEED, seer2, seer2 / eer2
         )
-    else:
-        EIRr82min = (Q_c.get(Qmax, t_82) / P_c.get(Qmax, t_82)) / cooling_cop_82_min
 
     EIRr82min = (Q_c.get(Qmax, t_82) / P_c.get(Qmax, t_82)) / cooling_cop_82_min
 
