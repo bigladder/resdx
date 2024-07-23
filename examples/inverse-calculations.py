@@ -163,8 +163,7 @@ class RatingRegression:
             )
             for index, rating_value in enumerate(self.secondary_range.data_values):
                 writer.writerow([rating_value] + self.input_data[index])
-            if write_mode == "a":
-                writer.writerow(["", ""])
+            writer.writerow(["", ""])
 
 
 def make_objective_function(comparison, target):
