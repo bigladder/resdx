@@ -469,10 +469,7 @@ class RESNETDXModel(DXModel):
 
             # At rated pressure
             self.system.rated_cooling_external_static_pressure[cfs] = (
-                self.system.calculate_rated_pressure(
-                    self.system.rated_cooling_airflow[cfs],
-                    fan_design_airflow,
-                )
+                self.system.rated_full_flow_external_static_pressure
             )
             self.system.fan.add_speed(
                 self.system.rated_cooling_airflow[cfs],
@@ -491,7 +488,7 @@ class RESNETDXModel(DXModel):
             self.system.rated_heating_external_static_pressure[hfs] = (
                 self.system.calculate_rated_pressure(
                     self.system.rated_heating_airflow[hfs],
-                    fan_design_airflow,
+                    self.system.rated_cooling_airflow[cfs],
                 )
             )
             self.system.fan.add_speed(
@@ -525,7 +522,7 @@ class RESNETDXModel(DXModel):
                 self.system.rated_cooling_external_static_pressure[i] = (
                     self.system.calculate_rated_pressure(
                         self.system.rated_cooling_airflow[i],
-                        self.system.rated_cooling_airflow[0],
+                        self.system.rated_cooling_airflow[cfs],
                     )
                 )
                 self.system.fan.add_speed(
@@ -557,7 +554,7 @@ class RESNETDXModel(DXModel):
                 self.system.rated_heating_external_static_pressure[i] = (
                     self.system.calculate_rated_pressure(
                         self.system.rated_heating_airflow[i],
-                        self.system.rated_heating_airflow[0],
+                        self.system.rated_cooling_airflow[cfs],
                     )
                 )
                 self.system.fan.add_speed(
@@ -655,7 +652,7 @@ class RESNETDXModel(DXModel):
         self.system.rated_heating_external_static_pressure[1] = (
             self.system.calculate_rated_pressure(
                 self.system.rated_heating_airflow[1],
-                self.system.rated_heating_airflow[0],
+                self.system.rated_cooling_airflow[0],
             )
         )
         self.system.rated_heating_fan_power[1] = self.system.fan.power(

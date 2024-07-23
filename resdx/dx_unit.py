@@ -519,8 +519,8 @@ class DXUnit:
             ] * self.number_of_heating_speeds
 
         full_airflow = (
-            self.rated_net_total_cooling_capacity[0]
-            * rated_cooling_airflow_per_rated_net_capacity[0]
+            self.rated_net_total_cooling_capacity[self.cooling_full_load_speed]
+            * rated_cooling_airflow_per_rated_net_capacity[self.cooling_full_load_speed]
         )
         for i, airflow_per_capacity in enumerate(
             rated_cooling_airflow_per_rated_net_capacity
@@ -541,10 +541,6 @@ class DXUnit:
                 self.B_low_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.F_low_cond.set_new_fan_speed(new_fan_speed, airflow)
 
-        full_airflow = (
-            self.rated_net_heating_capacity[0]
-            * rated_heating_airflow_per_rated_net_capacity[0]
-        )
         for i, airflow_per_capacity in enumerate(
             rated_heating_airflow_per_rated_net_capacity
         ):
@@ -629,18 +625,16 @@ class DXUnit:
         if condition_type == CoolingConditions:
             rated_net_capacity = self.rated_net_total_cooling_capacity[compressor_speed]
             rated_airflow = self.rated_cooling_airflow[compressor_speed]
-            rated_full_airflow = self.rated_cooling_airflow[0]
             rated_fan_speed = self.rated_cooling_fan_speed[compressor_speed]
         else:  # if condition_type == HeatingConditions:
             rated_net_capacity = self.rated_net_heating_capacity[compressor_speed]
             rated_airflow = self.rated_heating_airflow[compressor_speed]
-            rated_full_airflow = self.rated_heating_airflow[0]
             rated_fan_speed = self.rated_heating_fan_speed[compressor_speed]
 
         rated_flow_external_static_pressure = self.calculate_rated_pressure(
-            rated_airflow, rated_full_airflow
+            rated_airflow, self.rated_cooling_airflow[self.cooling_full_load_speed]
         )
-        condition = condition_type(
+        condition: OperatingConditions = condition_type(
             indoor=indoor,
             outdoor=outdoor,
             compressor_speed=compressor_speed,
@@ -665,10 +659,10 @@ class DXUnit:
             # TODO: Add exceptional system types
             return fr_u(0.5, "in_H2O")
 
-    def calculate_rated_pressure(self, rated_airflow, rated_full_airflow):
+    def calculate_rated_pressure(self, rated_airflow, rated_cooling_full_airflow):
         return (
             self.rated_full_flow_external_static_pressure
-            * (rated_airflow / rated_full_airflow) ** 2
+            * (rated_airflow / rated_cooling_full_airflow) ** 2
         )
 
     def set_rating_standard(self, rating_standard):
