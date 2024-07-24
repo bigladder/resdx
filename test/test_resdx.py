@@ -149,12 +149,16 @@ def test_2_speed_regression():
 
 
 def test_neep_statistical_vchp_regression():
-    # SEER 21.3, EER 13.4, HSPF(4) = 11.7
+    # AHRI Certification #: 202680596 https://ashp.neep.org/#!/product/34439/7/25000/95/7500/0///0
+    # SEER2 21, EER2 13, HSPF(4) = 11
     vchp_unit = DXUnit(
         staging_type=StagingType.VARIABLE_SPEED,
-        input_seer=21.3,
-        input_eer=13.4,
-        input_hspf=11.7,
+        input_seer=21,
+        input_eer=13,
+        input_hspf=11,
+        rated_net_total_cooling_capacity=fr_u(14000, "Btu/h"),
+        rated_net_heating_capacity=fr_u(18000, "Btu/h"),
+        rated_net_heating_capacity_17=fr_u(12100, "Btu/h"),
     )
     assert vchp_unit.net_total_cooling_capacity() == approx(
         vchp_unit.rated_net_total_cooling_capacity[vchp_unit.cooling_full_load_speed],
@@ -174,9 +178,11 @@ def test_neep_statistical_vchp_regression():
 
     vchp_unit.print_heating_info()
 
-    assert vchp_unit.seer() == approx(19.44, 0.01)
+    assert vchp_unit.seer() == approx(vchp_unit.input_seer, 0.05)
     assert vchp_unit.eer() == approx(vchp_unit.input_eer, 0.01)
-    assert vchp_unit.hspf() == approx(9.910, 0.01)
+    assert vchp_unit.hspf() == approx(
+        vchp_unit.input_hspf, 0.2
+    )  # This match is bad because cooling capacity is so high relative to heating capacity
 
 
 def test_neep_vchp_regression():

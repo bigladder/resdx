@@ -137,7 +137,7 @@ class RatingRegression:
         self.write_csv(csv_output_data, output_name)
 
     def plot(self, display_data_list, figure_name):
-        plot = DimensionalPlot(self.rating_range)
+        plot = DimensionalPlot(self.rating_range, title=self.staging_type.name)
         for y in display_data_list:
             plot.add_display_data(y, axis_name=self.input_title)
         plot.write_html_plot(f"output/{figure_name}.html")
@@ -244,7 +244,11 @@ variable_speed_cooling_regression.secondary_range = DimensionalData(
 def hspf_function(cop_47, hspf, staging_type, cap17m):
     # Note: results are sensitive to cap95 since it is used to set the building load and external static pressure.
     cap95 = fr_u(3.0, "ton_ref")
-    cap47 = resdx.models.tabular_data.neep_cap47_from_cap95(cap95)
+    cap47 = (
+        cap95
+        if staging_type != resdx.StagingType.VARIABLE_SPEED
+        else resdx.models.tabular_data.neep_cap47_from_cap95(cap95)
+    )
     cap17 = cap47 * cap17m
     return resdx.DXUnit(
         staging_type=staging_type,
