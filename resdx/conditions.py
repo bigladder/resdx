@@ -3,6 +3,20 @@ from koozie import fr_u
 
 
 class OperatingConditions:
+
+    rated_net_capacity: float
+    rated_standard_volumetric_airflow: float
+    rated_volumetric_airflow: float
+    rated_mass_airflow: float
+
+    standard_volumetric_airflow: float
+    volumetric_airflow: float
+    mass_airflow: float
+    mass_airflow_ratio: float
+    standard_volumetric_airflow_per_capacity: float
+
+    external_static_pressure: float
+
     def __init__(
         self,
         outdoor=STANDARD_CONDITIONS,
