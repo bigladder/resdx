@@ -339,10 +339,16 @@ class RESNETDXModel(DXModel):
                 self.set_lower_speed_net_capacities()
 
     def set_c_d_cooling(self, input):
-        self.system.c_d_cooling = self.set_cooling_default(input, 0.15)
+        if self.system.staging_type == StagingType.VARIABLE_SPEED:
+            self.system.c_d_cooling = self.set_cooling_default(input, 0.25)
+        else:
+            self.system.c_d_cooling = self.set_cooling_default(input, 0.08)
 
     def set_c_d_heating(self, input):
-        self.system.c_d_heating = self.set_heating_default(input, 0.15)
+        if self.system.staging_type == StagingType.VARIABLE_SPEED:
+            self.system.c_d_heating = self.set_heating_default(input, 0.25)
+        else:
+            self.system.c_d_heating = self.set_heating_default(input, 0.08)
 
     def set_rated_net_cooling_cop(self, input):
         if self.net_tabular_data is not None:
