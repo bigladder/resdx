@@ -9,9 +9,11 @@ import resdx.rating_solver
 
 seer2 = 14.3
 hspf2 = 7.5
+size_in = resdx.fr_u(7.5, "ton_ref")
+
 
 dx_unit = resdx.rating_solver.make_rating_unit(
-    staging_type=resdx.StagingType.TWO_STAGE, seer=seer2, hspf=hspf2
+    staging_type=resdx.StagingType.TWO_STAGE, seer=seer2, hspf=hspf2, q95=size_in
 )
 
 size = resdx.to_u(dx_unit.rated_net_total_cooling_capacity[0], "ton_ref")
@@ -54,3 +56,11 @@ with open(f"{output_directory_path}/{file_name}-motor.RS0005.json", "w") as file
         file,
         indent=4,
     )
+
+resdx.write_idf(
+    dx_unit,
+    f"{output_directory_path}/{file_name}-dx.RS0004.idf",
+    "Heat Pump ACDXCoil 1",
+    resdx.idf.EnergyPlusSystemType.UNITARY_SYSTEM,
+    autosize=False,
+)
