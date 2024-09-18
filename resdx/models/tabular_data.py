@@ -354,9 +354,7 @@ def make_neep_statistical_model_data(
     if cooling_capacity_ratio is not None:
         Qr95min = cooling_capacity_ratio
     else:
-        Qr95min = bracket(
-            0.510 - 0.119 * (EIRr82min - 1.305) / (-0.324), 0.1, Qr95rated
-        )
+        Qr95min = bracket(0.029 + 0.369 * EIRr82min, 0.1, Qr95rated)
 
     # Back to capacities
     Q_c.set_by_ratio(Qmin, t_95, Qr95min)
@@ -859,5 +857,6 @@ def make_two_speed_model_data(
 
     return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
 
+
 def neep_cap47_from_cap95(cap95: float):
-    return cap95*1.022 + fr_u(607.0, "Btu/h")
+    return cap95 * 1.022 + fr_u(607.0, "Btu/h")

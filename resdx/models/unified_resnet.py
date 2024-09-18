@@ -237,7 +237,7 @@ class RESNETDXModel(DXModel):
                 if self.rated_net_heating_capacity_17 is None:
                     self.rated_net_heating_capacity_17 = (
                         0.689 * rated_net_heating_capacity
-                    ) # Qm17rated from NEEP Statistics
+                    )  # Qm17rated from NEEP Statistics
                 if self.net_tabular_data is None:
                     self.net_tabular_data = make_neep_statistical_model_data(
                         cooling_capacity_95=rated_net_total_cooling_capacity,
