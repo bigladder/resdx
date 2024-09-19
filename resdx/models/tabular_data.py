@@ -7,8 +7,11 @@ from scipy.interpolate import RegularGridInterpolator
 from koozie import fr_u
 
 from ..util import bracket, calc_biquad
+from ..enums import StagingType
 
 from .nrel import NRELDXModel
+
+from .rating_correlations import cop_47_h1_full, cop_82_b_low
 
 
 class TemperatureSpeedPerformanceTable:
@@ -287,7 +290,7 @@ def make_neep_statistical_model_data(
     seer2: float,
     eer2: float,
     heating_capacity_47: float,
-    heating_capacity_17: float,
+    heating_capacity_17: Union[float, None],
     hspf2: float,
     max_cooling_temperature: float = fr_u(125, "degF"),
     min_heating_temperature: float = fr_u(-20, "degF"),
@@ -342,19 +345,16 @@ def make_neep_statistical_model_data(
     P_c.set_by_ratio(Qmax, t_95, Pr95rated)
     P_c.set_by_maintenance(Qmax, t_82, t_95, Pm95max)
     if cooling_cop_82_min is None:
-        EIRr82min = bracket(
-            1.305 - 0.324 * seer2 / eer2, 0.2, 1.0
-        )  # TODO: Replace with new regression
-        cooling_cop_82_min = (Q_c.get(Qmax, t_82) / P_c.get(Qmax, t_82)) / EIRr82min
-    else:
-        EIRr82min = (Q_c.get(Qmax, t_82) / P_c.get(Qmax, t_82)) / cooling_cop_82_min
+        cooling_cop_82_min = cop_82_b_low(
+            StagingType.VARIABLE_SPEED, seer2, seer2 / eer2
+        )
+
+    EIRr82min = (Q_c.get(Qmax, t_82) / P_c.get(Qmax, t_82)) / cooling_cop_82_min
 
     if cooling_capacity_ratio is not None:
         Qr95min = cooling_capacity_ratio
     else:
-        Qr95min = bracket(
-            0.510 - 0.119 * (EIRr82min - 1.305) / (-0.324), 0.1, Qr95rated
-        )
+        Qr95min = bracket(0.029 + 0.369 * EIRr82min, 0.1, Qr95rated)
 
     # Back to capacities
     Q_c.set_by_ratio(Qmin, t_95, Qr95min)
@@ -446,7 +446,7 @@ def make_neep_statistical_model_data(
 
     # Net Power
     if heating_cop_47 is None:
-        heating_cop_47 = 2.837 + 0.066 * hspf2
+        heating_cop_47 = cop_47_h1_full(StagingType.VARIABLE_SPEED, hspf2, Qm17rated)
 
     Pr47rated = Qr47rated * EIRr47rated
     Pr47min = Qr47min * EIRr47min
@@ -688,7 +688,7 @@ def make_single_speed_model_data(
 
     # Net Power
     if heating_cop_47 is None:
-        heating_cop_47 = 2.837 + 0.066 * hspf2  # TODO: Replace with inverse correlation
+        heating_cop_47 = cop_47_h1_full(StagingType.SINGLE_STAGE, hspf2, Qm17rated)
 
     Pm17rated = Qm17rated * EIRm17rated
 
@@ -765,7 +765,9 @@ def make_two_speed_model_data(
     Pm95rated = Qm95rated * EIRm95rated
 
     if cooling_cop_82_min is None:
-        cooling_cop_82_min = seer2 / 2.0  # TODO: Replace with regression
+        cooling_cop_82_min = cop_82_b_low(
+            StagingType.VARIABLE_SPEED, seer2, seer2 / eer2
+        )
 
     # 82 / 95 F
     P_c.set(Qrated, t_95, Q_c.get(Qrated, t_95) / fr_u(eer2, "Btu/Wh"))
@@ -826,7 +828,7 @@ def make_two_speed_model_data(
 
     # Net Power
     if heating_cop_47 is None:
-        heating_cop_47 = 2.837 + 0.066 * hspf2  # TODO: Replace with inverse correlation
+        heating_cop_47 = cop_47_h1_full(StagingType.SINGLE_STAGE, hspf2, Qm17rated)
 
     Pm17rated = Qm17rated * EIRm17rated
     PrHmin = QrHmin * EIRrHmin
@@ -854,3 +856,7 @@ def make_two_speed_model_data(
     P_h.set_interpolator()
 
     return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
+
+
+def neep_cap47_from_cap95(cap95: float):
+    return cap95 * 1.022 + fr_u(607.0, "Btu/h")

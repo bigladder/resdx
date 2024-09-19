@@ -1,12 +1,23 @@
 # %%
 import csv
 from copy import deepcopy
-import numpy as np
+from typing import Dict, List
+from pathlib import Path
+
+from numpy import linspace
 from scipy import optimize
+from jinja2 import Environment, FileSystemLoader
 
 from koozie import fr_u
 
-from dimes import MarkersOnly, LinesOnly, DimensionalPlot, DisplayData, DimensionalData
+from dimes import (
+    LineProperties,
+    MarkersOnly,
+    LinesOnly,
+    DimensionalPlot,
+    DisplayData,
+    DimensionalData,
+)
 
 
 from resdx.util import (
@@ -19,6 +30,7 @@ from resdx.util import (
     # quartic,
     # quartic_string,
     calculate_r_squared,
+    geometric_space,
 )
 
 import resdx
@@ -36,11 +48,14 @@ quadratic_curve_fit = CurveFit(quadratic, quadratic_string, (1, 1, 1))
 
 
 class RatingRegression:
+
+    input_data: List[List[float]]
+
     def __init__(
         self,
         staging_type: resdx.StagingType,
         calculation,
-        target_title: str,
+        input_title: str,
         initial_guess,
         rating_range: DisplayData,
         secondary_range: DisplayData,
@@ -48,16 +63,22 @@ class RatingRegression:
     ):
         self.staging_type = staging_type
         self.calculation = calculation
-        self.target_title = target_title
+        self.input_title = input_title
         self.initial_guess = initial_guess
         self.rating_range = rating_range
         self.secondary_range = secondary_range
         self.curve_fit = curve_fit
 
-    def evaluate(self, output_name):
+    def evaluate(self, output_name, do_curve_fit=False):
         display_data = []
+        csv_output_data = {
+            self.rating_range.name: [],
+            self.secondary_range.name: [],
+            self.input_title: [],
+        }
+        self.input_data = []
         for secondary_value in self.secondary_range.data_values:
-            series_name = f"{self.secondary_range.name}={secondary_value:.2}"
+            series_name = f"{self.secondary_range.name}={secondary_value:.2f}"
 
             print(f"Evaluating {self.staging_type.name} ({series_name})")
             try:
@@ -69,6 +90,7 @@ class RatingRegression:
                     self.initial_guess,
                     curve_fit_function=self.curve_fit.function,
                     curve_fit_guesses=self.curve_fit.initial_coefficient_guesses,
+                    do_curve_fit=do_curve_fit,
                 )
             except RuntimeError as e:
                 raise RuntimeError(
@@ -80,34 +102,68 @@ class RatingRegression:
                     inputs,
                     name=series_name,
                     native_units="W/W",
-                    line_properties=MarkersOnly(),
+                    line_properties=MarkersOnly() if do_curve_fit else LineProperties(),
                 )
             )
-            curve_fit_string = self.curve_fit.regression_string(
-                self.rating_range.name, *coefficients
-            )
-            curve_fit_data = [
-                self.curve_fit.function(rating, *coefficients)
-                for rating in self.rating_range.data_values
-            ]
-            r2 = calculate_r_squared(inputs, curve_fit_data)
-            display_data.append(
-                DisplayData(
-                    curve_fit_data,
-                    name=f"{series_name}: {curve_fit_string}, R2={r2:.4g}",
-                    native_units="W/W",
-                    line_properties=LinesOnly(),
+            if do_curve_fit:
+                curve_fit_string = self.curve_fit.regression_string(
+                    self.rating_range.name, *coefficients
                 )
+                curve_fit_data = [
+                    self.curve_fit.function(rating, *coefficients)
+                    for rating in self.rating_range.data_values
+                ]
+                r2 = calculate_r_squared(inputs, curve_fit_data)
+                display_data.append(
+                    DisplayData(
+                        curve_fit_data,
+                        name=f"{series_name}: {curve_fit_string}, R2={r2:.4g}",
+                        native_units="W/W",
+                        line_properties=LinesOnly(),
+                    )
+                )
+
+            csv_output_data[self.rating_range.name] += list(
+                self.rating_range.data_values
             )
+            csv_output_data[self.secondary_range.name] += [secondary_value] * len(
+                self.rating_range.data_values
+            )
+            csv_output_data[self.input_title] += inputs
+            self.input_data.append(inputs)
 
-        plot(self.rating_range, display_data, self.target_title, output_name)
+        self.plot(display_data, output_name)
 
+        self.write_csv(csv_output_data, output_name)
 
-def plot(x, ys, y_axis_name, figure_name):
-    plot = DimensionalPlot(x)
-    for y in ys:
-        plot.add_display_data(y, axis_name=y_axis_name)
-    plot.write_html_plot(f"output/{figure_name}.html")
+    def plot(self, display_data_list, figure_name):
+        plot = DimensionalPlot(self.rating_range, title=self.staging_type.name)
+        for y in display_data_list:
+            plot.add_display_data(y, axis_name=self.input_title)
+        plot.write_html_plot(f"output/{figure_name}.html")
+
+    def write_csv(self, column_dictionary: Dict[str, List[float]], table_name: str):
+        with open(f"output/{table_name}-points.csv", "w", encoding="utf-8") as csv_file:
+            writer = csv.writer(csv_file)
+            key_list = list(column_dictionary.keys())
+            writer.writerow(key_list)
+            for index in range(len(column_dictionary[key_list[0]])):
+                writer.writerow([column_dictionary[key][index] for key in key_list])
+
+    def write_csv2(self, table_name: str, write_mode: str = "w"):
+        with open(
+            f"output/{table_name}-table.csv", write_mode, encoding="utf-8"
+        ) as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(
+                [f"{self.staging_type.name} {self.input_title}", self.rating_range.name]
+            )
+            writer.writerow(
+                [self.secondary_range.name] + list(self.rating_range.data_values)
+            )
+            for index, rating_value in enumerate(self.secondary_range.data_values):
+                writer.writerow([rating_value] + self.input_data[index])
+            writer.writerow(["", ""])
 
 
 def make_objective_function(comparison, target):
@@ -120,10 +176,11 @@ def get_inverse_values(
     initial_guess=lambda x: x / 3.0,
     curve_fit_function=quadratic,
     curve_fit_guesses=(1, 1, 1),
+    do_curve_fit=False,
 ):
     inverse_values = []
     for target in target_range.data_values:
-        print(f"    {target_range.name}={target:.2f}")
+        print(f"    {target_range.name}={target:.1f}")
         try:
             inverse_values.append(
                 optimize.newton(
@@ -135,10 +192,16 @@ def get_inverse_values(
             raise RuntimeError(
                 f"Unable to find solution for target: {target_range.name}={target}."
             )
-    print(f"    curve fitting...")
-    curve_fit_coefficients = optimize.curve_fit(
-        curve_fit_function, target_range.data_values, inverse_values, curve_fit_guesses
-    )[0]
+    if do_curve_fit:
+        print(f"    curve fitting...")
+        curve_fit_coefficients = optimize.curve_fit(
+            curve_fit_function,
+            target_range.data_values,
+            inverse_values,
+            curve_fit_guesses,
+        )[0]
+    else:
+        curve_fit_coefficients = None
     return inverse_values, curve_fit_coefficients
 
 
@@ -149,57 +212,66 @@ def seer_function(cop_82_min, seer, staging_type, seer_eer_ratio):
         input_seer=seer,
         input_eer=seer / seer_eer_ratio,
         rated_net_total_cooling_cop_82_min=cop_82_min,
-        input_hspf=10.0,
+        input_hspf=7.5,
     ).seer()
 
 
 two_speed_cooling_regression = RatingRegression(
     staging_type=resdx.StagingType.TWO_STAGE,
     calculation=seer_function,
-    target_title="Net COP (at B low conditions)",
+    input_title="Net COP (at B low conditions)",
     initial_guess=lambda target: target / 3.0,
     rating_range=DimensionalData(
-        np.linspace(6, 26.5, 2), name="SEER2", native_units="Btu/Wh"
+        list(linspace(6, 22, 2)), name="SEER2", native_units="Btu/Wh"
     ),  # All straight lines don't need more than two points
     secondary_range=DimensionalData(
-        np.linspace(1.2, 2.0, 10), name="SEER2/EER2", native_units="W/W"
-    ),
+        list(linspace(1.0, 2.4, 2)), name="SEER2/EER2", native_units="W/W"
+    ),  # Also straight line
     curve_fit=linear_curve_fit,
 )
 
 variable_speed_cooling_regression = deepcopy(two_speed_cooling_regression)
 variable_speed_cooling_regression.staging_type = resdx.StagingType.VARIABLE_SPEED
 variable_speed_cooling_regression.rating_range = DimensionalData(
-    np.linspace(14, 35, 3), name="SEER2", native_units="Btu/Wh"
-)
-
-# two_speed_cooling_regression.evaluate("cooling-two-speed-cop82-v-seer")
-# variable_speed_cooling_regression.evaluate("cooling-variable-speed-cop82-v-seer")
+    list(linspace(14, 35, 3)), name="SEER2", native_units="Btu/Wh"
+)  # Slight inflection, three points should suffice
+variable_speed_cooling_regression.secondary_range = DimensionalData(
+    list(geometric_space(1.0, 2.4, 5, 0.5)), name="SEER2/EER2", native_units="W/W"
+)  # Exponential variation 5 values
 
 
 # Heating
 def hspf_function(cop_47, hspf, staging_type, cap17m):
+    # Note: results are sensitive to cap95 since it is used to set the building load and external static pressure.
+    cap95 = fr_u(3.0, "ton_ref")
+    cap47 = (
+        cap95
+        if staging_type != resdx.StagingType.VARIABLE_SPEED
+        else resdx.models.tabular_data.neep_cap47_from_cap95(cap95)
+    )
+    cap17 = cap47 * cap17m
     return resdx.DXUnit(
         staging_type=staging_type,
-        rated_net_heating_capacity=fr_u(3.0, "ton_ref"),
-        rated_net_heating_capacity_17=fr_u(3.0, "ton_ref") * cap17m,
+        rated_net_total_cooling_capacity=cap95,
+        rated_net_heating_capacity=cap47,
+        rated_net_heating_capacity_17=cap17,
         rated_net_heating_cop=cop_47,
         input_hspf=hspf,
-        input_seer=19.0,
-        input_eer=10.0,
+        input_seer=14.3,
+        input_eer=11.0,
     ).hspf()
 
 
 single_speed_heating_regression = RatingRegression(
     staging_type=resdx.StagingType.SINGLE_STAGE,
     calculation=hspf_function,
-    target_title="Net COP (at H1 full conditions)",
+    input_title="Net COP (at H1 full conditions)",
     initial_guess=lambda target: target / 2.0,
     rating_range=DimensionalData(
-        np.linspace(5, 11, 5), name="HSPF2", native_units="Btu/Wh"
+        list(linspace(5, 11, 5)), name="HSPF2", native_units="Btu/Wh"
     ),
     secondary_range=DimensionalData(
-        [0.5, 0.55, 0.6, 0.7, 0.8, 1.1], name="Q17/Q47", native_units="Btu/Btu"
+        list(geometric_space(0.5, 1.0, 5, 2.0)), name="Q17/Q47", native_units="Btu/Btu"
     ),
     curve_fit=quadratic_curve_fit,
 )
@@ -209,10 +281,38 @@ two_speed_heating_regression.staging_type = resdx.StagingType.TWO_STAGE
 
 variable_speed_heating_regression = deepcopy(single_speed_heating_regression)
 variable_speed_heating_regression.staging_type = resdx.StagingType.VARIABLE_SPEED
-variable_speed_cooling_regression.rating_range = DimensionalData(
-    np.linspace(5, 16, 5), name="HSPF2", native_units="Btu/Wh"
+variable_speed_heating_regression.rating_range = DimensionalData(
+    list(linspace(7, 16, 5)), name="HSPF2", native_units="Btu/Wh"
+)
+variable_speed_heating_regression.secondary_range = DimensionalData(
+    list(geometric_space(0.5, 1.1, 5, 2.0)), name="Q17/Q47", native_units="Btu/Btu"
 )
 
+two_speed_cooling_regression.evaluate("cooling-two-speed-cop82-v-seer")
+variable_speed_cooling_regression.evaluate("cooling-variable-speed-cop82-v-seer")
 single_speed_heating_regression.evaluate("heating-single-speed-cop47-v-hspf")
 two_speed_heating_regression.evaluate("heating-two-speed-cop47-v-hspf")
 variable_speed_heating_regression.evaluate("heating-variable-speed-cop47-v-hspf")
+
+two_speed_cooling_regression.write_csv2("regressions")
+variable_speed_cooling_regression.write_csv2("regressions", "a")
+single_speed_heating_regression.write_csv2("regressions", "a")
+two_speed_heating_regression.write_csv2("regressions", "a")
+variable_speed_heating_regression.write_csv2("regressions", "a")
+
+# Write python file
+SOURCE_PATH = Path("resdx", "models")
+FILE_NAME = "rating_correlations.py"
+template_environment = Environment(loader=FileSystemLoader(SOURCE_PATH))
+template = template_environment.get_template(f"{FILE_NAME}.jinja")
+
+content = template.render(
+    heating_1s=single_speed_heating_regression,
+    heating_2s=two_speed_heating_regression,
+    heating_vs=variable_speed_heating_regression,
+    cooling_2s=two_speed_cooling_regression,
+    cooling_vs=variable_speed_cooling_regression,
+)
+
+with open(Path(SOURCE_PATH, FILE_NAME), mode="w", encoding="utf-8") as python_file:
+    python_file.write(content)

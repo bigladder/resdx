@@ -1,0 +1,48 @@
+'''
+This file is generated from a template. To modify, edit the *.py.jinja file.
+'''
+from scipy.interpolate import RegularGridInterpolator
+
+from ..enums import StagingType
+
+
+def cop_47_h1_full(
+    staging_type: StagingType, hspf: float, capacity_maintenance_17: float
+) -> float:
+    if staging_type == StagingType.SINGLE_STAGE:
+        rating_range = {{ heating_1s.rating_range.data_values }}
+        ratio_range = {{ heating_1s.secondary_range.data_values }}
+        input_data = {{ heating_1s.input_data }}
+    elif staging_type == StagingType.TWO_STAGE:
+        rating_range = {{ heating_2s.rating_range.data_values }}
+        ratio_range = {{ heating_2s.secondary_range.data_values }}
+        input_data = {{ heating_2s.input_data }}
+    elif staging_type == StagingType.VARIABLE_SPEED:
+        # Historic NEEP correlation: heating_cop_47 = 2.837 + 0.066 * hspf2
+        rating_range = {{ heating_vs.rating_range.data_values }}
+        ratio_range = {{ heating_vs.secondary_range.data_values }}
+        input_data = {{ heating_vs.input_data }}
+
+    return float(RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")(
+        (capacity_maintenance_17, hspf)
+    ))
+
+
+def cop_82_b_low(
+    staging_type: StagingType, seer: float, seer_eer_ratio: float
+) -> float:
+    if staging_type == StagingType.SINGLE_STAGE:
+        raise RuntimeError("COP 82 B low is not available for single speed equipment.")
+    elif staging_type == StagingType.TWO_STAGE:
+        rating_range = {{ cooling_2s.rating_range.data_values }}
+        ratio_range = {{ cooling_2s.secondary_range.data_values }}
+        input_data = {{ cooling_2s.input_data }}
+    elif staging_type == StagingType.VARIABLE_SPEED:
+        # Historic NEEP correlation: EIRr82min = bracket(1.305 - 0.324 * seer2 / eer2, 0.2, 1.0)
+        rating_range = {{ cooling_vs.rating_range.data_values }}
+        ratio_range = {{ cooling_vs.secondary_range.data_values }}
+        input_data = {{ cooling_vs.input_data }}
+
+    return float(RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")(
+        (seer_eer_ratio, seer)
+    ))

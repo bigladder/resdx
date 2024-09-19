@@ -105,3 +105,17 @@ def calculate_r_squared(source_data, regression_data):
     ss_res = np.sum(residuals**2)
     ss_tot = np.sum((source_data_array - np.mean(source_data_array)) ** 2)
     return 1 - ss_res / ss_tot
+
+
+def geometric_space(start: float, end: float, number: int, coefficient: float = 1.0):
+    distance = end - start
+    if coefficient == 1.0:
+        d0 = distance / (number - 1)
+    else:
+        d0 = distance * (coefficient - 1) / (coefficient ** (number - 1) - 1)
+    values = np.zeros(number)
+    values[0] = start
+    for index in range(len(values) - 1):
+        delta = d0 * (coefficient**index)
+        values[index + 1] = values[index] + delta
+    return values

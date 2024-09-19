@@ -24,7 +24,7 @@ class Defrost:
         resistive_power=0,
         control=DefrostControl.TIMED,
         strategy=DefrostStrategy.REVERSE_CYCLE,
-        high_temperature=fr_u(41, "°F"),
+        high_temperature=fr_u(40, "°F"),
         low_temperature=None,  # Minimum temperature for defrost operation
         period=fr_u(90, "min"),  # Time between defrost terminations (for testing)
         max_time=fr_u(720, "min"),
