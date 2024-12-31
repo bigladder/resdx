@@ -18,7 +18,7 @@ from dimes import (
     DimensionalPlot,
     DisplayData,
     LineProperties,
-    sample_colorscale,
+    get_color_from_scale,
 )
 
 from .psychrometrics import PsychState, psychrolib, STANDARD_CONDITIONS
@@ -1718,7 +1718,7 @@ class DXUnit:
             for speed in range(number_of_speeds):
 
                 color_ratio = (number_of_speeds - speed) / number_of_speeds
-                line_color = sample_colorscale(pallette, color_ratio)[0]
+                line_color = get_color_from_scale(pallette, color_ratio)
                 if display_spec.version != "":
                     version_string = f"{display_spec.version} "
                 else:
@@ -1739,9 +1739,9 @@ class DXUnit:
                         ),
                         is_visible=is_visible,
                         legend_group=group_name,
+                        y_axis_name=display_spec.quantity,
                     ),
                     subplot_number=subplot_number,
-                    axis_name=display_spec.quantity,
                 )
 
         plot.write_html_plot(output_path)

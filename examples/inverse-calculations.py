@@ -120,6 +120,7 @@ class RatingRegression:
                         name=f"{series_name}: {curve_fit_string}, R2={r2:.4g}",
                         native_units="W/W",
                         line_properties=LinesOnly(),
+                        y_axis_name=self.input_title,
                     )
                 )
 
@@ -130,7 +131,7 @@ class RatingRegression:
                 self.rating_range.data_values
             )
             csv_output_data[self.input_title] += inputs
-            self.input_data.append(inputs)
+            self.input_data.append([float(v) for v in inputs])
 
         self.plot(display_data, output_name)
 
@@ -139,7 +140,7 @@ class RatingRegression:
     def plot(self, display_data_list, figure_name):
         plot = DimensionalPlot(self.rating_range, title=self.staging_type.name)
         for y in display_data_list:
-            plot.add_display_data(y, axis_name=self.input_title)
+            plot.add_display_data(y)
         plot.write_html_plot(f"output/{figure_name}.html")
 
     def write_csv(self, column_dictionary: Dict[str, List[float]], table_name: str):
@@ -159,7 +160,8 @@ class RatingRegression:
                 [f"{self.staging_type.name} {self.input_title}", self.rating_range.name]
             )
             writer.writerow(
-                [self.secondary_range.name] + list(self.rating_range.data_values)
+                [self.secondary_range.name]
+                + [float(v) for v in list(self.rating_range.data_values)]
             )
             for index, rating_value in enumerate(self.secondary_range.data_values):
                 writer.writerow([rating_value] + self.input_data[index])
@@ -222,10 +224,14 @@ two_speed_cooling_regression = RatingRegression(
     input_title="Net COP (at B low conditions)",
     initial_guess=lambda target: target / 3.0,
     rating_range=DimensionalData(
-        list(linspace(6, 22, 2)), name="SEER2", native_units="Btu/Wh"
+        [float(v) for v in list(linspace(6, 22, 2))],
+        name="SEER2",
+        native_units="Btu/Wh",
     ),  # All straight lines don't need more than two points
     secondary_range=DimensionalData(
-        list(linspace(1.0, 2.4, 2)), name="SEER2/EER2", native_units="W/W"
+        [float(v) for v in list(linspace(1.0, 2.4, 2))],
+        name="SEER2/EER2",
+        native_units="W/W",
     ),  # Also straight line
     curve_fit=linear_curve_fit,
 )
@@ -233,10 +239,12 @@ two_speed_cooling_regression = RatingRegression(
 variable_speed_cooling_regression = deepcopy(two_speed_cooling_regression)
 variable_speed_cooling_regression.staging_type = resdx.StagingType.VARIABLE_SPEED
 variable_speed_cooling_regression.rating_range = DimensionalData(
-    list(linspace(14, 35, 3)), name="SEER2", native_units="Btu/Wh"
+    [float(v) for v in list(linspace(14, 35, 3))], name="SEER2", native_units="Btu/Wh"
 )  # Slight inflection, three points should suffice
 variable_speed_cooling_regression.secondary_range = DimensionalData(
-    list(geometric_space(1.0, 2.4, 5, 0.5)), name="SEER2/EER2", native_units="W/W"
+    [float(v) for v in list(geometric_space(1.0, 2.4, 5, 0.5))],
+    name="SEER2/EER2",
+    native_units="W/W",
 )  # Exponential variation 5 values
 
 
@@ -268,10 +276,14 @@ single_speed_heating_regression = RatingRegression(
     input_title="Net COP (at H1 full conditions)",
     initial_guess=lambda target: target / 2.0,
     rating_range=DimensionalData(
-        list(linspace(5, 11, 5)), name="HSPF2", native_units="Btu/Wh"
+        [float(v) for v in list(linspace(5, 11, 5))],
+        name="HSPF2",
+        native_units="Btu/Wh",
     ),
     secondary_range=DimensionalData(
-        list(geometric_space(0.5, 1.0, 5, 2.0)), name="Q17/Q47", native_units="Btu/Btu"
+        [float(v) for v in list(geometric_space(0.5, 1.0, 5, 2.0))],
+        name="Q17/Q47",
+        native_units="Btu/Btu",
     ),
     curve_fit=quadratic_curve_fit,
 )
@@ -282,10 +294,12 @@ two_speed_heating_regression.staging_type = resdx.StagingType.TWO_STAGE
 variable_speed_heating_regression = deepcopy(single_speed_heating_regression)
 variable_speed_heating_regression.staging_type = resdx.StagingType.VARIABLE_SPEED
 variable_speed_heating_regression.rating_range = DimensionalData(
-    list(linspace(7, 16, 5)), name="HSPF2", native_units="Btu/Wh"
+    [float(v) for v in list(linspace(7, 16, 5))], name="HSPF2", native_units="Btu/Wh"
 )
 variable_speed_heating_regression.secondary_range = DimensionalData(
-    list(geometric_space(0.5, 1.1, 5, 2.0)), name="Q17/Q47", native_units="Btu/Btu"
+    [float(v) for v in list(geometric_space(0.5, 1.1, 5, 2.0))],
+    name="Q17/Q47",
+    native_units="Btu/Btu",
 )
 
 two_speed_cooling_regression.evaluate("cooling-two-speed-cop82-v-seer")
