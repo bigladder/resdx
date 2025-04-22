@@ -144,7 +144,7 @@ class RatingRegression:
         for y in display_data_list:
             plot.add_display_data(y)
         plot.write_html_plot(f"output/{figure_name}.html")
-        plot.write_image_plot(f"output/{figure_name}.png")
+        # plot.write_image_plot(f"output/{figure_name}.png")
         # plot.write_image_plot(f"output/{figure_name}.pdf")
         # time.sleep(2)
         # plot.write_image_plot(f"output/{figure_name}.pdf")
