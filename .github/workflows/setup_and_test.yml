@@ -20,12 +20,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Python ${{ matrix.python-version }}
-        uses: bigladder/github-actions/setup-python-poetry@main
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Test
-        run: poetry run doit -v2
+      - name: Install the project
+        run: uv sync --all-extras --dev
+      - name: Run doit
+        run: uv run doit
       - name: Upload output
         uses: actions/upload-artifact@v4
         with:
