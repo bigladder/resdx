@@ -107,7 +107,9 @@ def calculate_r_squared(source_data, regression_data):
     return 1 - ss_res / ss_tot
 
 
-def geometric_space(start: float, end: float, number: int, coefficient: float = 1.0):
+def geometric_space(
+    start: float, end: float, number: int, coefficient: float = 1.0
+) -> list[float]:
     distance = end - start
     if coefficient == 1.0:
         d0 = distance / (number - 1)
@@ -118,4 +120,4 @@ def geometric_space(start: float, end: float, number: int, coefficient: float = 
     for index in range(len(values) - 1):
         delta = d0 * (coefficient**index)
         values[index + 1] = values[index] + delta
-    return values
+    return [float(value) for value in values]

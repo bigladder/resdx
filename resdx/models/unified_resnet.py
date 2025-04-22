@@ -105,16 +105,27 @@ class RESNETDXModel(DXModel):
         else:
             return NRELDXModel.gross_steady_state_heating_capacity(self, conditions)
 
-    def gross_integrated_heating_capacity(self, conditions: HeatingConditions):
+    @staticmethod
+    def defrost_fraction(outdoor_drybulb_temperature: float) -> float:
+        return max(
+            min(0.134 - 0.003 * to_u(outdoor_drybulb_temperature, "degF"), 0.08), 0.0
+        )
+
+    @staticmethod
+    def defrost_capacity_multiplier(outdoor_drybulb_temperature: float) -> float:
+        return 1.0 - 1.8 * RESNETDXModel.defrost_fraction(outdoor_drybulb_temperature)
+
+    @staticmethod
+    def defrost_power_multiplier(outdoor_drybulb_temperature: float) -> float:
+        return 1.0 - 0.3 * RESNETDXModel.defrost_fraction(outdoor_drybulb_temperature)
+
+    def gross_integrated_heating_capacity(self, conditions: HeatingConditions) -> float:
         if self.system.defrost.in_defrost(conditions):
-            fdef = max(
-                min(0.134 - 0.003 * to_u(conditions.outdoor.db, "degF"), 0.08), 0.0
-            )
-            return self.system.gross_steady_state_heating_capacity(conditions) * (
-                1.0 - 1.8 * fdef
-            )
-        else:
-            return self.system.gross_steady_state_heating_capacity(conditions)
+            return self.system.gross_steady_state_heating_capacity(
+                conditions
+            ) * self.defrost_capacity_multiplier(conditions.outdoor.db)
+
+        return self.system.gross_steady_state_heating_capacity(conditions)
 
     def gross_steady_state_heating_power(self, conditions):
         if self.net_tabular_data is not None:
@@ -127,13 +138,10 @@ class RESNETDXModel(DXModel):
         else:
             return NRELDXModel.gross_steady_state_heating_power(self, conditions)
 
-    def gross_integrated_heating_power(self, conditions):
+    def gross_integrated_heating_power(self, conditions: HeatingConditions) -> float:
         if self.system.defrost.in_defrost(conditions):
-            fdef = max(
-                min(0.134 - 0.003 * to_u(conditions.outdoor.db, "degF"), 0.08), 0.0
-            )
-            return self.gross_steady_state_heating_power(conditions) * (
-                1.0 - 0.3 * fdef
+            return self.system.gross_steady_state_heating_power(conditions) * (
+                self.defrost_power_multiplier(conditions.outdoor.db)
             )
         else:
             return self.gross_steady_state_heating_power(conditions)
@@ -192,8 +200,6 @@ class RESNETDXModel(DXModel):
                             heating_capacity_47=rated_net_heating_capacity,
                             heating_capacity_17=self.rated_net_heating_capacity_17,
                             hspf2=self.system.input_hspf,
-                            max_cooling_temperature=self.system.cooling_off_temperature,
-                            min_heating_temperature=self.system.heating_off_temperature,
                             heating_cop_47=self.system.input_rated_net_heating_cop,
                             cycling_degradation_coefficient=self.system.c_d_cooling,
                         )
@@ -213,8 +219,6 @@ class RESNETDXModel(DXModel):
                             heating_capacity_47=rated_net_heating_capacity,
                             heating_capacity_17=self.rated_net_heating_capacity_17,
                             hspf2=self.system.input_hspf,
-                            max_cooling_temperature=self.system.cooling_off_temperature,
-                            min_heating_temperature=self.system.heating_off_temperature,
                             cooling_cop_82_min=self.rated_net_total_cooling_cop_82_min,
                             heating_cop_47=self.system.input_rated_net_heating_cop,
                         )
@@ -246,7 +250,6 @@ class RESNETDXModel(DXModel):
                         heating_capacity_47=rated_net_heating_capacity,
                         heating_capacity_17=self.rated_net_heating_capacity_17,
                         hspf2=self.system.input_hspf,
-                        max_cooling_temperature=self.system.cooling_off_temperature,
                         min_heating_temperature=self.system.heating_off_temperature,
                         cooling_capacity_ratio=self.min_net_total_cooling_capacity_ratio_95,
                         cooling_cop_82_min=self.rated_net_total_cooling_cop_82_min,
@@ -266,7 +269,7 @@ class RESNETDXModel(DXModel):
                 self.tabular_cooling_speed_map = self.tabular_heating_speed_map = {
                     0: 3.0,
                     1: 2.0,
-                    2: 1.5,
+                    2: 1.5,  # 1.3333,
                     3: 1.0,
                 }
 

@@ -3,6 +3,7 @@ import csv
 from copy import deepcopy
 from typing import Dict, List
 from pathlib import Path
+import time
 
 from numpy import linspace
 from scipy import optimize
@@ -78,14 +79,14 @@ class RatingRegression:
         }
         self.input_data = []
         for secondary_value in self.secondary_range.data_values:
-            series_name = f"{self.secondary_range.name}={secondary_value:.2f}"
+            series_name = f"${self.secondary_range.name}={secondary_value:.2f}$"
 
             print(f"Evaluating {self.staging_type.name} ({series_name})")
             try:
                 inputs, coefficients = get_inverse_values(
                     self.rating_range,
                     lambda x, target: self.calculation(
-                        x, target, self.staging_type, secondary_value
+                        float(x), target, self.staging_type, secondary_value
                     ),
                     self.initial_guess,
                     curve_fit_function=self.curve_fit.function,
@@ -103,6 +104,7 @@ class RatingRegression:
                     name=series_name,
                     native_units="W/W",
                     line_properties=MarkersOnly() if do_curve_fit else LineProperties(),
+                    y_axis_name=self.input_title,
                 )
             )
             if do_curve_fit:
@@ -138,10 +140,14 @@ class RatingRegression:
         self.write_csv(csv_output_data, output_name)
 
     def plot(self, display_data_list, figure_name):
-        plot = DimensionalPlot(self.rating_range, title=self.staging_type.name)
+        plot = DimensionalPlot(self.rating_range)  # , title=self.staging_type.name)
         for y in display_data_list:
             plot.add_display_data(y)
         plot.write_html_plot(f"output/{figure_name}.html")
+        plot.write_image_plot(f"output/{figure_name}.png")
+        plot.write_image_plot(f"output/{figure_name}.pdf")
+        time.sleep(2)
+        plot.write_image_plot(f"output/{figure_name}.pdf")
 
     def write_csv(self, column_dictionary: Dict[str, List[float]], table_name: str):
         with open(f"output/{table_name}-points.csv", "w", encoding="utf-8") as csv_file:
@@ -208,24 +214,26 @@ def get_inverse_values(
 
 
 # Cooling
-def seer_function(cop_82_min, seer, staging_type, seer_eer_ratio):
-    return resdx.DXUnit(
+def seer_function(cop_82_min, target_seer, staging_type, seer_eer_ratio):
+    eer = target_seer / seer_eer_ratio
+    seer = resdx.DXUnit(
         staging_type=staging_type,
-        input_seer=seer,
-        input_eer=seer / seer_eer_ratio,
+        input_seer=target_seer,
+        input_eer=eer,
         rated_net_total_cooling_cop_82_min=cop_82_min,
         input_hspf=7.5,
     ).seer()
+    return seer
 
 
 two_speed_cooling_regression = RatingRegression(
     staging_type=resdx.StagingType.TWO_STAGE,
     calculation=seer_function,
-    input_title="Net COP (at B low conditions)",
+    input_title="$COP_{82°F,low}$",
     initial_guess=lambda target: target / 3.0,
     rating_range=DimensionalData(
         [float(v) for v in list(linspace(6, 22, 2))],
-        name="SEER2",
+        name="$SEER2$",
         native_units="Btu/Wh",
     ),  # All straight lines don't need more than two points
     secondary_range=DimensionalData(
@@ -239,7 +247,7 @@ two_speed_cooling_regression = RatingRegression(
 variable_speed_cooling_regression = deepcopy(two_speed_cooling_regression)
 variable_speed_cooling_regression.staging_type = resdx.StagingType.VARIABLE_SPEED
 variable_speed_cooling_regression.rating_range = DimensionalData(
-    [float(v) for v in list(linspace(14, 35, 3))], name="SEER2", native_units="Btu/Wh"
+    [float(v) for v in list(linspace(14, 35, 3))], name="$SEER2$", native_units="Btu/Wh"
 )  # Slight inflection, three points should suffice
 variable_speed_cooling_regression.secondary_range = DimensionalData(
     [float(v) for v in list(geometric_space(1.0, 2.4, 5, 0.5))],
@@ -273,16 +281,16 @@ def hspf_function(cop_47, hspf, staging_type, cap17m):
 single_speed_heating_regression = RatingRegression(
     staging_type=resdx.StagingType.SINGLE_STAGE,
     calculation=hspf_function,
-    input_title="Net COP (at H1 full conditions)",
+    input_title="$COP_{47°F,full}$",
     initial_guess=lambda target: target / 2.0,
     rating_range=DimensionalData(
         [float(v) for v in list(linspace(5, 11, 5))],
-        name="HSPF2",
+        name="$HSPF2$",
         native_units="Btu/Wh",
     ),
     secondary_range=DimensionalData(
         [float(v) for v in list(geometric_space(0.5, 1.0, 5, 2.0))],
-        name="Q17/Q47",
+        name="Q_{17°F,full}/Q_{47°F,full}",
         native_units="Btu/Btu",
     ),
     curve_fit=quadratic_curve_fit,
@@ -294,19 +302,19 @@ two_speed_heating_regression.staging_type = resdx.StagingType.TWO_STAGE
 variable_speed_heating_regression = deepcopy(single_speed_heating_regression)
 variable_speed_heating_regression.staging_type = resdx.StagingType.VARIABLE_SPEED
 variable_speed_heating_regression.rating_range = DimensionalData(
-    [float(v) for v in list(linspace(7, 16, 5))], name="HSPF2", native_units="Btu/Wh"
+    [float(v) for v in list(linspace(7, 16, 5))], name="$HSPF2$", native_units="Btu/Wh"
 )
 variable_speed_heating_regression.secondary_range = DimensionalData(
     [float(v) for v in list(geometric_space(0.5, 1.1, 5, 2.0))],
-    name="Q17/Q47",
+    name="Q_{17°F,full}/Q_{47°F,full}",
     native_units="Btu/Btu",
 )
 
-two_speed_cooling_regression.evaluate("cooling-two-speed-cop82-v-seer")
-variable_speed_cooling_regression.evaluate("cooling-variable-speed-cop82-v-seer")
-single_speed_heating_regression.evaluate("heating-single-speed-cop47-v-hspf")
-two_speed_heating_regression.evaluate("heating-two-speed-cop47-v-hspf")
-variable_speed_heating_regression.evaluate("heating-variable-speed-cop47-v-hspf")
+two_speed_cooling_regression.evaluate("seer-two")
+variable_speed_cooling_regression.evaluate("seer-variable")
+single_speed_heating_regression.evaluate("hspf-one")
+two_speed_heating_regression.evaluate("hspf-two")
+variable_speed_heating_regression.evaluate("hspf-variable")
 
 two_speed_cooling_regression.write_csv2("regressions")
 variable_speed_cooling_regression.write_csv2("regressions", "a")
