@@ -214,9 +214,6 @@ def get_inverse_values(
 
 
 # Cooling
-print("Cooling...")
-
-
 def seer_function(cop_82_min, target_seer, staging_type, seer_eer_ratio):
     eer = target_seer / seer_eer_ratio
     seer = resdx.DXUnit(
@@ -260,9 +257,6 @@ variable_speed_cooling_regression.secondary_range = DimensionalData(
 
 
 # Heating
-print("Heating...")
-
-
 def hspf_function(cop_47, hspf, staging_type, cap17m):
     # Note: results are sensitive to cap95 since it is used to set the building load and external static pressure.
     cap95 = fr_u(3.0, "ton_ref")
