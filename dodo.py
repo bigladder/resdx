@@ -10,6 +10,7 @@ def task_test():
     return {
         "actions": ["pytest -v test"],
         "clean": True,
+        "verbosity": 2,
     }
 
 
@@ -20,4 +21,5 @@ def task_examples():
             "name": file_path.name,
             "actions": [f"python {file_path}"],
             "clean": True,
+            "verbosity": 2,
         }

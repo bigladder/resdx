@@ -144,10 +144,10 @@ class RatingRegression:
         for y in display_data_list:
             plot.add_display_data(y)
         plot.write_html_plot(f"output/{figure_name}.html")
-        plot.write_image_plot(f"output/{figure_name}.png")
-        plot.write_image_plot(f"output/{figure_name}.pdf")
-        time.sleep(2)
-        plot.write_image_plot(f"output/{figure_name}.pdf")
+        # plot.write_image_plot(f"output/{figure_name}.png")
+        # plot.write_image_plot(f"output/{figure_name}.pdf")
+        # time.sleep(2)
+        # plot.write_image_plot(f"output/{figure_name}.pdf")
 
     def write_csv(self, column_dictionary: Dict[str, List[float]], table_name: str):
         with open(f"output/{table_name}-points.csv", "w", encoding="utf-8") as csv_file:

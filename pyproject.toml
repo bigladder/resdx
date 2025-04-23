@@ -1,24 +1,33 @@
-[tool.poetry]
+[project]
 name = "resdx"
 version = "0.1.0"
 description = ""
-authors = ["Big Ladder Software"]
+authors = [{ name = "Big Ladder Software" }]
+requires-python = "~=3.10"
+dependencies = [
+    "koozie>=1.2.2",
+    "PsychroLib>=2.5.0",
+    "scipy>=1.6.3",
+    "dimes",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-koozie = ">=1.2.2"
-PsychroLib = ">=2.5.0"
-scipy = ">=1.6.3"
-dimes = { git = "https://github.com/bigladder/dimes.git", branch = "main" } # { git = "https://github.com/bigladder/dimes.git", branch = ""} { path = "../dimes/", develop = true }
+[dependency-groups]
+dev = [
+    "pytest>=7.1.3",
+    "doit",
+    "jinja2",
+]
+extras = ["ipykernel>=6.29.4"]
 
-[tool.poetry.group.dev.dependencies]
-pytest = ">=7.1.3"
-doit = "*"
-jinja2 = "*"
+[tool.uv]
+default-groups = [
+    "dev",
+    "extras",
+]
 
-[tool.poetry.group.extras.dependencies]
-ipykernel = ">=6.29.4"
+[tool.uv.sources]
+dimes = { git = "https://github.com/bigladder/dimes.git", branch = "main" }
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
