@@ -29,10 +29,7 @@ def test_psc_fan():
     assert psc_fan.airflow(1) == approx(fr_u(1061.045, "cfm"), 0.01)
 
     psc_fan.add_speed(psc_fan.design_airflow[0], fr_u(0.15, "in_H2O"))
-    assert (
-        psc_fan.airflow(psc_fan.number_of_speeds - 1, fr_u(0.15, "in_H2O"))
-        == psc_fan.design_airflow[0]
-    )
+    assert psc_fan.airflow(psc_fan.number_of_speeds - 1, fr_u(0.15, "in_H2O")) == psc_fan.design_airflow[0]
 
 
 def test_ecm_fan():
@@ -40,10 +37,7 @@ def test_ecm_fan():
 
     """Based on Fan #1 in Proctor measurements"""
     ecm_fan = resdx.ECMFlowFan(
-        design_airflow=[
-            fr_u(v, "cfm")
-            for v in [2405.0, 2200.0, 1987.0, 1760.0, 1537.0, 1310.0, 1169.0, 1099.0]
-        ],
+        design_airflow=[fr_u(v, "cfm") for v in [2405.0, 2200.0, 1987.0, 1760.0, 1537.0, 1310.0, 1169.0, 1099.0]],
         design_external_static_pressure=design_external_static_pressure,
         design_efficacy=fr_u(0.3665, "W/cfm"),
         maximum_power=fr_u(1000, "W"),
@@ -53,9 +47,7 @@ def test_ecm_fan():
     assert ecm_fan.airflow(0, fr_u(0.0, "in_H2O")) == fr_u(2405.0, "cfm")
 
     # Design conditions
-    assert ecm_fan.rotational_speed(0, design_external_static_pressure) == fr_u(
-        1100.0, "rpm"
-    )
+    assert ecm_fan.rotational_speed(0, design_external_static_pressure) == fr_u(1100.0, "rpm")
 
     # Power limit
     assert ecm_fan.power(0, fr_u(0.8, "in_H2O")) == fr_u(1000.0, "W")
@@ -90,30 +82,23 @@ def test_eere_fans():
 
 
 def test_resnet_fans():
-
     airflows = [fr_u(v * 100 + 1, "cfm") for v in reversed(range(11))]
 
     psc_fan = resdx.RESNETPSCFan(airflows)
     assert psc_fan.efficacy(0) == psc_fan.design_efficacy
-    assert psc_fan.efficacy(10) / psc_fan.efficacy(0) == approx(
-        1.0 - psc_fan.EFFICACY_SLOPE, 0.01
-    )
+    assert psc_fan.efficacy(10) / psc_fan.efficacy(0) == approx(1.0 - psc_fan.EFFICACY_SLOPE, 0.01)
 
     bpm_fan = resdx.RESNETBPMFan(airflows)
 
     # Ducted fan
-    assert bpm_fan.efficacy(0, fr_u(0.5, "in_H2O")) == approx(
-        bpm_fan.DUCTED_DESIGN_EFFICACY, 1e-5
-    )
+    assert bpm_fan.efficacy(0, fr_u(0.5, "in_H2O")) == approx(bpm_fan.DUCTED_DESIGN_EFFICACY, 1e-5)
 
     # Ductless fan
     assert bpm_fan.efficacy(0, 0.0) == approx(bpm_fan.DUCTLESS_DESIGN_EFFICACY, 1e-5)
 
     # Ductless BPM efficacy ratio <= Ducted BPM efficacy <= PSC efficacy
     for speed in range(11):
-        ductless_bpm_efficacy_ratio = bpm_fan.efficacy(speed, 0.0) / bpm_fan.efficacy(
-            0, 0.0
-        )
+        ductless_bpm_efficacy_ratio = bpm_fan.efficacy(speed, 0.0) / bpm_fan.efficacy(0, 0.0)
         ducted_bpm_efficacy_ratio = bpm_fan.efficacy(speed) / bpm_fan.efficacy(0)
         psc_efficacy_ratio = psc_fan.efficacy(speed) / psc_fan.efficacy(0)
         assert ductless_bpm_efficacy_ratio <= ducted_bpm_efficacy_ratio

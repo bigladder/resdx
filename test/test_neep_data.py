@@ -6,7 +6,6 @@ from resdx import make_neep_statistical_model_data
 
 
 def test_make_neep_statistical_model_data():
-
     size = fr_u(5.0, "ton_ref")
     eer2 = 11.0
     neep_model = make_neep_statistical_model_data(

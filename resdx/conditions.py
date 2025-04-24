@@ -3,7 +3,6 @@ from koozie import fr_u
 
 
 class OperatingConditions:
-
     rated_net_capacity: float
     rated_standard_volumetric_airflow: float
     rated_volumetric_airflow: float
@@ -32,15 +31,11 @@ class OperatingConditions:
         self.rated_flow_external_static_pressure = rated_flow_external_static_pressure
         self.fan_speed = fan_speed
 
-    def set_rated_volumetric_airflow(
-        self, rated_volumetric_airflow, rated_net_capacity
-    ):
+    def set_rated_volumetric_airflow(self, rated_volumetric_airflow, rated_net_capacity):
         self.rated_net_capacity = rated_net_capacity
         self.rated_standard_volumetric_airflow = rated_volumetric_airflow
         self.rated_volumetric_airflow = (
-            self.rated_standard_volumetric_airflow
-            * STANDARD_CONDITIONS.rho
-            / self.indoor.rho
+            self.rated_standard_volumetric_airflow * STANDARD_CONDITIONS.rho / self.indoor.rho
         )
         self.rated_mass_airflow = self.rated_volumetric_airflow * self.indoor.rho
         self.rated_airflow_set = True
@@ -52,65 +47,43 @@ class OperatingConditions:
         self.standard_volumetric_airflow = self.mass_airflow / STANDARD_CONDITIONS.rho
         if self.rated_airflow_set:
             self.mass_airflow_ratio = self.mass_airflow / self.rated_mass_airflow
-            self.standard_volumetric_airflow_per_capacity = (
-                self.standard_volumetric_airflow / self.rated_net_capacity
-            )
+            self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow / self.rated_net_capacity
             if self.rated_flow_external_static_pressure is not None:
                 self.external_static_pressure = (
-                    self.rated_flow_external_static_pressure
-                    * (self.mass_airflow_ratio) ** 2.0
+                    self.rated_flow_external_static_pressure * (self.mass_airflow_ratio) ** 2.0
                 )
 
     def set_standard_volumetric_airflow(self, volumetric_airflow):
         self.standard_volumetric_airflow = volumetric_airflow
-        self.volumetric_airflow = (
-            self.standard_volumetric_airflow * STANDARD_CONDITIONS.rho / self.indoor.rho
-        )
+        self.volumetric_airflow = self.standard_volumetric_airflow * STANDARD_CONDITIONS.rho / self.indoor.rho
         self.mass_airflow = self.volumetric_airflow * self.indoor.rho
         if self.rated_airflow_set:
             self.mass_airflow_ratio = self.mass_airflow / self.rated_mass_airflow
-            self.standard_volumetric_airflow_per_capacity = (
-                self.standard_volumetric_airflow / self.rated_net_capacity
-            )
+            self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow / self.rated_net_capacity
             if self.rated_flow_external_static_pressure is not None:
                 self.external_static_pressure = (
-                    self.rated_flow_external_static_pressure
-                    * (self.mass_airflow_ratio) ** 2.0
+                    self.rated_flow_external_static_pressure * (self.mass_airflow_ratio) ** 2.0
                 )
 
     def set_mass_airflow(self, mass_airflow):
         self.mass_airflow = mass_airflow
         if self.rated_flow_external_static_pressure is not None:
-            self.external_static_pressure = (
-                self.rated_flow_external_static_pressure
-                * (self.mass_airflow_ratio) ** 2.0
-            )
+            self.external_static_pressure = self.rated_flow_external_static_pressure * (self.mass_airflow_ratio) ** 2.0
         if self.rated_airflow_set:
             self.mass_airflow_ratio = self.rated_mass_airflow / self.mass_airflow
             self.volumetric_airflow = self.mass_airflow / self.indoor.rho
-            self.standard_volumetric_airflow = (
-                self.mass_airflow / STANDARD_CONDITIONS.rho
-            )
-            self.standard_volumetric_airflow_per_capacity = (
-                self.standard_volumetric_airflow / self.rated_net_capacity
-            )
+            self.standard_volumetric_airflow = self.mass_airflow / STANDARD_CONDITIONS.rho
+            self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow / self.rated_net_capacity
 
     def set_mass_airflow_ratio(self, mass_airflow_ratio):
         self.mass_airflow_ratio = mass_airflow_ratio
         if self.rated_flow_external_static_pressure is not None:
-            self.external_static_pressure = (
-                self.rated_flow_external_static_pressure
-                * (self.mass_airflow_ratio) ** 2.0
-            )
+            self.external_static_pressure = self.rated_flow_external_static_pressure * (self.mass_airflow_ratio) ** 2.0
         if self.rated_airflow_set:
             self.mass_airflow = self.mass_airflow_ratio * self.rated_mass_airflow
             self.volumetric_airflow = self.mass_airflow / self.indoor.rho
-            self.standard_volumetric_airflow = (
-                self.mass_airflow / STANDARD_CONDITIONS.rho
-            )
-            self.standard_volumetric_airflow_per_capacity = (
-                self.standard_volumetric_airflow / self.rated_net_capacity
-            )
+            self.standard_volumetric_airflow = self.mass_airflow / STANDARD_CONDITIONS.rho
+            self.standard_volumetric_airflow_per_capacity = self.standard_volumetric_airflow / self.rated_net_capacity
 
     def set_new_fan_speed(self, fan_speed, airflow):
         self.fan_speed = fan_speed

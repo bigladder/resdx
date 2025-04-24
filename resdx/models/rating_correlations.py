@@ -6,9 +6,7 @@ from scipy.interpolate import RegularGridInterpolator
 from ..enums import StagingType
 
 
-def cop_47_h1_full(
-    staging_type: StagingType, hspf: float, capacity_maintenance_17: float
-) -> float:
+def cop_47_h1_full(staging_type: StagingType, hspf: float, capacity_maintenance_17: float) -> float:
     if staging_type == StagingType.SINGLE_STAGE:
         rating_range = [5.0, 6.5, 8.0, 9.5, 11.0]
         ratio_range = [0.5, 0.5333333333333333, 0.6, 0.7333333333333333, 1.0]
@@ -28,9 +26,7 @@ def cop_47_h1_full(
     ))
 
 
-def cop_82_b_low(
-    staging_type: StagingType, seer: float, seer_eer_ratio: float
-) -> float:
+def cop_82_b_low(staging_type: StagingType, seer: float, seer_eer_ratio: float) -> float:
     if staging_type == StagingType.SINGLE_STAGE:
         raise RuntimeError("COP 82 B low is not available for single speed equipment.")
     elif staging_type == StagingType.TWO_STAGE:
@@ -43,6 +39,4 @@ def cop_82_b_low(
         ratio_range = [1.0, 1.7466666666666666, 2.12, 2.3066666666666666, 2.4]
         input_data = [[4.047240765768898, 7.061466285336162, 10.057968980927825], [6.174580645705325, 10.288519440812733, 14.052861468542359], [14.24024173044029, 23.261833752330144, 30.96218837002951], [19.50808827608118, 31.84246180796491, 42.38831468300697], [23.028778414477685, 37.51287887399246, 49.86316799389439]]
 
-    return float(RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")(
-        (seer_eer_ratio, seer)
-    ))
+    return float(RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")((seer_eer_ratio, seer)))

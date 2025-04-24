@@ -29,23 +29,16 @@ class FanMotorType(Enum):
 
 
 class RESNETDXModel(DXUnit):
-
     def __init__(
         self,
         staging_type: StagingType | None = None,  # Allow default based on inputs
         rated_net_total_cooling_capacity: float = fr_u(3.0, "ton_ref"),
-        input_seer: (
-            float | None
-        ) = None,  # SEER value input (may not match calculated SEER of the model)
-        input_eer: (
-            float | None
-        ) = None,  # EER value input (may not match calculated EER of the model)
+        input_seer: (float | None) = None,  # SEER value input (may not match calculated SEER of the model)
+        input_eer: (float | None) = None,  # EER value input (may not match calculated EER of the model)
         rated_net_heating_capacity: float | None = None,
         rated_net_heating_capacity_17: float | None = None,
         heating_off_temperature: float | None = None,
-        input_hspf: (
-            float | None
-        ) = None,  # HSPF value input (may not match calculated HSPF of the model)
+        input_hspf: (float | None) = None,  # HSPF value input (may not match calculated HSPF of the model)
         rated_net_heating_cop: float | None = None,
         rated_net_cooling_cop: float | None = None,
         rated_net_total_cooling_cop_82_min: float | None = None,
@@ -59,15 +52,9 @@ class RESNETDXModel(DXUnit):
         self.net_tabular_data: Union[TemperatureSpeedPerformance, None] = tabular_data
         self.gross_tabular_data: Union[TemperatureSpeedPerformance, None] = None
         self.motor_type: Union[FanMotorType, None] = motor_type
-        self.rated_net_heating_capacity_17: Union[float, None] = (
-            rated_net_heating_capacity_17
-        )
-        self.min_net_total_cooling_capacity_ratio_95: Union[float, None] = (
-            min_net_total_cooling_capacity_ratio_95
-        )
-        self.rated_net_total_cooling_cop_82_min: Union[float, None] = (
-            rated_net_total_cooling_cop_82_min
-        )
+        self.rated_net_heating_capacity_17: Union[float, None] = rated_net_heating_capacity_17
+        self.min_net_total_cooling_capacity_ratio_95: Union[float, None] = min_net_total_cooling_capacity_ratio_95
+        self.rated_net_total_cooling_cop_82_min: Union[float, None] = rated_net_total_cooling_cop_82_min
 
         self.tabular_cooling_speed_map: Dict[int, float]
         self.tabular_heating_speed_map: Dict[int, float]
@@ -94,9 +81,7 @@ class RESNETDXModel(DXUnit):
             return self.gross_tabular_data.cooling_power(
                 self.tabular_cooling_speed_map[conditions.compressor_speed],
                 conditions.outdoor.db,
-            ) * self.get_cooling_correction_factor(
-                conditions, NRELDXModel.full_charge_gross_cooling_power
-            )
+            ) * self.get_cooling_correction_factor(conditions, NRELDXModel.full_charge_gross_cooling_power)
         else:
             return NRELDXModel.full_charge_gross_cooling_power(self, conditions)
 
@@ -105,13 +90,9 @@ class RESNETDXModel(DXUnit):
             return self.gross_tabular_data.cooling_capacity(
                 self.tabular_cooling_speed_map[conditions.compressor_speed],
                 conditions.outdoor.db,
-            ) * self.get_cooling_correction_factor(
-                conditions, NRELDXModel.full_charge_gross_total_cooling_capacity
-            )
+            ) * self.get_cooling_correction_factor(conditions, NRELDXModel.full_charge_gross_total_cooling_capacity)
         else:
-            return NRELDXModel.full_charge_gross_total_cooling_capacity(
-                self, conditions
-            )
+            return NRELDXModel.full_charge_gross_total_cooling_capacity(self, conditions)
 
     def full_charge_gross_sensible_cooling_capacity(self, conditions):
         return NRELDXModel.full_charge_gross_sensible_cooling_capacity(self, conditions)
@@ -128,15 +109,11 @@ class RESNETDXModel(DXUnit):
                 conditions, NRELDXModel.full_charge_gross_steady_state_heating_capacity
             )
         else:
-            return NRELDXModel.full_charge_gross_steady_state_heating_capacity(
-                self, conditions
-            )
+            return NRELDXModel.full_charge_gross_steady_state_heating_capacity(self, conditions)
 
     @staticmethod
     def defrost_fraction(outdoor_drybulb_temperature: float) -> float:
-        return max(
-            min(0.134 - 0.003 * to_u(outdoor_drybulb_temperature, "degF"), 0.08), 0.0
-        )
+        return max(min(0.134 - 0.003 * to_u(outdoor_drybulb_temperature, "degF"), 0.08), 0.0)
 
     @staticmethod
     def defrost_capacity_multiplier(outdoor_drybulb_temperature: float) -> float:
@@ -146,13 +123,11 @@ class RESNETDXModel(DXUnit):
     def defrost_power_multiplier(outdoor_drybulb_temperature: float) -> float:
         return 1.0 - 0.3 * RESNETDXModel.defrost_fraction(outdoor_drybulb_temperature)
 
-    def full_charge_gross_integrated_heating_capacity(
-        self, conditions: HeatingConditions
-    ) -> float:
+    def full_charge_gross_integrated_heating_capacity(self, conditions: HeatingConditions) -> float:
         if self.defrost.in_defrost(conditions):
-            return self.gross_steady_state_heating_capacity(
-                conditions
-            ) * self.defrost_capacity_multiplier(conditions.outdoor.db)
+            return self.gross_steady_state_heating_capacity(conditions) * self.defrost_capacity_multiplier(
+                conditions.outdoor.db
+            )
 
         return self.gross_steady_state_heating_capacity(conditions)
 
@@ -161,15 +136,11 @@ class RESNETDXModel(DXUnit):
             return self.gross_tabular_data.heating_power(
                 self.tabular_heating_speed_map[conditions.compressor_speed],
                 conditions.outdoor.db,
-            ) * self.get_heating_correction_factor(
-                conditions, NRELDXModel.gross_steady_state_heating_power
-            )
+            ) * self.get_heating_correction_factor(conditions, NRELDXModel.gross_steady_state_heating_power)
         else:
             return NRELDXModel.gross_steady_state_heating_power(self, conditions)
 
-    def full_charge_gross_integrated_heating_power(
-        self, conditions: HeatingConditions
-    ) -> float:
+    def full_charge_gross_integrated_heating_power(self, conditions: HeatingConditions) -> float:
         if self.defrost.in_defrost(conditions):
             return self.gross_steady_state_heating_power(conditions) * (
                 self.defrost_power_multiplier(conditions.outdoor.db)
@@ -184,38 +155,25 @@ class RESNETDXModel(DXUnit):
         return NRELDXModel.gross_total_cooling_capacity_charge_factor(self, conditions)
 
     def gross_steady_state_heating_capacity_charge_factor(self, conditions):
-        return NRELDXModel.gross_steady_state_heating_capacity_charge_factor(
-            self, conditions
-        )
+        return NRELDXModel.gross_steady_state_heating_capacity_charge_factor(self, conditions)
 
     def gross_steady_state_heating_power_charge_factor(self, conditions):
-        return NRELDXModel.gross_steady_state_heating_power_charge_factor(
-            self, conditions
-        )
+        return NRELDXModel.gross_steady_state_heating_power_charge_factor(self, conditions)
 
-    def set_net_capacities_and_fan(
-        self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan
-    ):
+    def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
         if self.net_tabular_data is not None:
-            self.staging_type = StagingType(
-                min(self.net_tabular_data.number_of_cooling_speeds, 3)
-            )
+            self.staging_type = StagingType(min(self.net_tabular_data.number_of_cooling_speeds, 3))
             self.number_of_cooling_speeds = self.number_of_heating_speeds = (
-                self.staging_type.value
-                if self.staging_type != StagingType.VARIABLE_SPEED
-                else 4
+                self.staging_type.value if self.staging_type != StagingType.VARIABLE_SPEED else 4
             )
             self.set_placeholder_arrays()
 
         if not isinstance(rated_net_heating_capacity, list):
             if self.staging_type != StagingType.VARIABLE_SPEED:
-                self.rated_net_total_cooling_capacity = make_list(
-                    rated_net_total_cooling_capacity
-                )
+                self.rated_net_total_cooling_capacity = make_list(rated_net_total_cooling_capacity)
                 rated_net_heating_capacity = set_default(
                     rated_net_heating_capacity,
-                    self.rated_net_total_cooling_capacity[0] * 0.98
-                    + fr_u(180.0, "Btu/h"),
+                    self.rated_net_total_cooling_capacity[0] * 0.98 + fr_u(180.0, "Btu/h"),
                     number_of_speeds=self.number_of_heating_speeds,
                 )  # From Title24
                 self.rated_net_heating_capacity = make_list(rated_net_heating_capacity)
@@ -303,27 +261,19 @@ class RESNETDXModel(DXUnit):
                 }
 
             self.inverse_tabular_cooling_speed_map = {
-                v: k
-                for k, v in self.tabular_cooling_speed_map.items()
-                if v.is_integer()
+                v: k for k, v in self.tabular_cooling_speed_map.items() if v.is_integer()
             }
             self.inverse_tabular_heating_speed_map = {
-                v: k
-                for k, v in self.tabular_heating_speed_map.items()
-                if v.is_integer()
+                v: k for k, v in self.tabular_heating_speed_map.items() if v.is_integer()
             }
 
             self.rated_net_total_cooling_capacity = [
-                self.net_tabular_data.cooling_capacity(
-                    self.tabular_cooling_speed_map[i]
-                )
+                self.net_tabular_data.cooling_capacity(self.tabular_cooling_speed_map[i])
                 for i in range(len(self.tabular_cooling_speed_map))
             ]
 
             self.rated_net_heating_capacity = [
-                self.net_tabular_data.heating_capacity(
-                    self.tabular_heating_speed_map[i]
-                )
+                self.net_tabular_data.heating_capacity(self.tabular_heating_speed_map[i])
                 for i in range(len(self.tabular_heating_speed_map))
             ]
         else:
@@ -349,15 +299,11 @@ class RESNETDXModel(DXUnit):
 
             for i, speed in self.tabular_cooling_speed_map.items():
                 self.rated_net_cooling_cop[i] = self.net_tabular_data.cooling_cop(speed)
-                self.rated_gross_cooling_cop[i] = self.gross_tabular_data.cooling_cop(
-                    speed
-                )
+                self.rated_gross_cooling_cop[i] = self.gross_tabular_data.cooling_cop(speed)
 
             for i, speed in self.tabular_heating_speed_map.items():
                 self.rated_net_heating_cop[i] = self.net_tabular_data.heating_cop(speed)
-                self.rated_gross_heating_cop[i] = self.gross_tabular_data.heating_cop(
-                    speed
-                )
+                self.rated_gross_heating_cop[i] = self.gross_tabular_data.heating_cop(speed)
 
         # setup lower speed net capacities if they aren't provided
         if self.staging_type == StagingType.TWO_STAGE:
@@ -402,9 +348,7 @@ class RESNETDXModel(DXUnit):
 
     def set_fan(self, fan):
         # Setup fan
-        self.rated_full_flow_external_static_pressure = (
-            self.get_rated_full_flow_rated_pressure()
-        )
+        self.rated_full_flow_external_static_pressure = self.get_rated_full_flow_rated_pressure()
 
         # Rated flow rates per net capacity
         self.rated_cooling_airflow_per_rated_net_capacity = set_default(
@@ -421,19 +365,11 @@ class RESNETDXModel(DXUnit):
         if fan is not None:
             self.fan = fan
             for i in range(self.number_of_cooling_speeds):
-                self.rated_cooling_airflow[i] = self.fan.airflow(
-                    self.rated_cooling_fan_speed[i]
-                )
-                self.rated_cooling_fan_power[i] = self.fan.power(
-                    self.rated_cooling_fan_speed[i]
-                )
+                self.rated_cooling_airflow[i] = self.fan.airflow(self.rated_cooling_fan_speed[i])
+                self.rated_cooling_fan_power[i] = self.fan.power(self.rated_cooling_fan_speed[i])
             for i in range(self.number_of_heating_speeds):
-                self.rated_heating_airflow[i] = self.fan.airflow(
-                    self.rated_heating_fan_speed[i]
-                )
-                self.rated_heating_fan_power[i] = self.fan.power(
-                    self.rated_heating_fan_speed[i]
-                )
+                self.rated_heating_airflow[i] = self.fan.airflow(self.rated_heating_fan_speed[i])
+                self.rated_heating_fan_power[i] = self.fan.power(self.rated_heating_fan_speed[i])
         else:
             self.cooling_fan_speed = [None] * self.number_of_cooling_speeds
             self.heating_fan_speed = [None] * self.number_of_heating_speeds
@@ -444,12 +380,10 @@ class RESNETDXModel(DXUnit):
             hfs = self.heating_full_load_speed
 
             self.rated_cooling_airflow[cfs] = (
-                self.rated_net_total_cooling_capacity[cfs]
-                * self.rated_cooling_airflow_per_rated_net_capacity[cfs]
+                self.rated_net_total_cooling_capacity[cfs] * self.rated_cooling_airflow_per_rated_net_capacity[cfs]
             )
             self.rated_heating_airflow[hfs] = (
-                self.rated_net_heating_capacity[hfs]
-                * self.rated_heating_airflow_per_rated_net_capacity[hfs]
+                self.rated_net_heating_capacity[hfs] * self.rated_heating_airflow_per_rated_net_capacity[hfs]
             )
 
             if self.rated_cooling_airflow[cfs] >= self.rated_heating_airflow[hfs]:
@@ -480,14 +414,10 @@ class RESNETDXModel(DXUnit):
                 self.cooling_fan_speed[cfs] = self.fan.number_of_speeds - 1
 
             # At rated pressure
-            self.rated_cooling_external_static_pressure[cfs] = (
-                self.rated_full_flow_external_static_pressure
-            )
+            self.rated_cooling_external_static_pressure[cfs] = self.rated_full_flow_external_static_pressure
             self.fan.add_speed(
                 self.rated_cooling_airflow[cfs],
-                external_static_pressure=self.rated_cooling_external_static_pressure[
-                    cfs
-                ],
+                external_static_pressure=self.rated_cooling_external_static_pressure[cfs],
             )
             self.rated_cooling_fan_speed[cfs] = self.fan.number_of_speeds - 1
             self.rated_cooling_fan_power[cfs] = self.fan.power(
@@ -495,17 +425,13 @@ class RESNETDXModel(DXUnit):
                 self.rated_cooling_external_static_pressure[cfs],
             )
 
-            self.rated_heating_external_static_pressure[hfs] = (
-                self.calculate_rated_pressure(
-                    self.rated_heating_airflow[hfs],
-                    self.rated_cooling_airflow[cfs],
-                )
+            self.rated_heating_external_static_pressure[hfs] = self.calculate_rated_pressure(
+                self.rated_heating_airflow[hfs],
+                self.rated_cooling_airflow[cfs],
             )
             self.fan.add_speed(
                 self.rated_heating_airflow[hfs],
-                external_static_pressure=self.rated_heating_external_static_pressure[
-                    hfs
-                ],
+                external_static_pressure=self.rated_heating_external_static_pressure[hfs],
             )
             self.rated_heating_fan_speed[hfs] = self.fan.number_of_speeds - 1
             self.rated_heating_fan_power[hfs] = self.fan.power(
@@ -517,24 +443,18 @@ class RESNETDXModel(DXUnit):
             for i, net_capacity in enumerate(self.rated_net_total_cooling_capacity):
                 if i == cfs:
                     continue
-                self.rated_cooling_airflow[i] = (
-                    net_capacity * self.rated_cooling_airflow_per_rated_net_capacity[i]
-                )
+                self.rated_cooling_airflow[i] = net_capacity * self.rated_cooling_airflow_per_rated_net_capacity[i]
                 self.fan.add_speed(self.rated_cooling_airflow[i])
                 self.cooling_fan_speed[i] = self.fan.number_of_speeds - 1
 
                 # At rated pressure
-                self.rated_cooling_external_static_pressure[i] = (
-                    self.calculate_rated_pressure(
-                        self.rated_cooling_airflow[i],
-                        self.rated_cooling_airflow[cfs],
-                    )
+                self.rated_cooling_external_static_pressure[i] = self.calculate_rated_pressure(
+                    self.rated_cooling_airflow[i],
+                    self.rated_cooling_airflow[cfs],
                 )
                 self.fan.add_speed(
                     self.rated_cooling_airflow[i],
-                    external_static_pressure=self.rated_cooling_external_static_pressure[
-                        i
-                    ],
+                    external_static_pressure=self.rated_cooling_external_static_pressure[i],
                 )
                 self.rated_cooling_fan_speed[i] = self.fan.number_of_speeds - 1
                 self.rated_cooling_fan_power[i] = self.fan.power(
@@ -547,24 +467,19 @@ class RESNETDXModel(DXUnit):
                 if i == hfs:
                     continue
                 self.rated_heating_airflow[i] = (
-                    self.rated_net_heating_capacity[i]
-                    * self.rated_heating_airflow_per_rated_net_capacity[i]
+                    self.rated_net_heating_capacity[i] * self.rated_heating_airflow_per_rated_net_capacity[i]
                 )
                 self.fan.add_speed(self.rated_heating_airflow[i])
                 self.heating_fan_speed[i] = self.fan.number_of_speeds - 1
 
                 # At rated pressure
-                self.rated_heating_external_static_pressure[i] = (
-                    self.calculate_rated_pressure(
-                        self.rated_heating_airflow[i],
-                        self.rated_cooling_airflow[cfs],
-                    )
+                self.rated_heating_external_static_pressure[i] = self.calculate_rated_pressure(
+                    self.rated_heating_airflow[i],
+                    self.rated_cooling_airflow[cfs],
                 )
                 self.fan.add_speed(
                     self.rated_heating_airflow[i],
-                    external_static_pressure=self.rated_heating_external_static_pressure[
-                        i
-                    ],
+                    external_static_pressure=self.rated_heating_external_static_pressure[i],
                 )
                 self.rated_heating_fan_speed[i] = self.fan.number_of_speeds - 1
                 self.rated_heating_fan_power[i] = self.fan.power(
@@ -582,14 +497,10 @@ class RESNETDXModel(DXUnit):
         self.rated_gross_total_cooling_capacity[0] = (
             self.rated_net_total_cooling_capacity[0] + self.rated_cooling_fan_power[0]
         )
-        self.rated_gross_total_cooling_capacity[1] = (
-            self.rated_gross_total_cooling_capacity[0] * cooling_capacity_ratio
-        )
+        self.rated_gross_total_cooling_capacity[1] = self.rated_gross_total_cooling_capacity[0] * cooling_capacity_ratio
 
         # Solve for rated flow rate
-        guess_airflow = (
-            self.fan.design_airflow[self.cooling_fan_speed[0]] * cooling_capacity_ratio
-        )
+        guess_airflow = self.fan.design_airflow[self.cooling_fan_speed[0]] * cooling_capacity_ratio
         self.rated_cooling_airflow[1] = self.fan.find_rated_fan_speed(
             self.rated_gross_total_cooling_capacity[1],
             self.rated_heating_airflow_per_rated_net_capacity[1],
@@ -620,17 +531,11 @@ class RESNETDXModel(DXUnit):
             self.rated_heating_fan_speed[0],
             self.rated_heating_external_static_pressure[0],
         )
-        self.rated_gross_heating_capacity[0] = (
-            self.rated_net_heating_capacity[0] - self.rated_heating_fan_power[0]
-        )
-        self.rated_gross_heating_capacity[1] = (
-            self.rated_gross_heating_capacity[0] * heating_capacity_ratio
-        )
+        self.rated_gross_heating_capacity[0] = self.rated_net_heating_capacity[0] - self.rated_heating_fan_power[0]
+        self.rated_gross_heating_capacity[1] = self.rated_gross_heating_capacity[0] * heating_capacity_ratio
 
         # Solve for rated flow rate
-        guess_airflow = (
-            self.fan.design_airflow[self.heating_fan_speed[0]] * heating_capacity_ratio
-        )
+        guess_airflow = self.fan.design_airflow[self.heating_fan_speed[0]] * heating_capacity_ratio
         self.rated_heating_airflow[1] = self.fan.find_rated_fan_speed(
             self.rated_gross_heating_capacity[1],
             self.rated_heating_airflow_per_rated_net_capacity[1],
@@ -651,9 +556,7 @@ class RESNETDXModel(DXUnit):
             self.rated_heating_fan_speed[1],
             self.rated_heating_external_static_pressure[1],
         )
-        self.rated_net_heating_capacity.append(
-            self.rated_gross_heating_capacity[1] + self.rated_heating_fan_power[1]
-        )
+        self.rated_net_heating_capacity.append(self.rated_gross_heating_capacity[1] + self.rated_heating_fan_power[1])
 
     def get_cooling_correction_factor(self, conditions: CoolingConditions, function):
         rated_conditions = self.make_condition(

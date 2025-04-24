@@ -19,15 +19,15 @@ class CarrierDefrostModel(DXUnit):
     defrost_fractions = [0.075, 0.085, 0.11, 0.09]
 
     def full_charge_gross_integrated_heating_capacity(self, conditions):
-        if self.system.defrost.in_defrost(conditions):
-            return self.system.gross_steady_state_heating_capacity(conditions) * (
+        if self.defrost.in_defrost(conditions):
+            return self.full_charge_gross_steady_state_heating_capacity(conditions) * (
                 1 - CarrierDefrostModel.fdef(conditions)
             )
         else:
-            return self.system.gross_steady_state_heating_capacity(conditions)
+            return self.full_charge_gross_steady_state_heating_capacity(conditions)
 
     def full_charge_gross_integrated_heating_power(self, conditions):
-        return self.system.gross_steady_state_heating_power(conditions)
+        return self.full_charge_gross_steady_state_heating_power(conditions)
 
     @staticmethod
     def fdef(conditions):

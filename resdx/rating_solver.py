@@ -21,7 +21,6 @@ def make_rating_unit(
     t_defrost: float = fr_u(40.0, "degF"),
     rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
 ) -> RESNETDXModel:
-
     q47_: float
     if q47 is None:
         q47_ = q95

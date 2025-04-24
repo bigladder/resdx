@@ -10,12 +10,9 @@ from ..dx_unit import DXUnit
 
 
 class Title24DXModel(DXUnit):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.input_cooling_efficiency_multiplier = kwargs.get(
-            "input_cooling_efficiency_multiplier", 1.0
-        )
+        self.input_cooling_efficiency_multiplier = kwargs.get("input_cooling_efficiency_multiplier", 1.0)
 
     @staticmethod
     def CA_regression(coeffs, T_ewb, T_odb, T_edb, V_standard_per_rated_cap):
@@ -38,9 +35,7 @@ class Title24DXModel(DXUnit):
         T_iwb = to_u(conditions.indoor.wb, "°F")  # Cutler curves use °F
         T_odb = to_u(conditions.outdoor.db, "°F")  # Title 24 curves use °F
         T_idb = to_u(conditions.indoor.db, "°F")  # Title 24 curves use °F
-        CFM_per_ton = to_u(
-            conditions.standard_volumetric_airflow_per_capacity, "cfm/ton_ref"
-        )
+        CFM_per_ton = to_u(conditions.standard_volumetric_airflow_per_capacity, "cfm/ton_ref")
         coeffs = [
             0.0242020,
             -0.0592153,
@@ -84,9 +79,7 @@ class Title24DXModel(DXUnit):
         T_iwb = to_u(conditions.indoor.wb, "°F")  # Title 24 curves use °F
         T_odb = to_u(conditions.outdoor.db, "°F")  # Title 24 curves use °F
         T_idb = to_u(conditions.indoor.db, "°F")  # Title 24 curves use °F
-        CFM_per_ton = to_u(
-            conditions.standard_volumetric_airflow_per_capacity, "cfm/ton_ref"
-        )
+        CFM_per_ton = to_u(conditions.standard_volumetric_airflow_per_capacity, "cfm/ton_ref")
         if shr < 1:
             coeffs = [
                 0,
@@ -123,18 +116,14 @@ class Title24DXModel(DXUnit):
         )
 
     def full_charge_gross_sensible_cooling_capacity(self, conditions):
-        return self.gross_shr(conditions) * self.gross_total_cooling_capacity(
-            conditions
-        )
+        return self.gross_shr(conditions) * self.gross_total_cooling_capacity(conditions)
 
     def full_charge_gross_cooling_power(self, conditions):
         shr = self.gross_shr(conditions)
         T_iwb = to_u(conditions.indoor.wb, "°F")  # Title 24 curves use °F
         T_odb = to_u(conditions.outdoor.db, "°F")  # Title 24 curves use °F
         T_idb = to_u(conditions.indoor.db, "°F")  # Title 24 curves use °F
-        CFM_per_ton = to_u(
-            conditions.standard_volumetric_airflow_per_capacity, "cfm/ton_ref"
-        )
+        CFM_per_ton = to_u(conditions.standard_volumetric_airflow_per_capacity, "cfm/ton_ref")
         cap95 = self.rated_net_total_cooling_capacity[conditions.compressor_speed]
         q_fan = self.rated_cooling_fan_power[conditions.compressor_speed]
         if T_odb < 95.0:
@@ -199,12 +188,8 @@ class Title24DXModel(DXUnit):
                 ]
             f_cond_seer = Title24DXModel.CA_regression(
                 cap_coeffs, T_iwb, T_odb, T_idb, CFM_per_ton
-            ) / Title24DXModel.CA_regression(
-                seer_coeffs, T_iwb, T_odb, T_idb, CFM_per_ton
-            )
-            seer_nf = (
-                f_cond_seer * (1.09 * cap95 + q_fan) / (1.09 * cap95 / seer - q_fan)
-            )  # unitless
+            ) / Title24DXModel.CA_regression(seer_coeffs, T_iwb, T_odb, T_idb, CFM_per_ton)
+            seer_nf = f_cond_seer * (1.09 * cap95 + q_fan) / (1.09 * cap95 / seer - q_fan)  # unitless
         else:
             seer_nf = 0.0
         if T_odb > 82.0:
@@ -239,12 +224,8 @@ class Title24DXModel(DXUnit):
                     0,
                     -0.475306500,
                 ]
-            cap_nf = self.rated_gross_total_cooling_capacity[
-                conditions.compressor_speed
-            ]
-            f_cond_eer = Title24DXModel.CA_regression(
-                eer_coeffs, T_iwb, T_odb, T_idb, CFM_per_ton
-            )
+            cap_nf = self.rated_gross_total_cooling_capacity[conditions.compressor_speed]
+            f_cond_eer = Title24DXModel.CA_regression(eer_coeffs, T_iwb, T_odb, T_idb, CFM_per_ton)
             eer_nf = cap_nf / (f_cond_eer * (cap95 / eer - q_fan / 3.413))
         else:
             eer_nf = 0.0
@@ -286,15 +267,13 @@ class Title24DXModel(DXUnit):
             # If not already in the model data then...
             if "cap17" in self.kwargs:
                 # Read from model kwargs (if provided)
-                self.model_data["cap17"][conditions.compressor_speed] = self.kwargs[
-                    "cap17"
-                ][conditions.compressor_speed]
+                self.model_data["cap17"][conditions.compressor_speed] = self.kwargs["cap17"][
+                    conditions.compressor_speed
+                ]
             else:
                 # or use the Title 24 default calculation
                 cap47 = self.rated_net_heating_capacity[conditions.compressor_speed]
-                self.model_data["cap17"][conditions.compressor_speed] = (
-                    self.cap17_ratio_rated(self.input_hspf) * cap47
-                )
+                self.model_data["cap17"][conditions.compressor_speed] = self.cap17_ratio_rated(self.input_hspf) * cap47
             return self.model_data["cap17"][conditions.compressor_speed]
 
     def get_cap35(self, conditions):
@@ -305,9 +284,9 @@ class Title24DXModel(DXUnit):
             return self.model_data["cap35"][conditions.compressor_speed]
         else:
             if "cap35" in self.kwargs:
-                self.model_data["cap35"][conditions.compressor_speed] = self.kwargs[
-                    "cap35"
-                ][conditions.compressor_speed]
+                self.model_data["cap35"][conditions.compressor_speed] = self.kwargs["cap35"][
+                    conditions.compressor_speed
+                ]
             else:
                 cap47 = self.rated_net_heating_capacity[conditions.compressor_speed]
                 cap17 = self.get_cap17(conditions)
@@ -322,11 +301,7 @@ class Title24DXModel(DXUnit):
         cap47 = self.rated_net_heating_capacity[conditions.compressor_speed]
         cap17 = self.get_cap17(conditions)
         slope = (cap47 - cap17) / (47.0 - 17.0)
-        return (
-            cap17
-            + slope * (T_odb - 17.0)
-            - self.rated_heating_fan_power[conditions.compressor_speed]
-        )
+        return cap17 + slope * (T_odb - 17.0) - self.rated_heating_fan_power[conditions.compressor_speed]
 
     def full_charge_gross_integrated_heating_capacity(self, conditions):
         T_odb = to_u(conditions.outdoor.db, "°F")  # Title 24 curves use °F
@@ -337,11 +312,7 @@ class Title24DXModel(DXUnit):
             slope = (cap35 - cap17) / (35.0 - 17.0)
         else:
             slope = (cap47 - cap17) / (47.0 - 17.0)
-        return (
-            cap17
-            + slope * (T_odb - 17.0)
-            - self.rated_heating_fan_power[conditions.compressor_speed]
-        )
+        return cap17 + slope * (T_odb - 17.0) - self.rated_heating_fan_power[conditions.compressor_speed]
 
     @staticmethod
     def rated_net_heating_cop(hspf):
@@ -433,10 +404,7 @@ class Title24DXModel(DXUnit):
             else:
                 sigma_t = 1.0
 
-            inp_tot += (
-                x_t * inp * sigma_t / PLF * frac_hours[i]
-                + (bL - (x_t * cap * sigma_t)) * frac_hours[i]
-            )
+            inp_tot += x_t * inp * sigma_t / PLF * frac_hours[i] + (bL - (x_t * cap * sigma_t)) * frac_hours[i]
             out_tot += bL * frac_hours[i]
 
         return to_u(out_tot / inp_tot, "Btu/Wh")
@@ -458,9 +426,7 @@ class Title24DXModel(DXUnit):
 
         root_fn = lambda cop17: self.check_hspf(conditions, cop17) - self.input_hspf
         cop17_guess = 3.0  # 0.2186*hspf + 0.6734
-        self.model_data["cop17"][conditions.compressor_speed] = optimize.newton(
-            root_fn, cop17_guess
-        )
+        self.model_data["cop17"][conditions.compressor_speed] = optimize.newton(root_fn, cop17_guess)
 
     def get_cop35(self, conditions):
         if "cop35" not in self.model_data:
@@ -486,11 +452,7 @@ class Title24DXModel(DXUnit):
         inp17 = cap17 / cop17
 
         slope = (inp47 - inp17) / (47.0 - 17.0)
-        return (
-            inp17
-            + slope * (T_odb - 17.0)
-            - self.rated_heating_fan_power[conditions.compressor_speed]
-        )
+        return inp17 + slope * (T_odb - 17.0) - self.rated_heating_fan_power[conditions.compressor_speed]
 
     def full_charge_gross_integrated_heating_power(self, conditions):
         T_odb = to_u(conditions.outdoor.db, "°F")  # Title 24 curves use °F
@@ -510,11 +472,7 @@ class Title24DXModel(DXUnit):
             slope = (inp35 - inp17) / (35.0 - 17.0)
         else:
             slope = (inp47 - inp17) / (47.0 - 17.0)
-        return (
-            inp17
-            + slope * (T_odb - 17.0)
-            - self.rated_heating_fan_power[conditions.compressor_speed]
-        )
+        return inp17 + slope * (T_odb - 17.0) - self.rated_heating_fan_power[conditions.compressor_speed]
 
     # TODO: Default assumptions
     def set_rated_fan_characteristics(self, fan):
@@ -545,45 +503,31 @@ class Title24DXModel(DXUnit):
                 self.heating_fan_speed = []
                 self.rated_heating_fan_speed = []
 
-            rated_fan_efficacy = Title24DXModel.fan_efficacy_rated(
-                fr_u(350.0, "cfm/ton_ref")
-            )
+            rated_fan_efficacy = Title24DXModel.fan_efficacy_rated(fr_u(350.0, "cfm/ton_ref"))
             for i, cap in enumerate(self.rated_net_total_cooling_capacity):
-                self.rated_cooling_airflow[i] = (
-                    cap * self.rated_cooling_airflow_per_rated_net_capacity[i]
-                )
+                self.rated_cooling_airflow[i] = cap * self.rated_cooling_airflow_per_rated_net_capacity[i]
                 airflows.append(self.rated_cooling_airflow[i])
                 efficacies.append(rated_fan_efficacy)
-                self.rated_cooling_fan_power[i] = (
-                    self.rated_cooling_airflow[i] * rated_fan_efficacy
-                )
+                self.rated_cooling_fan_power[i] = self.rated_cooling_airflow[i] * rated_fan_efficacy
                 if set_cooling_fan_speed:
                     self.cooling_fan_speed.append(fan_speed)
                     self.rated_cooling_fan_speed.append(fan_speed)
                     fan_speed += 1
 
             for i, cap in enumerate(self.rated_net_total_cooling_capacity):
-                self.rated_heating_airflow[i] = (
-                    cap * self.rated_heating_airflow_per_rated_net_capacity[i]
-                )
+                self.rated_heating_airflow[i] = cap * self.rated_heating_airflow_per_rated_net_capacity[i]
                 airflows.append(self.rated_heating_airflow[i])
                 efficacies.append(rated_fan_efficacy)
-                self.rated_heating_fan_power[i] = (
-                    self.rated_heating_airflow[i] * rated_fan_efficacy
-                )
+                self.rated_heating_fan_power[i] = self.rated_heating_airflow[i] * rated_fan_efficacy
                 if set_heating_fan_speed:
                     self.heating_fan_speed.append(fan_speed)
                     self.rated_heating_fan_speed.append(fan_speed)
                     fan_speed += 1
 
-            fan = ConstantEfficacyFan(
-                airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies
-            )
+            fan = ConstantEfficacyFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies)
             self.fan = fan
 
-    def set_net_capacities_and_fan(
-        self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan
-    ):
+    def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
         self.set_rated_fan_characteristics(fan)
         self.set_rated_net_total_cooling_capacity(rated_net_total_cooling_capacity)
         self.set_rated_net_heating_capacity(rated_net_heating_capacity)

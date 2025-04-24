@@ -49,9 +49,7 @@ heating_powers = [
 
 
 dx_units[name] = RESNETDXModel(
-    tabular_data=make_neep_model_data(
-        cooling_capacities, cooling_powers, heating_capacities, heating_powers
-    ),
+    tabular_data=make_neep_model_data(cooling_capacities, cooling_powers, heating_capacities, heating_powers),
     input_seer=seer2,
     input_eer=eer2,
     input_hspf=hspf2,
@@ -99,9 +97,7 @@ heating_powers = [
 ]
 
 dx_units[name] = RESNETDXModel(
-    tabular_data=make_neep_model_data(
-        cooling_capacities, cooling_powers, heating_capacities, heating_powers
-    ),
+    tabular_data=make_neep_model_data(cooling_capacities, cooling_powers, heating_capacities, heating_powers),
     input_seer=seer2,
     input_eer=eer2,
     input_hspf=hspf2,
@@ -149,9 +145,7 @@ heating_powers = [
 ]
 
 dx_units[name] = RESNETDXModel(
-    tabular_data=make_neep_model_data(
-        cooling_capacities, cooling_powers, heating_capacities, heating_powers
-    ),
+    tabular_data=make_neep_model_data(cooling_capacities, cooling_powers, heating_capacities, heating_powers),
     input_seer=seer2,
     input_eer=eer2,
     input_hspf=hspf2,
@@ -199,9 +193,7 @@ heating_powers = [
 ]
 
 dx_units[name] = RESNETDXModel(
-    tabular_data=make_neep_model_data(
-        cooling_capacities, cooling_powers, heating_capacities, heating_powers
-    ),
+    tabular_data=make_neep_model_data(cooling_capacities, cooling_powers, heating_capacities, heating_powers),
     input_seer=seer2,
     input_eer=eer2,
     input_hspf=hspf2,

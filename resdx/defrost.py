@@ -41,18 +41,13 @@ class Defrost:
 
         # Check inputs
         if self.strategy == DefrostStrategy.RESISTIVE and self.resistive_power <= 0:
-            sys.exit(
-                f"Defrost strategy=RESISTIVE, but resistive_power is not greater than zero."
-            )
+            sys.exit(f"Defrost strategy=RESISTIVE, but resistive_power is not greater than zero.")
 
     def in_defrost(self, conditions):
         if self.strategy == DefrostStrategy.NONE:
             return False
         if self.low_temperature is not None:
-            if (
-                conditions.outdoor.db > self.low_temperature
-                and conditions.outdoor.db < self.high_temperature
-            ):
+            if conditions.outdoor.db > self.low_temperature and conditions.outdoor.db < self.high_temperature:
                 return True
         else:
             if conditions.outdoor.db < self.high_temperature:
@@ -65,7 +60,5 @@ class Defrost:
             t_test = max(self.period, fr_u(90, "min"))
             t_max = min(self.max_time, fr_u(720.0, "min"))
 
-            return 1.0 + 0.03 * (
-                1 - (t_test - fr_u(90.0, "min")) / (t_max - fr_u(90.0, "min"))
-            )  # eq. 11.129
+            return 1.0 + 0.03 * (1 - (t_test - fr_u(90.0, "min")) / (t_max - fr_u(90.0, "min")))  # eq. 11.129
         return 1.0  # eq. 11.130

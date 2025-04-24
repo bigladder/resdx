@@ -25,14 +25,14 @@ ignore = [
     "F405", # undefined-local-with-import-star-usage
 ]
 
-# [tool.mypy]
-# disallow_incomplete_defs = true
-# no_implicit_optional = true
-# check_untyped_defs = true
+[tool.mypy]
+disallow_incomplete_defs = true
+no_implicit_optional = true
+check_untyped_defs = true
 
-# [[tool.mypy.overrides]]
-# module = "resdx.*"
-# disable_error_code = ["annotation-unchecked", "import"]
+[[tool.mypy.overrides]]
+module = "resdx.*"
+disable_error_code = ["annotation-unchecked", "import"]
 
 
 [build-system]

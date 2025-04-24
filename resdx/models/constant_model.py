@@ -29,9 +29,7 @@ class ConstantDXModel(DXUnit):
         return self.gross_steady_state_heating_power(conditions)
 
     def full_charge_gross_sensible_cooling_capacity(self, conditions):
-        return self.gross_total_cooling_capacity(conditions) * self.gross_shr(
-            conditions
-        )
+        return self.gross_total_cooling_capacity(conditions) * self.gross_shr(conditions)
 
     def gross_shr(self, conditions):
         return 0.7

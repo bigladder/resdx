@@ -48,23 +48,16 @@ class TemperatureSpeedPerformanceTable:
         if speed_index == max_index:
             # Set max from rated
             reference_speed_index = speed_index - 1
-            self.data[temperature_index][speed_index] = (
-                self.data[temperature_index][reference_speed_index] / ratio
-            )
+            self.data[temperature_index][speed_index] = self.data[temperature_index][reference_speed_index] / ratio
         else:
             # Set from max
-            self.data[temperature_index][speed_index] = (
-                self.data[temperature_index][max_index] * ratio
-            )
+            self.data[temperature_index][speed_index] = self.data[temperature_index][max_index] * ratio
 
     def get_ratio(self, speed: int, temperature: float) -> float:
         speed_index = speed - 1
         temperature_index = self.get_temperature_index(temperature)
         max_index = len(self.speeds) - 1
-        return (
-            self.data[temperature_index][speed_index]
-            / self.data[temperature_index][max_index]
-        )
+        return self.data[temperature_index][speed_index] / self.data[temperature_index][max_index]
 
     def set_by_interpolation(self, speed: int, temperature: float) -> None:
         """Interpolate rated speed from temperature above (currently only needed for lower temperatures)"""
@@ -75,11 +68,9 @@ class TemperatureSpeedPerformanceTable:
         s2 = s1 + 1
         t1 = temperature_index
         t2 = t1 + 1
-        self.data[t1][s1] = self.data[t1][s0] + (
-            self.data[t2][s1] - self.data[t2][s0]
-        ) / (self.data[t2][s2] - self.data[t2][s0]) * (
-            self.data[t1][s2] - self.data[t1][s0]
-        )
+        self.data[t1][s1] = self.data[t1][s0] + (self.data[t2][s1] - self.data[t2][s0]) / (
+            self.data[t2][s2] - self.data[t2][s0]
+        ) * (self.data[t1][s2] - self.data[t1][s0])
 
     def get_temperature_index(self, temperature: float) -> int:
         if temperature in self.temperatures:
@@ -94,9 +85,7 @@ class TemperatureSpeedPerformanceTable:
         extrapolation_limit: Union[float, None] = None,
     ) -> None:
         if temperature in self.temperatures:
-            raise RuntimeError(
-                f"Temperature, {temperature:.2f}, already exists. Unable to add temperature."
-            )
+            raise RuntimeError(f"Temperature, {temperature:.2f}, already exists. Unable to add temperature.")
         insort(self.temperatures, temperature)
         t_i = self.get_temperature_index(temperature)  # temperature index
 
@@ -110,13 +99,11 @@ class TemperatureSpeedPerformanceTable:
             for speed in self.speeds:
                 s_i = speed - 1  # speed index
                 if extrapolate:
-                    value = self.data[t_i + 1][s_i] - (
-                        self.data[t_i + 2][s_i] - self.data[t_i + 1][s_i]
-                    ) / (t_2 - t_1) * (t_1 - t_0)
+                    value = self.data[t_i + 1][s_i] - (self.data[t_i + 2][s_i] - self.data[t_i + 1][s_i]) / (
+                        t_2 - t_1
+                    ) * (t_1 - t_0)
                     if extrapolation_limit is not None:
-                        value = max(
-                            value, self.data[t_i + 1][s_i] * extrapolation_limit
-                        )
+                        value = max(value, self.data[t_i + 1][s_i] * extrapolation_limit)
                 else:
                     value = self.data[t_i + 1][s_i]
 
@@ -130,13 +117,11 @@ class TemperatureSpeedPerformanceTable:
             for speed in self.speeds:
                 s_i = speed - 1  # speed index
                 if extrapolate:
-                    value = self.data[t_i - 1][s_i] + (
-                        self.data[t_i - 1][s_i] - self.data[t_i - 2][s_i]
-                    ) / (t_m1 - t_m2) * (t - t_m1)
+                    value = self.data[t_i - 1][s_i] + (self.data[t_i - 1][s_i] - self.data[t_i - 2][s_i]) / (
+                        t_m1 - t_m2
+                    ) * (t - t_m1)
                     if extrapolation_limit is not None:
-                        value = min(
-                            value, self.data[t_i - 1][s_i] * extrapolation_limit
-                        )
+                        value = min(value, self.data[t_i - 1][s_i] * extrapolation_limit)
                 else:
                     value = self.data[t_i - 1][s_i]
 
@@ -149,9 +134,9 @@ class TemperatureSpeedPerformanceTable:
             t_1 = self.temperatures[1]
             for speed in self.speeds:
                 s_i = speed - 1  # speed index
-                self.data[t_i][s_i] = self.data[t_i - 1][s_i] + (
-                    self.data[t_i + 1][s_i] - self.data[t_i - 1][s_i]
-                ) / (t_1 - t_m1) * (t - t_m1)
+                self.data[t_i][s_i] = self.data[t_i - 1][s_i] + (self.data[t_i + 1][s_i] - self.data[t_i - 1][s_i]) / (
+                    t_1 - t_m1
+                ) * (t - t_m1)
 
     def get_temperature_at_value(
         self,
@@ -163,25 +148,16 @@ class TemperatureSpeedPerformanceTable:
         """Using a line between two points for a given speed, calculate the temperature corresponding to a given value"""
         v_1 = self.data[self.get_temperature_index(temperature_1)][speed - 1]
         v_2 = self.data[self.get_temperature_index(temperature_2)][speed - 1]
-        return temperature_1 + (value - v_1) / (v_2 - v_1) * (
-            temperature_2 - temperature_1
-        )
+        return temperature_1 + (value - v_1) / (v_2 - v_1) * (temperature_2 - temperature_1)
 
-    def set_by_maintenance(
-        self, speed: int, temperature: float, reference_temperature: float, ratio: float
-    ) -> None:
+    def set_by_maintenance(self, speed: int, temperature: float, reference_temperature: float, ratio: float) -> None:
         raise NotImplementedError()
 
-    def get_maintenance(
-        self, speed: int, temperature: float, reference_temperature: float
-    ) -> float:
+    def get_maintenance(self, speed: int, temperature: float, reference_temperature: float) -> float:
         speed_index = speed - 1
         temperature_index = self.get_temperature_index(temperature)
         reference_temperature_index = self.get_temperature_index(reference_temperature)
-        return (
-            self.data[temperature_index][speed_index]
-            / self.data[reference_temperature_index][speed_index]
-        )
+        return self.data[temperature_index][speed_index] / self.data[reference_temperature_index][speed_index]
 
     def set_interpolator(self):
         self.interpolator = RegularGridInterpolator(
@@ -202,48 +178,35 @@ class TemperatureSpeedPerformanceTable:
                 self.data[t_i][s_i] = value - fan_powers[s_i]
                 if self.data[t_i][s_i] <= 0:
                     raise RuntimeError(
-                        f"Negative value after fan power correction. Value={value:.2f} W, Fan Power={fan_powers[s_i]:.2f} W at temperature={to_u(self.temperatures[t_i],'°F'):.1f} °F, speed={self.speeds[s_i]}"
+                        f"Negative value after fan power correction. Value={value:.2f} W, Fan Power={fan_powers[s_i]:.2f} W at temperature={to_u(self.temperatures[t_i], '°F'):.1f} °F, speed={self.speeds[s_i]}"
                     )
 
         self.set_interpolator()
 
 
 class TemperatureSpeedCoolingPerformanceTable(TemperatureSpeedPerformanceTable):
-    def set_by_maintenance(
-        self, speed: int, temperature: float, reference_temperature: float, ratio: float
-    ) -> None:
+    def set_by_maintenance(self, speed: int, temperature: float, reference_temperature: float, ratio: float) -> None:
         speed_index = speed - 1
         temperature_index = self.get_temperature_index(temperature)
         reference_temperature_index = self.get_temperature_index(reference_temperature)
         if reference_temperature_index < temperature_index:
-            self.data[temperature_index][speed_index] = (
-                self.data[reference_temperature_index][speed_index] * ratio
-            )
+            self.data[temperature_index][speed_index] = self.data[reference_temperature_index][speed_index] * ratio
         else:
-            self.data[temperature_index][speed_index] = (
-                self.data[reference_temperature_index][speed_index] / ratio
-            )
+            self.data[temperature_index][speed_index] = self.data[reference_temperature_index][speed_index] / ratio
 
 
 class TemperatureSpeedHeatingPerformanceTable(TemperatureSpeedPerformanceTable):
-    def set_by_maintenance(
-        self, speed: int, temperature: float, reference_temperature: float, ratio: float
-    ) -> None:
+    def set_by_maintenance(self, speed: int, temperature: float, reference_temperature: float, ratio: float) -> None:
         speed_index = speed - 1
         temperature_index = self.get_temperature_index(temperature)
         reference_temperature_index = self.get_temperature_index(reference_temperature)
         if reference_temperature_index > temperature_index:
-            self.data[temperature_index][speed_index] = (
-                self.data[reference_temperature_index][speed_index] * ratio
-            )
+            self.data[temperature_index][speed_index] = self.data[reference_temperature_index][speed_index] * ratio
         else:
-            self.data[temperature_index][speed_index] = (
-                self.data[reference_temperature_index][speed_index] / ratio
-            )
+            self.data[temperature_index][speed_index] = self.data[reference_temperature_index][speed_index] / ratio
 
 
 class TemperatureSpeedPerformance:
-
     def __init__(
         self,
         cooling_capacities: TemperatureSpeedCoolingPerformanceTable,
@@ -251,7 +214,6 @@ class TemperatureSpeedPerformance:
         heating_capacities: TemperatureSpeedHeatingPerformanceTable,
         heating_powers: TemperatureSpeedHeatingPerformanceTable,
     ) -> None:
-
         self.number_of_cooling_speeds = len(cooling_capacities.speeds)
         if len(cooling_powers.speeds) != self.number_of_cooling_speeds:
             raise RuntimeError("Inconsistent power / capacity table sizes!")
@@ -280,9 +242,7 @@ class TemperatureSpeedPerformance:
         return self.cooling_powers.calculate(speed, temperature)
 
     def cooling_cop(self, speed: float = 2, temperature: float = fr_u(95, "degF")):
-        return self.cooling_capacity(speed, temperature) / self.cooling_power(
-            speed, temperature
-        )
+        return self.cooling_capacity(speed, temperature) / self.cooling_power(speed, temperature)
 
     def heating_capacity(self, speed: float = 2, temperature: float = fr_u(47, "degF")):
         return self.heating_capacities.calculate(speed, temperature)
@@ -291,20 +251,12 @@ class TemperatureSpeedPerformance:
         return self.heating_powers.calculate(speed, temperature)
 
     def heating_cop(self, speed: float = 2, temperature: float = fr_u(47, "degF")):
-        return self.heating_capacity(speed, temperature) / self.heating_power(
-            speed, temperature
-        )
+        return self.heating_capacity(speed, temperature) / self.heating_power(speed, temperature)
 
-    def make_gross(
-        self, cooling_fan_powers: List[float], heating_fan_powers: List[float]
-    ) -> None:
-        self.cooling_capacities.apply_fan_power_correction(
-            [-p for p in cooling_fan_powers]
-        )  # increases
+    def make_gross(self, cooling_fan_powers: List[float], heating_fan_powers: List[float]) -> None:
+        self.cooling_capacities.apply_fan_power_correction([-p for p in cooling_fan_powers])  # increases
         self.cooling_powers.apply_fan_power_correction(cooling_fan_powers)  # decreases
-        self.heating_capacities.apply_fan_power_correction(
-            heating_fan_powers
-        )  # decreases
+        self.heating_capacities.apply_fan_power_correction(heating_fan_powers)  # decreases
         self.heating_powers.apply_fan_power_correction(heating_fan_powers)  # decreases
 
 
@@ -320,7 +272,6 @@ def make_neep_statistical_model_data(
     cooling_cop_82_min: Union[float, None] = None,
     heating_cop_47: Union[float, None] = None,
 ) -> TemperatureSpeedPerformance:
-
     Qmin = 1
     Qrated = 2
     Qmax = 3
@@ -365,9 +316,7 @@ def make_neep_statistical_model_data(
     P_c.set_by_ratio(Qmax, t_95, Pr95rated)
     P_c.set_by_maintenance(Qmax, t_82, t_95, Pm95max)
     if cooling_cop_82_min is None:
-        cooling_cop_82_min = cop_82_b_low(
-            StagingType.VARIABLE_SPEED, seer2, seer2 / eer2
-        )
+        cooling_cop_82_min = cop_82_b_low(StagingType.VARIABLE_SPEED, seer2, seer2 / eer2)
 
     EIRr82min = (Q_c.get(Qmax, t_82) / P_c.get(Qmax, t_82)) / cooling_cop_82_min
 
@@ -554,18 +503,10 @@ def make_neep_model_data(
         t_lct = fr_u(lct, "degF")
         heating_temperatures = [t_lct] + heating_temperatures
 
-    Q_c = TemperatureSpeedCoolingPerformanceTable(
-        cooling_temperatures, 3, cooling_capacities
-    )
-    P_c = TemperatureSpeedCoolingPerformanceTable(
-        cooling_temperatures, 3, cooling_powers
-    )
-    Q_h = TemperatureSpeedHeatingPerformanceTable(
-        heating_temperatures, 3, heating_capacities
-    )
-    P_h = TemperatureSpeedHeatingPerformanceTable(
-        heating_temperatures, 3, heating_powers
-    )
+    Q_c = TemperatureSpeedCoolingPerformanceTable(cooling_temperatures, 3, cooling_capacities)
+    P_c = TemperatureSpeedCoolingPerformanceTable(cooling_temperatures, 3, cooling_powers)
+    Q_h = TemperatureSpeedHeatingPerformanceTable(heating_temperatures, 3, heating_capacities)
+    P_h = TemperatureSpeedHeatingPerformanceTable(heating_temperatures, 3, heating_powers)
 
     # Interpolate for missing rated conditions, and extrapolate to extreme temperatures
     Q_c.set_by_interpolation(2, t_82)
@@ -641,9 +582,7 @@ def make_single_speed_model_data(
 
     # 95/82 F
     P_c.set(Qrated, t_95, Q_c.get(Qrated, t_95) / fr_u(eer2, "Btu/Wh"))
-    eer2_b = seer2 / (
-        1.0 - 0.5 * cycling_degradation_coefficient
-    )  # EER2 at B (82F) conditions
+    eer2_b = seer2 / (1.0 - 0.5 * cycling_degradation_coefficient)  # EER2 at B (82F) conditions
     P_c.set(Qrated, t_82, Q_c.get(Qrated, t_82) / fr_u(eer2_b, "Btu/Wh"))
 
     # Tmin
@@ -674,9 +613,7 @@ def make_single_speed_model_data(
     if heating_capacity_17 is not None:
         Qm17rated = heating_capacity_17 / heating_capacity_47
     else:
-        Qm17rated = (
-            0.626  # Based on AHRI directory units believed to be single speed (4/4/24)
-        )
+        Qm17rated = 0.626  # Based on AHRI directory units believed to be single speed (4/4/24)
 
     Q_h = TemperatureSpeedHeatingPerformanceTable(t_h, 1)
     P_h = TemperatureSpeedHeatingPerformanceTable(t_h, 1)
@@ -757,9 +694,7 @@ def make_two_speed_model_data(
     Pm95rated = Qm95rated * EIRm95rated
 
     if cooling_cop_82_min is None:
-        cooling_cop_82_min = cop_82_b_low(
-            StagingType.VARIABLE_SPEED, seer2, seer2 / eer2
-        )
+        cooling_cop_82_min = cop_82_b_low(StagingType.VARIABLE_SPEED, seer2, seer2 / eer2)
 
     # 82 / 95 F
     P_c.set(Qrated, t_95, Q_c.get(Qrated, t_95) / fr_u(eer2, "Btu/Wh"))
@@ -796,7 +731,9 @@ def make_two_speed_model_data(
     if heating_capacity_17 is not None:
         Qm17rated = heating_capacity_17 / heating_capacity_47
     else:
-        Qm17rated = 0.626  # Based on AHRI directory units believed to be single speed (4/4/24) TODO: Switch to Cutler curve
+        Qm17rated = (
+            0.626  # Based on AHRI directory units believed to be single speed (4/4/24) TODO: Switch to Cutler curve
+        )
 
     Q_h = TemperatureSpeedHeatingPerformanceTable(t_h, 2)
     P_h = TemperatureSpeedHeatingPerformanceTable(t_h, 2)

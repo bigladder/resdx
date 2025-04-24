@@ -34,12 +34,8 @@ dx_unit = RESNETDXModel(
 # Indoor conditions variability
 
 cop_values = []
-indoor_temperatures = GridAxis(
-    [65.0, 67.5, 70.0, 72.5, 75.0], "Indoor Temperature", "degF"
-)
-indoor_airflow_rates = GridAxis(
-    [300.0, 350.0, 400.0, 450.0], "Indoor Airflow Rate", "cfm/ton"
-)
+indoor_temperatures = GridAxis([65.0, 67.5, 70.0, 72.5, 75.0], "Indoor Temperature", "degF")
+indoor_airflow_rates = GridAxis([300.0, 350.0, 400.0, 450.0], "Indoor Airflow Rate", "cfm/ton")
 for indoor_temperature in indoor_temperatures.data_values:
     for air_flow in indoor_airflow_rates.data_values:
         condition = dx_unit.make_condition(
@@ -80,9 +76,7 @@ plot.add_display_data(shrs)
 plot.write_html_plot(f"{output_directory_path}/shr.html")
 
 # Heating temperature bins
-distributions = RESNETDXModel.regional_heating_distributions[
-    AHRIVersion.AHRI_210_240_2023
-]
+distributions = RESNETDXModel.regional_heating_distributions[AHRIVersion.AHRI_210_240_2023]
 regions = GridAxis([1, 2, 3, 4, 5, 6], "Region", "")
 dry_bulbs = GridAxis(HeatingDistribution.outdoor_drybulbs, "Outdoor Temperature", "K")
 fraction_values = []
@@ -153,10 +147,7 @@ cycling_ratios = DimensionalData(
 )
 
 variable_speed_degradation = DisplayData(
-    data_values=[
-        cycling_multiplier(cycling_ratio, 0.4) - 1.0
-        for cycling_ratio in cycling_ratios.data_values
-    ],
+    data_values=[cycling_multiplier(cycling_ratio, 0.4) - 1.0 for cycling_ratio in cycling_ratios.data_values],
     name="Variable Speed",
     native_units="",
     display_units="%",
@@ -165,10 +156,7 @@ variable_speed_degradation = DisplayData(
 )
 
 single_speed_degradation = DisplayData(
-    data_values=[
-        cycling_multiplier(cycling_ratio, 0.08) - 1.0
-        for cycling_ratio in cycling_ratios.data_values
-    ],
+    data_values=[cycling_multiplier(cycling_ratio, 0.08) - 1.0 for cycling_ratio in cycling_ratios.data_values],
     name="Single or Two Stage",
     native_units="",
     display_units="%",
