@@ -17,7 +17,9 @@ dx_unit = resdx.rating_solver.make_rating_unit(
 
 size = resdx.to_u(dx_unit.rated_net_total_cooling_capacity[0], "ton_ref")
 
-dx_unit.metadata.description = f"{dx_unit.number_of_cooling_speeds} speed, {size:.1f} ton, {seer2:.1f} SEER2 air conditioner"
+dx_unit.metadata.description = (
+    f"{dx_unit.number_of_cooling_speeds} speed, {size:.1f} ton, {seer2:.1f} SEER2 air conditioner"
+)
 dx_unit.metadata.uuid_seed = hash((dx_unit.number_of_cooling_speeds, size, seer2))
 dx_unit.metadata.data_version = 2
 
@@ -40,18 +42,14 @@ with open(f"{output_directory_path}/{file_name}-unitary.RS0002.json", "w") as fi
     json.dump(representation, file, indent=4)
 
 with open(f"{output_directory_path}/{file_name}-fan.RS0003.json", "w") as file:
-    json.dump(
-        representation["performance"]["indoor_fan_representation"], file, indent=4
-    )
+    json.dump(representation["performance"]["indoor_fan_representation"], file, indent=4)
 
 with open(f"{output_directory_path}/{file_name}-dx.RS0004.json", "w") as file:
     json.dump(representation["performance"]["dx_system_representation"], file, indent=4)
 
 with open(f"{output_directory_path}/{file_name}-motor.RS0005.json", "w") as file:
     json.dump(
-        representation["performance"]["indoor_fan_representation"]["performance"][
-            "motor_representation"
-        ],
+        representation["performance"]["indoor_fan_representation"]["performance"]["motor_representation"],
         file,
         indent=4,
     )

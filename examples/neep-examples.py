@@ -1,19 +1,16 @@
-from typing import Dict
-
 from koozie import fr_u
 
 from resdx import (
-    RESNETDXModel,
-    make_neep_model_data,
-    make_neep_statistical_model_data,
-    StagingType,
-    write_idf,
     EnergyPlusSystemType,
+    RESNETDXModel,
+    StagingType,
+    make_neep_model_data,
+    write_idf,
 )
 
 output_directory_path = "output"
 
-dx_units: Dict[str, RESNETDXModel] = {}
+dx_units: dict[str, RESNETDXModel] = {}
 
 # Mitsubishi Electric M-Series
 # MUZ-GL15NAH2 AHRI Certification #: 202680596 https://ashp.neep.org/#!/product/34439/7/25000/95/7500/0///0
@@ -49,9 +46,7 @@ heating_powers = [
 
 
 dx_units[name] = RESNETDXModel(
-    tabular_data=make_neep_model_data(
-        cooling_capacities, cooling_powers, heating_capacities, heating_powers
-    ),
+    tabular_data=make_neep_model_data(cooling_capacities, cooling_powers, heating_capacities, heating_powers),
     input_seer=seer2,
     input_eer=eer2,
     input_hspf=hspf2,
@@ -99,9 +94,7 @@ heating_powers = [
 ]
 
 dx_units[name] = RESNETDXModel(
-    tabular_data=make_neep_model_data(
-        cooling_capacities, cooling_powers, heating_capacities, heating_powers
-    ),
+    tabular_data=make_neep_model_data(cooling_capacities, cooling_powers, heating_capacities, heating_powers),
     input_seer=seer2,
     input_eer=eer2,
     input_hspf=hspf2,
@@ -149,9 +142,7 @@ heating_powers = [
 ]
 
 dx_units[name] = RESNETDXModel(
-    tabular_data=make_neep_model_data(
-        cooling_capacities, cooling_powers, heating_capacities, heating_powers
-    ),
+    tabular_data=make_neep_model_data(cooling_capacities, cooling_powers, heating_capacities, heating_powers),
     input_seer=seer2,
     input_eer=eer2,
     input_hspf=hspf2,
@@ -199,9 +190,7 @@ heating_powers = [
 ]
 
 dx_units[name] = RESNETDXModel(
-    tabular_data=make_neep_model_data(
-        cooling_capacities, cooling_powers, heating_capacities, heating_powers
-    ),
+    tabular_data=make_neep_model_data(cooling_capacities, cooling_powers, heating_capacities, heating_powers),
     input_seer=seer2,
     input_eer=eer2,
     input_hspf=hspf2,

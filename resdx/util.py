@@ -4,15 +4,11 @@ import numpy as np
 def limit_check(value, min=None, max=None):
     if min is not None:
         if value < min:
-            raise Exception(
-                f"Value, {value}, is less than the allowed minimum of {min}"
-            )
+            raise Exception(f"Value, {value}, is less than the allowed minimum of {min}")
 
     if max is not None:
         if value > max:
-            raise Exception(
-                f"Value, {value}, is greater than the allowed maximum of {max}"
-            )
+            raise Exception(f"Value, {value}, is greater than the allowed maximum of {max}")
 
     return value
 
@@ -127,9 +123,7 @@ def calculate_r_squared(source_data, regression_data):
     return 1 - ss_res / ss_tot
 
 
-def geometric_space(
-    start: float, end: float, number: int, coefficient: float = 1.0
-) -> list[float]:
+def geometric_space(start: float, end: float, number: int, coefficient: float = 1.0) -> list[float]:
     distance = end - start
     if coefficient == 1.0:
         d0 = distance / (number - 1)

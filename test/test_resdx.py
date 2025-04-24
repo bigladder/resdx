@@ -1,12 +1,9 @@
+from koozie import fr_u
 from pytest import approx
-
 from scipy import optimize
 
-from koozie import fr_u
-
-from resdx import RESNETDXModel, StagingType, AHRIVersion, make_neep_model_data
+from resdx import AHRIVersion, RESNETDXModel, StagingType, make_neep_model_data
 from resdx.rating_solver import make_rating_unit
-
 
 # Single speed gross COP values used for regression testing
 COP_C = 3.312
@@ -31,9 +28,7 @@ def test_1_speed_regression():
     assert dx_unit_1_speed.gross_total_cooling_capacity() == approx(
         dx_unit_1_speed.rated_gross_total_cooling_capacity[0], 0.01
     )
-    assert dx_unit_1_speed.cooling_fan_power() == approx(
-        dx_unit_1_speed.rated_cooling_fan_power[0], 0.0001
-    )
+    assert dx_unit_1_speed.cooling_fan_power() == approx(dx_unit_1_speed.rated_cooling_fan_power[0], 0.0001)
     assert dx_unit_1_speed.net_total_cooling_capacity() == approx(
         dx_unit_1_speed.rated_net_total_cooling_capacity[0], 0.01
     )
@@ -101,9 +96,7 @@ def test_1_speed_rating_version():
         input_hspf=hspf_1,
     )
 
-    assert dx_unit_2017.rated_cooling_airflow[0] == approx(
-        dx_unit_2023.rated_cooling_airflow[0], 0.001
-    )
+    assert dx_unit_2017.rated_cooling_airflow[0] == approx(dx_unit_2023.rated_cooling_airflow[0], 0.001)
     assert dx_unit_2017.seer() >= dx_unit_2023.seer()  # SEER > SEER2
     assert dx_unit_2017.hspf() > dx_unit_2023.hspf()  # HSPF > HSPF2
 
@@ -199,9 +192,7 @@ def test_neep_vchp_regression():
     ]
 
     vchp_unit = RESNETDXModel(
-        tabular_data=make_neep_model_data(
-            cooling_capacities, cooling_powers, heating_capacities, heating_powers
-        ),
+        tabular_data=make_neep_model_data(cooling_capacities, cooling_powers, heating_capacities, heating_powers),
         rating_standard=AHRIVersion.AHRI_210_240_2017,
     )
     assert vchp_unit.net_total_cooling_capacity() == approx(

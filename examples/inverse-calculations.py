@@ -1,41 +1,36 @@
 # %%
 import csv
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Dict, List
 from pathlib import Path
 
-
-from numpy import linspace
-from scipy import optimize
-from jinja2 import Environment, FileSystemLoader
-
-from koozie import fr_u
-
 from dimes import (
-    LineProperties,
-    MarkersOnly,
-    LinesOnly,
+    DimensionalData,
     DimensionalPlot,
     DisplayData,
-    DimensionalData,
+    LineProperties,
+    LinesOnly,
+    MarkersOnly,
 )
+from jinja2 import Environment, FileSystemLoader
+from koozie import fr_u
+from numpy import linspace
+from scipy import optimize
 
-
+from resdx import RESNETDXModel, StagingType
+from resdx.models.tabular_data import neep_cap47_from_cap95
 from resdx.util import (
-    linear,
-    linear_string,
-    quadratic,
-    quadratic_string,
     # cubic,
     # cubic_string,
     # quartic,
     # quartic_string,
     calculate_r_squared,
     geometric_space,
+    linear,
+    linear_string,
+    quadratic,
+    quadratic_string,
 )
-
-from resdx import RESNETDXModel, StagingType
-from resdx.models.tabular_data import neep_cap47_from_cap95
 
 
 class CurveFit:
@@ -50,19 +45,18 @@ quadratic_curve_fit = CurveFit(quadratic, quadratic_string, (1, 1, 1))
 
 
 class RatingRegression:
-
-    input_data: List[List[float]]
+    input_data: list[list[float]]
 
     def __init__(
         self,
         staging_type: StagingType,
-        calculation,
+        calculation: Callable[[float, float, StagingType, float], float],
         input_title: str,
-        initial_guess,
+        initial_guess: Callable[[float], float],
         rating_range: DisplayData,
         secondary_range: DisplayData,
         curve_fit: CurveFit,
-    ):
+    ) -> None:
         self.staging_type = staging_type
         self.calculation = calculation
         self.input_title = input_title
@@ -71,9 +65,9 @@ class RatingRegression:
         self.secondary_range = secondary_range
         self.curve_fit = curve_fit
 
-    def evaluate(self, output_name, do_curve_fit=False):
+    def evaluate(self, output_name: str, do_curve_fit: bool = False) -> None:
         display_data = []
-        csv_output_data = {
+        csv_output_data: dict[str, list] = {
             self.rating_range.name: [],
             self.secondary_range.name: [],
             self.input_title: [],
@@ -86,18 +80,14 @@ class RatingRegression:
             try:
                 inputs, coefficients = get_inverse_values(
                     self.rating_range,
-                    lambda x, target: self.calculation(
-                        float(x), target, self.staging_type, secondary_value
-                    ),
+                    lambda x, target: self.calculation(float(x), target, self.staging_type, secondary_value),
                     self.initial_guess,
                     curve_fit_function=self.curve_fit.function,
                     curve_fit_guesses=self.curve_fit.initial_coefficient_guesses,
                     do_curve_fit=do_curve_fit,
                 )
             except RuntimeError as e:
-                raise RuntimeError(
-                    f"Unable to find solution for {self.staging_type.name} ({series_name}): {e}"
-                )
+                raise RuntimeError(f"Unable to find solution for {self.staging_type.name} ({series_name}): {e}")
 
             display_data.append(
                 DisplayData(
@@ -109,12 +99,9 @@ class RatingRegression:
                 )
             )
             if do_curve_fit:
-                curve_fit_string = self.curve_fit.regression_string(
-                    self.rating_range.name, *coefficients
-                )
+                curve_fit_string = self.curve_fit.regression_string(self.rating_range.name, *coefficients)
                 curve_fit_data = [
-                    self.curve_fit.function(rating, *coefficients)
-                    for rating in self.rating_range.data_values
+                    self.curve_fit.function(rating, *coefficients) for rating in self.rating_range.data_values
                 ]
                 r2 = calculate_r_squared(inputs, curve_fit_data)
                 display_data.append(
@@ -127,12 +114,8 @@ class RatingRegression:
                     )
                 )
 
-            csv_output_data[self.rating_range.name] += list(
-                self.rating_range.data_values
-            )
-            csv_output_data[self.secondary_range.name] += [secondary_value] * len(
-                self.rating_range.data_values
-            )
+            csv_output_data[self.rating_range.name] += list(self.rating_range.data_values)
+            csv_output_data[self.secondary_range.name] += [secondary_value] * len(self.rating_range.data_values)
             csv_output_data[self.input_title] += inputs
             self.input_data.append([float(v) for v in inputs])
 
@@ -150,7 +133,7 @@ class RatingRegression:
         # time.sleep(2)
         # plot.write_image_plot(f"output/{figure_name}.pdf")
 
-    def write_csv(self, column_dictionary: Dict[str, List[float]], table_name: str):
+    def write_csv(self, column_dictionary: dict[str, list[float]], table_name: str) -> None:
         with open(f"output/{table_name}-points.csv", "w", encoding="utf-8") as csv_file:
             writer = csv.writer(csv_file)
             key_list = list(column_dictionary.keys())
@@ -158,18 +141,11 @@ class RatingRegression:
             for index in range(len(column_dictionary[key_list[0]])):
                 writer.writerow([column_dictionary[key][index] for key in key_list])
 
-    def write_csv2(self, table_name: str, write_mode: str = "w"):
-        with open(
-            f"output/{table_name}-table.csv", write_mode, encoding="utf-8"
-        ) as csv_file:
+    def write_csv2(self, table_name: str, write_mode: str = "w") -> None:
+        with open(f"output/{table_name}-table.csv", write_mode, encoding="utf-8") as csv_file:
             writer = csv.writer(csv_file)
-            writer.writerow(
-                [f"{self.staging_type.name} {self.input_title}", self.rating_range.name]
-            )
-            writer.writerow(
-                [self.secondary_range.name]
-                + [float(v) for v in list(self.rating_range.data_values)]
-            )
+            writer.writerow([f"{self.staging_type.name} {self.input_title}", self.rating_range.name])
+            writer.writerow([self.secondary_range.name] + [float(v) for v in list(self.rating_range.data_values)])
             for index, rating_value in enumerate(self.secondary_range.data_values):
                 writer.writerow([rating_value] + self.input_data[index])
             writer.writerow(["", ""])
@@ -198,9 +174,7 @@ def get_inverse_values(
                 )
             )
         except RuntimeError:
-            raise RuntimeError(
-                f"Unable to find solution for target: {target_range.name}={target}."
-            )
+            raise RuntimeError(f"Unable to find solution for target: {target_range.name}={target}.")
     if do_curve_fit:
         print(f"    curve fitting...")
         curve_fit_coefficients = optimize.curve_fit(
@@ -261,11 +235,7 @@ variable_speed_cooling_regression.secondary_range = DimensionalData(
 def hspf_function(cop_47, hspf, staging_type, cap17m):
     # Note: results are sensitive to cap95 since it is used to set the building load and external static pressure.
     cap95 = fr_u(3.0, "ton_ref")
-    cap47 = (
-        cap95
-        if staging_type != StagingType.VARIABLE_SPEED
-        else neep_cap47_from_cap95(cap95)
-    )
+    cap47 = cap95 if staging_type != StagingType.VARIABLE_SPEED else neep_cap47_from_cap95(cap95)
     cap17 = cap47 * cap17m
     return RESNETDXModel(
         staging_type=staging_type,

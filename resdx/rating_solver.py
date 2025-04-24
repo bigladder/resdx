@@ -1,10 +1,7 @@
-from typing import Union
+from koozie import fr_u
 from scipy import optimize
 
-from koozie import fr_u
-
 from .dx_unit import AHRIVersion, StagingType
-from .defrost import Defrost
 from .models.unified_resnet import RESNETDXModel
 
 
@@ -12,16 +9,14 @@ def make_rating_unit(
     staging_type: StagingType,
     seer: float,
     hspf: float,
-    eer: Union[float, None] = None,
+    eer: float | None = None,
     q95: float = fr_u(3.0, "ton_ref"),
-    q47: Union[float, None] = None,
+    q47: float | None = None,
     qm17: float = 0.63,
-    t_min: Union[float, None] = None,
-    t_max: float = fr_u(125.0, "degF"),
+    t_min: float | None = None,
     t_defrost: float = fr_u(40.0, "degF"),
     rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
 ) -> RESNETDXModel:
-
     q47_: float
     if q47 is None:
         q47_ = q95

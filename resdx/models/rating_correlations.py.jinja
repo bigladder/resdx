@@ -1,14 +1,12 @@
-'''
+"""
 This file is generated from a template. To modify, edit the *.py.jinja file.
-'''
+"""
 from scipy.interpolate import RegularGridInterpolator
 
 from ..enums import StagingType
 
 
-def cop_47_h1_full(
-    staging_type: StagingType, hspf: float, capacity_maintenance_17: float
-) -> float:
+def cop_47_h1_full(staging_type: StagingType, hspf: float, capacity_maintenance_17: float) -> float:
     if staging_type == StagingType.SINGLE_STAGE:
         rating_range = {{ heating_1s.rating_range.data_values }}
         ratio_range = {{ heating_1s.secondary_range.data_values }}
@@ -28,9 +26,7 @@ def cop_47_h1_full(
     ))
 
 
-def cop_82_b_low(
-    staging_type: StagingType, seer: float, seer_eer_ratio: float
-) -> float:
+def cop_82_b_low(staging_type: StagingType, seer: float, seer_eer_ratio: float) -> float:
     if staging_type == StagingType.SINGLE_STAGE:
         raise RuntimeError("COP 82 B low is not available for single speed equipment.")
     elif staging_type == StagingType.TWO_STAGE:
@@ -43,6 +39,4 @@ def cop_82_b_low(
         ratio_range = {{ cooling_vs.secondary_range.data_values }}
         input_data = {{ cooling_vs.input_data }}
 
-    return float(RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")(
-        (seer_eer_ratio, seer)
-    ))
+    return float(RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")((seer_eer_ratio, seer)))

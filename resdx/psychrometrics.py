@@ -1,7 +1,7 @@
-from koozie import fr_u, to_u
-
 import sys
+
 import psychrolib
+from koozie import fr_u, to_u
 
 psychrolib.SetUnitSystem(psychrolib.SI)
 
@@ -36,9 +36,7 @@ class PsychState:
         elif "enthalpy" in kwargs:
             self.h = kwargs["enthalpy"]
         else:
-            raise RuntimeError(
-                f"{PsychState.__name__}: Unknown or missing key word argument {kwargs}."
-            )
+            raise RuntimeError(f"{PsychState.__name__}: Unknown or missing key word argument {kwargs}.")
 
     @property
     def wb(self):
@@ -63,9 +61,7 @@ class PsychState:
         if self.hr_set:
             return self._hr
         else:
-            self.hr = psychrolib.GetHumRatioFromTWetBulb(
-                self.db_C, self.get_wb_C(), self.p
-            )
+            self.hr = psychrolib.GetHumRatioFromTWetBulb(self.db_C, self.get_wb_C(), self.p)
             return self._hr
 
     @hr.setter
@@ -84,18 +80,14 @@ class PsychState:
         if self.rh_set:
             return self._rh
         else:
-            self.rh = psychrolib.GetHumRatioFromTWetBulb(
-                self.db_C, self.get_wb_C(), self.p
-            )
+            self.rh = psychrolib.GetHumRatioFromTWetBulb(self.db_C, self.get_wb_C(), self.p)
             return self._rh
 
     @rh.setter
     def rh(self, rh):
         self._rh = rh
         if not self.wb_set:
-            self.wb = fr_u(
-                psychrolib.GetTWetBulbFromRelHum(self.db_C, self._rh, self.p), "°C"
-            )
+            self.wb = fr_u(psychrolib.GetTWetBulbFromRelHum(self.db_C, self._rh, self.p), "°C")
         self.rh_set = True
 
     @property
