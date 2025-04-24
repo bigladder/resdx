@@ -1,6 +1,5 @@
-from scipy import interpolate
-
 from koozie import fr_u
+from scipy import interpolate
 
 from ..dx_unit import DXUnit
 

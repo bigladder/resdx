@@ -1,29 +1,25 @@
-from typing import Union, List
 from bisect import insort
 from copy import deepcopy
 
+from koozie import fr_u, to_u
 from scipy.interpolate import RegularGridInterpolator
 
-from koozie import fr_u, to_u
-
-from ..util import bracket, calc_biquad
 from ..enums import StagingType
-
+from ..util import bracket, calc_biquad
 from .nrel import NRELDXModel
-
 from .rating_correlations import cop_47_h1_full, cop_82_b_low
 
 
 class TemperatureSpeedPerformanceTable:
     def __init__(
         self,
-        temperatures: List[float],
+        temperatures: list[float],
         number_of_speeds: int,
-        data_in: Union[List[List[Union[float, None]]], None] = None,
+        data_in: list[list[float | None]] | None = None,
     ) -> None:
-        self.temperatures: List[float] = deepcopy(temperatures)
-        self.speeds: List[int] = [i + 1 for i in range(number_of_speeds)]
-        self.data: List[List[Union[float, None]]]
+        self.temperatures: list[float] = deepcopy(temperatures)
+        self.speeds: list[int] = [i + 1 for i in range(number_of_speeds)]
+        self.data: list[list[float | None]]
         if data_in is None:
             self.data = [[None] * number_of_speeds for _ in range(len(temperatures))]
         else:
@@ -36,7 +32,7 @@ class TemperatureSpeedPerformanceTable:
         temperature_index = self.get_temperature_index(temperature)
         self.data[temperature_index][speed_index] = value
 
-    def get(self, speed: int, temperature: float) -> Union[float, None]:
+    def get(self, speed: int, temperature: float) -> float | None:
         speed_index = speed - 1
         temperature_index = self.get_temperature_index(temperature)
         return self.data[temperature_index][speed_index]
@@ -82,7 +78,7 @@ class TemperatureSpeedPerformanceTable:
         self,
         temperature: float,
         extrapolate: bool = True,
-        extrapolation_limit: Union[float, None] = None,
+        extrapolation_limit: float | None = None,
     ) -> None:
         if temperature in self.temperatures:
             raise RuntimeError(f"Temperature, {temperature:.2f}, already exists. Unable to add temperature.")
@@ -171,7 +167,7 @@ class TemperatureSpeedPerformanceTable:
     def calculate(self, speed: float, temperature: float) -> float:
         return self.interpolator([temperature, speed])[0]
 
-    def apply_fan_power_correction(self, fan_powers: List[float]) -> None:
+    def apply_fan_power_correction(self, fan_powers: list[float]) -> None:
         assert len(fan_powers) == len(self.speeds)
         for t_i, speed_data in enumerate(self.data):
             for s_i, value in enumerate(speed_data):
@@ -235,25 +231,25 @@ class TemperatureSpeedPerformance:
         self.rated_cooling_speed = 2
         self.rated_heating_speed = 2
 
-    def cooling_capacity(self, speed: float = 2, temperature: float = fr_u(95, "degF")):
+    def cooling_capacity(self, speed: float = 2, temperature: float = fr_u(95, "degF")) -> float:
         return self.cooling_capacities.calculate(speed, temperature)
 
-    def cooling_power(self, speed: float = 2, temperature: float = fr_u(95, "degF")):
+    def cooling_power(self, speed: float = 2, temperature: float = fr_u(95, "degF")) -> float:
         return self.cooling_powers.calculate(speed, temperature)
 
-    def cooling_cop(self, speed: float = 2, temperature: float = fr_u(95, "degF")):
+    def cooling_cop(self, speed: float = 2, temperature: float = fr_u(95, "degF")) -> float:
         return self.cooling_capacity(speed, temperature) / self.cooling_power(speed, temperature)
 
-    def heating_capacity(self, speed: float = 2, temperature: float = fr_u(47, "degF")):
+    def heating_capacity(self, speed: float = 2, temperature: float = fr_u(47, "degF")) -> float:
         return self.heating_capacities.calculate(speed, temperature)
 
-    def heating_power(self, speed: float = 2, temperature: float = fr_u(47, "degF")):
+    def heating_power(self, speed: float = 2, temperature: float = fr_u(47, "degF")) -> float:
         return self.heating_powers.calculate(speed, temperature)
 
-    def heating_cop(self, speed: float = 2, temperature: float = fr_u(47, "degF")):
+    def heating_cop(self, speed: float = 2, temperature: float = fr_u(47, "degF")) -> float:
         return self.heating_capacity(speed, temperature) / self.heating_power(speed, temperature)
 
-    def make_gross(self, cooling_fan_powers: List[float], heating_fan_powers: List[float]) -> None:
+    def make_gross(self, cooling_fan_powers: list[float], heating_fan_powers: list[float]) -> None:
         self.cooling_capacities.apply_fan_power_correction([-p for p in cooling_fan_powers])  # increases
         self.cooling_powers.apply_fan_power_correction(cooling_fan_powers)  # decreases
         self.heating_capacities.apply_fan_power_correction(heating_fan_powers)  # decreases
@@ -265,12 +261,12 @@ def make_neep_statistical_model_data(
     seer2: float,
     eer2: float,
     heating_capacity_47: float,
-    heating_capacity_17: Union[float, None],
+    heating_capacity_17: float | None,
     hspf2: float,
     min_heating_temperature: float = fr_u(-20, "degF"),
-    cooling_capacity_ratio: Union[float, None] = None,  # min/max capacity ratio at 95F
-    cooling_cop_82_min: Union[float, None] = None,
-    heating_cop_47: Union[float, None] = None,
+    cooling_capacity_ratio: float | None = None,  # min/max capacity ratio at 95F
+    cooling_cop_82_min: float | None = None,
+    heating_cop_47: float | None = None,
 ) -> TemperatureSpeedPerformance:
     Qmin = 1
     Qrated = 2
@@ -463,12 +459,12 @@ def make_neep_statistical_model_data(
 
 
 def make_neep_model_data(
-    cooling_capacities: List[List[Union[float, None]]],
-    cooling_powers: List[List[Union[float, None]]],
-    heating_capacities: List[List[Union[float, None]]],
-    heating_powers: List[List[Union[float, None]]],
-    lct: Union[float, None] = None,
-):
+    cooling_capacities: list[list[float | None]],
+    cooling_powers: list[list[float | None]],
+    heating_capacities: list[list[float | None]],
+    heating_powers: list[list[float | None]],
+    lct: float | None = None,
+) -> TemperatureSpeedPerformance:
     # Convert from NEEP units
     for s_i, value_list in enumerate(cooling_capacities):
         for t_i, value in enumerate(value_list):
@@ -548,9 +544,9 @@ def make_single_speed_model_data(
     seer2: float,
     eer2: float,
     heating_capacity_47: float,
-    heating_capacity_17: Union[float, None],
+    heating_capacity_17: float | None,
     hspf2: float,
-    heating_cop_47: Union[float, None] = None,
+    heating_cop_47: float | None = None,
     cycling_degradation_coefficient: float = 0.08,
 ) -> TemperatureSpeedPerformance:
     Qrated = 1
@@ -651,10 +647,10 @@ def make_two_speed_model_data(
     seer2: float,
     eer2: float,
     heating_capacity_47: float,
-    heating_capacity_17: Union[float, None],
+    heating_capacity_17: float | None,
     hspf2: float,
-    cooling_cop_82_min: Union[float, None] = None,
-    heating_cop_47: Union[float, None] = None,
+    cooling_cop_82_min: float | None = None,
+    heating_cop_47: float | None = None,
 ) -> TemperatureSpeedPerformance:
     Qmin = 1
     Qrated = 2
@@ -771,5 +767,5 @@ def make_two_speed_model_data(
     return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
 
 
-def neep_cap47_from_cap95(cap95: float):
+def neep_cap47_from_cap95(cap95: float) -> float:
     return cap95 * 1.022 + fr_u(607.0, "Btu/h")

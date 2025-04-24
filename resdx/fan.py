@@ -1,13 +1,12 @@
-import uuid
 import datetime
-from random import Random
-from typing import List, Tuple
+import uuid
 from enum import Enum
+from math import exp, inf, log
+from random import Random
 
-from math import exp, log, inf
+from koozie import convert, fr_u, to_u
+from numpy import array, linspace
 from scipy import optimize  # Used for finding system/fan curve intersection
-from numpy import linspace, array
-from koozie import fr_u, to_u, convert
 
 from .util import calc_quad
 
@@ -560,16 +559,16 @@ class EEREFan(Fan):
     """Base class for fans modeled with 'EERE-2014-BT-STD-0048-0098' assumptions"""
 
     NOMINAL_CAPACITIES = [fr_u(capacity, "ton_ref") for capacity in (2.0, 3.0, 4.0, 5.0)]
-    FLOW_COEFFICIENTS: Tuple[float, float]
-    BASE_EFFICACIES: List[float]
-    EFFICACY_COEFFICIENTS: Tuple[float, float]
+    FLOW_COEFFICIENTS: tuple[float, float]
+    BASE_EFFICACIES: list[float]
+    EFFICACY_COEFFICIENTS: tuple[float, float]
 
     def __init__(
         self,
         design_airflow,
         design_external_static_pressure,
     ):
-        self.free_airflow: List[float] = []
+        self.free_airflow: list[float] = []
         super().__init__(design_airflow, design_external_static_pressure)
         self.nominal_system_capacity = self.design_airflow[0] / fr_u(400.0, "cfm/ton_ref")
 

@@ -1,6 +1,5 @@
-from pytest import approx
-
 from koozie import fr_u
+from pytest import approx
 
 from resdx import make_neep_statistical_model_data
 

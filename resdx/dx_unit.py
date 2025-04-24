@@ -1,17 +1,12 @@
-from enum import Enum
+import datetime
 import math
 import uuid
-import datetime
-from random import Random
-from typing import Union, List, Callable
-from pathlib import Path
-from dataclasses import dataclass
+from collections.abc import Callable
 from csv import DictWriter
-
-from scipy import optimize
-from numpy import linspace
-
-from koozie import fr_u, to_u
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from random import Random
 
 from dimes import (
     DimensionalData,
@@ -20,16 +15,25 @@ from dimes import (
     LineProperties,
     get_color_from_scale,
 )
+from koozie import fr_u, to_u
+from numpy import linspace
+from scipy import optimize
 
-from .psychrometrics import PsychState, psychrolib, STANDARD_CONDITIONS
-from .conditions import HeatingConditions, CoolingConditions, OperatingConditions
+from .conditions import CoolingConditions, HeatingConditions, OperatingConditions
 from .defrost import Defrost, DefrostControl
-from .util import find_nearest, limit_check, set_default
-from .fan import Fan, FanMotorType, ConstantEfficacyFan
 from .enums import StagingType
+from .fan import ConstantEfficacyFan, Fan, FanMotorType
+from .psychrometrics import STANDARD_CONDITIONS, PsychState, psychrolib
+from .util import find_nearest, limit_check, set_default
 
 
-def interpolate_separate(f, f2, cond_1, cond_2, x):
+def interpolate_separate(
+    f: Callable[[OperatingConditions], float],
+    f2: Callable[[OperatingConditions], float],
+    cond_1: OperatingConditions,
+    cond_2: OperatingConditions,
+    x: float,
+) -> float:
     return f(cond_1) + (f2(cond_2) - f(cond_1)) / (cond_2.outdoor.db - cond_1.outdoor.db) * (x - cond_1.outdoor.db)
 
 
@@ -53,32 +57,11 @@ class HeatingDistribution:
 
     def __init__(
         self,
-        outdoor_design_temperature: float = fr_u(5.0, "°F"),
-        # fmt: off
-        fractional_hours: List[float] = [
-            0.132,
-            0.111,
-            0.103,
-            0.093,
-            0.100,
-            0.109,
-            0.126,
-            0.087,
-            0.055,
-            0.036,
-            0.026,
-            0.013,
-            0.006,
-            0.002,
-            0.001,
-            0,
-            0,
-            0,
-        ],
-        # fmt: on
-        c=None,
-        c_vs=None,
-        zero_load_temperature=None,
+        outdoor_design_temperature: float,
+        fractional_hours: list[float],
+        c: float | None = None,  # Not used in 2017 standard
+        c_vs: float | None = None,  # Not used in 2017 standard
+        zero_load_temperature: float | None = None,  # Not used in 2017 standard
     ) -> None:
         self.outdoor_design_temperature = outdoor_design_temperature
         self.c = c
@@ -127,20 +110,20 @@ class DXUnit:
     # fmt: off
     regional_heating_distributions = {
         AHRIVersion.AHRI_210_240_2017: {
-            1: HeatingDistribution(fr_u(37.0,"°F"), [0.291,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
-            2: HeatingDistribution(fr_u(27.0,"°F"), [0.215,0.189,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]),
-            3: HeatingDistribution(fr_u(17.0,"°F"), [0.153,0.142,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000]),
-            4: HeatingDistribution(fr_u(5.0,"°F"),  [0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000]),
-            5: HeatingDistribution(fr_u(-10.0,"°F"),[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]),
-            6: HeatingDistribution(fr_u(30.0,"°F"), [0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000])},
+            1: HeatingDistribution(fr_u(37.0,"°F"), [0.291,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]), # noqa: E501
+            2: HeatingDistribution(fr_u(27.0,"°F"), [0.215,0.189,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]), # noqa: E501
+            3: HeatingDistribution(fr_u(17.0,"°F"), [0.153,0.142,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000]), # noqa: E501
+            4: HeatingDistribution(fr_u(5.0,"°F"),  [0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000]), # noqa: E501
+            5: HeatingDistribution(fr_u(-10.0,"°F"),[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]), # noqa: E501
+            6: HeatingDistribution(fr_u(30.0,"°F"), [0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000])}, # noqa: E501
         AHRIVersion.AHRI_210_240_2023: {
             # Note: AHRI 2023 issue: None of these distributions add to 1.0!
-            1: HeatingDistribution(fr_u(37.0,"°F"), [0.000,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.10, 1.03, fr_u(58.0,"°F")),
-            2: HeatingDistribution(fr_u(27.0,"°F"), [0.000,0.000,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.06, 0.99, fr_u(57.0,"°F")),
-            3: HeatingDistribution(fr_u(17.0,"°F"), [0.000,0.000,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000], 1.30, 1.21, fr_u(56.0,"°F")),
-            4: HeatingDistribution(fr_u(5.0,"°F"),  [0.000,0.000,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000], 1.15, 1.07, fr_u(55.0,"°F")),
-            5: HeatingDistribution(fr_u(-10.0,"°F"),[0.000,0.000,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001], 1.16, 1.08, fr_u(55.0,"°F")),
-            6: HeatingDistribution(fr_u(30.0,"°F"), [0.000,0.000,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.11, 1.03, fr_u(57.0,"°F"))},
+            1: HeatingDistribution(fr_u(37.0,"°F"), [0.000,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.10, 1.03, fr_u(58.0,"°F")), # noqa: E501
+            2: HeatingDistribution(fr_u(27.0,"°F"), [0.000,0.000,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.06, 0.99, fr_u(57.0,"°F")), # noqa: E501
+            3: HeatingDistribution(fr_u(17.0,"°F"), [0.000,0.000,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000], 1.30, 1.21, fr_u(56.0,"°F")), # noqa: E501
+            4: HeatingDistribution(fr_u(5.0,"°F"),  [0.000,0.000,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000], 1.15, 1.07, fr_u(55.0,"°F")), # noqa: E501
+            5: HeatingDistribution(fr_u(-10.0,"°F"),[0.000,0.000,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001], 1.16, 1.08, fr_u(55.0,"°F")), # noqa: E501
+            6: HeatingDistribution(fr_u(30.0,"°F"), [0.000,0.000,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.11, 1.03, fr_u(57.0,"°F"))}, # noqa: E501
     }
     # fmt: on
 
@@ -163,37 +146,39 @@ class DXUnit:
         cooling_off_temperature: float = fr_u(125.0, "°F"),
         # Heating (rating = AHRI H1 conditions)
         rated_net_heating_capacity: float | None = None,
-        rated_gross_heating_cop=3.82,
+        rated_gross_heating_cop: float | None = 3.82,
         rated_net_heating_cop: float | None = None,
         rated_heating_airflow_per_rated_net_capacity: float | None = None,
         c_d_heating: float | None = None,
         heating_off_temperature: float | None = None,
         heating_on_temperature: (float | None) = None,  # default to heating_off_temperature
-        defrost=None,
+        defrost: Defrost | None = None,
         # Fan
-        fan=None,
-        heating_fan_speed=None,  # Map of cooling compressor speed to fan speed setting
-        cooling_fan_speed=None,  # Map of heating compressor speed to fan speed setting
-        rated_heating_fan_speed=None,  # Map of cooling compressor speed to fan speed setting used for ratings
-        rated_cooling_fan_speed=None,  # Map of heating compressor speed to fan speed setting used for ratings
+        fan: Fan | None = None,
+        heating_fan_speed: list[int] | None = None,  # Map of cooling compressor speed to fan speed setting
+        cooling_fan_speed: list[int] | None = None,  # Map of heating compressor speed to fan speed setting
+        rated_heating_fan_speed: list[int]
+        | None = None,  # Map of cooling compressor speed to fan speed setting used for ratings
+        rated_cooling_fan_speed: list[int]
+        | None = None,  # Map of heating compressor speed to fan speed setting used for ratings
         # Standby
-        crankcase_heater_capacity=None,
-        crankcase_heater_setpoint_temperature=fr_u(50.0, "°F"),
+        crankcase_heater_capacity: float | None = None,
+        crankcase_heater_setpoint_temperature: float = fr_u(50.0, "°F"),
         # Faults
-        refrigerant_charge_deviation=0.0,
+        refrigerant_charge_deviation: float = 0.0,
         # Ratings
-        cycling_method=CyclingMethod.BETWEEN_LOW_FULL,
-        cooling_full_load_speed=0,  # The first entry (index = 0) in arrays reflects AHRI "full" speed.
-        cooling_intermediate_speed=None,
-        heating_full_load_speed=0,  # The first entry (index = 0) in arrays reflects AHRI "full" speed.
-        heating_intermediate_speed=None,
-        is_ducted=True,
-        rating_standard=AHRIVersion.AHRI_210_240_2023,
+        cycling_method: CyclingMethod = CyclingMethod.BETWEEN_LOW_FULL,
+        cooling_full_load_speed: int = 0,  # The first entry (index = 0) in arrays reflects AHRI "full" speed.
+        cooling_intermediate_speed: int | None = None,
+        heating_full_load_speed: int = 0,  # The first entry (index = 0) in arrays reflects AHRI "full" speed.
+        heating_intermediate_speed: int | None = None,
+        is_ducted: bool = True,
+        rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
         # Used for comparisons and to inform some defaults
         input_seer: (float | None) = None,  # SEER value input (may not match calculated SEER of the model)
         input_eer: (float | None) = None,  # EER value input (may not match calculated EER of the model)
         input_hspf: (float | None) = None,  # HSPF value input (may not match calculated HSPF of the model)
-        metadata=None,
+        metadata: DXUnitMetadata | None = None,
     ):  # Additional inputs used for specific models
         # Initialize direct values
 
@@ -231,14 +216,16 @@ class DXUnit:
         self.refrigerant_charge_deviation = refrigerant_charge_deviation
 
         # Number of stages/speeds
-        if type(rated_net_total_cooling_capacity) is list:
+        self.number_of_cooling_speeds: int
+        if isinstance(rated_net_total_cooling_capacity, list):
             self.number_of_cooling_speeds = len(rated_net_total_cooling_capacity)
         elif staging_type is not None:
             self.number_of_cooling_speeds = staging_type.value if staging_type != StagingType.VARIABLE_SPEED else 4
         else:
             self.number_of_cooling_speeds = 1
 
-        if type(rated_net_heating_capacity) is list:
+        self.number_of_heating_speeds: int
+        if isinstance(rated_net_heating_capacity, list):
             self.number_of_heating_speeds = len(rated_net_heating_capacity)
         elif staging_type is not None:
             self.number_of_heating_speeds = staging_type.value if staging_type != StagingType.VARIABLE_SPEED else 4
@@ -248,9 +235,9 @@ class DXUnit:
         self.cooling_full_load_speed = cooling_full_load_speed
         self.heating_full_load_speed = heating_full_load_speed
 
-        self.cooling_boost_speed: Union[int, None] = 0 if self.cooling_full_load_speed > 0 else None
+        self.cooling_boost_speed: int | None = 0 if self.cooling_full_load_speed > 0 else None
 
-        self.heating_boost_speed: Union[int, None] = 0 if self.heating_full_load_speed > 0 else None
+        self.heating_boost_speed: int | None = 0 if self.heating_full_load_speed > 0 else None
 
         if cooling_intermediate_speed is None:
             self.cooling_intermediate_speed = cooling_full_load_speed + 1
@@ -262,11 +249,13 @@ class DXUnit:
         else:
             self.heating_intermediate_speed = heating_intermediate_speed
 
+        self.cooling_low_speed: int | None
         if self.number_of_cooling_speeds > 1:
             self.cooling_low_speed = self.number_of_cooling_speeds - 1
         else:
             self.cooling_low_speed = None
 
+        self.heating_low_speed: int | None
         if self.number_of_heating_speeds > 1:
             self.heating_low_speed = self.number_of_heating_speeds - 1
         else:
@@ -305,19 +294,23 @@ class DXUnit:
         self.set_c_d_heating(c_d_heating)
 
         # Set net capacities and fan
-        self.rated_net_total_cooling_capacity: List[float]
-        self.rated_net_heating_capacity: List[float]
+        self.rated_net_total_cooling_capacity: list[float]
+        self.rated_net_heating_capacity: list[float]
+        self.rated_cooling_fan_power: list[float]
+        self.rated_heating_fan_power: list[float]
         self.fan: Fan
         self.set_net_capacities_and_fan(rated_net_total_cooling_capacity, rated_net_heating_capacity, fan)
 
         self.rated_full_flow_external_static_pressure = self.get_rated_full_flow_rated_pressure()
 
         # Derived gross capacities
+        self.rated_gross_total_cooling_capacity: list[float]
         for i in range(self.number_of_cooling_speeds):
             self.rated_gross_total_cooling_capacity[i] = (
                 self.rated_net_total_cooling_capacity[i] + self.rated_cooling_fan_power[i]
             )
 
+        self.rated_gross_heating_capacity: list[float]
         for i in range(self.number_of_heating_speeds):
             self.rated_gross_heating_capacity[i] = self.rated_net_heating_capacity[i] - self.rated_heating_fan_power[i]
 
@@ -547,7 +540,7 @@ class DXUnit:
                     self.rated_gross_shr_cooling[self.cooling_boost_speed] = self.get_rated_gross_shr(self.A_boost_cond)
                     self.calculate_rated_bypass_factor(self.A_boost_cond)
 
-            self.rated_gross_shr_cooling[self.cooling_low_speed] = self.get_rated_gross_shr(self.A_low_cond)
+            self.rated_gross_shr_cooling[self.cooling_low_speed] = self.get_rated_gross_shr(self.A_low_cond)  # type: ignore
             self.calculate_rated_bypass_factor(self.A_low_cond)
 
     def reset_rated_flow_rates(
@@ -556,12 +549,12 @@ class DXUnit:
         rated_heating_airflow_per_rated_net_capacity,
     ):
         # Make new fan settings
-        if type(rated_cooling_airflow_per_rated_net_capacity) is not list:
+        if not isinstance(rated_cooling_airflow_per_rated_net_capacity, list):
             rated_cooling_airflow_per_rated_net_capacity = [
                 rated_cooling_airflow_per_rated_net_capacity
             ] * self.number_of_cooling_speeds
 
-        if type(rated_heating_airflow_per_rated_net_capacity) is not list:
+        if not isinstance(rated_heating_airflow_per_rated_net_capacity, list):
             rated_heating_airflow_per_rated_net_capacity = [
                 rated_heating_airflow_per_rated_net_capacity
             ] * self.number_of_heating_speeds
@@ -627,7 +620,7 @@ class DXUnit:
         self.rated_gross_total_cooling_capacity = [None] * self.number_of_cooling_speeds
         self.rated_gross_shr_cooling = [None] * self.number_of_cooling_speeds
         self.rated_bypass_factor = [None] * self.number_of_cooling_speeds
-        self.normalized_ntu = [None] * self.number_of_cooling_speeds
+        self.normalized_ntu: list[float] = [float("nan")] * self.number_of_cooling_speeds
         self.rated_net_cooling_cop = [None] * self.number_of_cooling_speeds
         self.rated_net_cooling_power = [None] * self.number_of_cooling_speeds
         self.rated_gross_cooling_power = [None] * self.number_of_cooling_speeds
@@ -714,7 +707,7 @@ class DXUnit:
             # TODO: Handle default mappings?
             self.fan = input
         else:
-            airflows = []
+            airflows: list[float] = []
             self.cooling_fan_speed = []
             self.heating_fan_speed = []
             self.rated_cooling_fan_speed = []
@@ -793,7 +786,7 @@ class DXUnit:
             conditions = self.A_full_cond
         return limit_check(self.full_charge_gross_sensible_cooling_capacity(conditions), min=0.0)
 
-    def gross_shr(self, conditions=None):
+    def gross_shr(self, conditions: OperatingConditions | None = None) -> float:
         return limit_check(
             self.gross_sensible_cooling_capacity(conditions) / self.gross_total_cooling_capacity(conditions),
             min=0.0,
@@ -832,7 +825,9 @@ class DXUnit:
     def net_sensible_cooling_cop(self, conditions=None):
         return self.net_sensible_cooling_capacity(conditions) / self.net_cooling_power(conditions)
 
-    def gross_cooling_outlet_state(self, conditions=None, gross_sensible_capacity=None):
+    def gross_cooling_outlet_state(
+        self, conditions: CoolingConditions | None = None, gross_sensible_capacity: float | None = None
+    ) -> PsychState:
         if conditions is None:
             conditions = self.A_full_cond
         if gross_sensible_capacity is None:
@@ -845,7 +840,7 @@ class DXUnit:
         T_odb = T_idb - gross_sensible_capacity / (m_dot_rated * conditions.indoor.C_p)
         return PsychState(T_odb, pressure=conditions.indoor.p, enthalpy=h_o)
 
-    def calculate_adp_state(self, inlet_state, outlet_state):
+    def calculate_adp_state(self, inlet_state: PsychState, outlet_state: PsychState) -> PsychState:
         T_idb = inlet_state.db_C
         w_i = inlet_state.hr
         T_odb = outlet_state.db_C
@@ -865,7 +860,7 @@ class DXUnit:
             )
         return PsychState(fr_u(T_ADP, "°C"), pressure=inlet_state.p, hum_rat=w_ADP)
 
-    def calculate_rated_bypass_factor(self, conditions: CoolingConditions):  # for rated flow rate
+    def calculate_rated_bypass_factor(self, conditions: CoolingConditions) -> None:  # for rated flow rate
         Q_s_rated = self.rated_gross_shr_cooling[conditions.compressor_speed] * self.gross_total_cooling_capacity(
             conditions
         )
@@ -879,16 +874,18 @@ class DXUnit:
             self.rated_bypass_factor[conditions.compressor_speed]
         )  # A0 = - m_dot * ln(BF)
 
-    def bypass_factor(self, conditions=None):
+    def bypass_factor(self, conditions: CoolingConditions | None = None) -> float:
         if conditions is None:
             conditions = self.A_full_cond
         return math.exp(-self.normalized_ntu[conditions.compressor_speed] / conditions.mass_airflow)
 
-    def adp_state(self, conditions=None):
+    def adp_state(self, conditions: CoolingConditions | None = None) -> PsychState:
+        if conditions is None:
+            conditions = self.A_full_cond
         outlet_state = self.gross_cooling_outlet_state(conditions)
         return self.calculate_adp_state(conditions.indoor, outlet_state)
 
-    def eer(self, conditions=None):
+    def eer(self, conditions: CoolingConditions | None = None) -> float:
         return to_u(self.net_total_cooling_cop(conditions), "Btu/Wh")
 
     def seer(self):
@@ -1569,7 +1566,7 @@ class DXUnit:
 
         return representation
 
-    def plot(self, output_path: Union[Path, str]):
+    def plot(self, output_path: Path | str) -> None:
         """Generate an HTML plot for this system."""
 
         # Heating Temperatures
@@ -1741,7 +1738,7 @@ class DXUnit:
 
         plot.write_html_plot(output_path)
 
-    def write_validation_tables(self, output_dir: Union[Path, str], file_name: str):
+    def write_validation_tables(self, output_dir: Path | str, file_name: str) -> None:
         """
         Create inputs used to verify rating calculations at https://seerhspf2.ahrianalytics.org/app/seerhspf2.
         Work in progress...

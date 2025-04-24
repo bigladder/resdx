@@ -1,15 +1,16 @@
-from enum import Enum
-from typing import Union, Dict
 from copy import deepcopy
+from enum import Enum
 
 from koozie import fr_u, to_u
 
-from ..dx_unit import DXUnit, AHRIVersion
+from ..conditions import CoolingConditions, HeatingConditions
 from ..defrost import Defrost
+from ..dx_unit import AHRIVersion, DXUnit
+from ..enums import StagingType
+from ..fan import RESNETBPMFan, RESNETPSCFan
+from ..psychrometrics import PsychState
+from ..util import make_list, set_default
 from .nrel import NRELDXModel
-from .title24 import Title24DXModel
-from .carrier_defrost_model import CarrierDefrostModel
-from ..fan import RESNETPSCFan, RESNETBPMFan
 from .tabular_data import (
     TemperatureSpeedPerformance,
     make_neep_statistical_model_data,
@@ -17,10 +18,7 @@ from .tabular_data import (
     make_two_speed_model_data,
     neep_cap47_from_cap95,
 )
-from ..util import set_default, make_list
-from ..enums import StagingType
-from ..conditions import CoolingConditions, HeatingConditions
-from ..psychrometrics import PsychState
+from .title24 import Title24DXModel
 
 
 class FanMotorType(Enum):
@@ -49,17 +47,17 @@ class RESNETDXModel(DXUnit):
         rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
         tabular_data: TemperatureSpeedPerformance | None = None,
     ) -> None:
-        self.net_tabular_data: Union[TemperatureSpeedPerformance, None] = tabular_data
-        self.gross_tabular_data: Union[TemperatureSpeedPerformance, None] = None
-        self.motor_type: Union[FanMotorType, None] = motor_type
-        self.rated_net_heating_capacity_17: Union[float, None] = rated_net_heating_capacity_17
-        self.min_net_total_cooling_capacity_ratio_95: Union[float, None] = min_net_total_cooling_capacity_ratio_95
-        self.rated_net_total_cooling_cop_82_min: Union[float, None] = rated_net_total_cooling_cop_82_min
+        self.net_tabular_data: TemperatureSpeedPerformance | None = tabular_data
+        self.gross_tabular_data: TemperatureSpeedPerformance | None = None
+        self.motor_type: FanMotorType | None = motor_type
+        self.rated_net_heating_capacity_17: float | None = rated_net_heating_capacity_17
+        self.min_net_total_cooling_capacity_ratio_95: float | None = min_net_total_cooling_capacity_ratio_95
+        self.rated_net_total_cooling_cop_82_min: float | None = rated_net_total_cooling_cop_82_min
 
-        self.tabular_cooling_speed_map: Dict[int, float]
-        self.tabular_heating_speed_map: Dict[int, float]
-        self.inverse_tabular_cooling_speed_map: Dict[int, int]
-        self.inverse_tabular_heating_speed_map: Dict[int, int]
+        self.tabular_cooling_speed_map: dict[int, float]
+        self.tabular_heating_speed_map: dict[int, float]
+        self.inverse_tabular_cooling_speed_map: dict[int, int]
+        self.inverse_tabular_heating_speed_map: dict[int, int]
         super().__init__(
             staging_type=staging_type,
             rated_net_total_cooling_capacity=rated_net_total_cooling_capacity,
@@ -76,7 +74,7 @@ class RESNETDXModel(DXUnit):
         )
 
     # Power and capacity
-    def full_charge_gross_cooling_power(self, conditions: CoolingConditions):
+    def full_charge_gross_cooling_power(self, conditions: CoolingConditions) -> float:
         if self.net_tabular_data is not None:
             return self.gross_tabular_data.cooling_power(
                 self.tabular_cooling_speed_map[conditions.compressor_speed],
@@ -85,7 +83,7 @@ class RESNETDXModel(DXUnit):
         else:
             return NRELDXModel.full_charge_gross_cooling_power(self, conditions)
 
-    def full_charge_gross_total_cooling_capacity(self, conditions: CoolingConditions):
+    def full_charge_gross_total_cooling_capacity(self, conditions: CoolingConditions) -> float:
         if self.net_tabular_data is not None:
             return self.gross_tabular_data.cooling_capacity(
                 self.tabular_cooling_speed_map[conditions.compressor_speed],

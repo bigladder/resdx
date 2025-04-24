@@ -1,41 +1,36 @@
 # %%
 import csv
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Dict, List
 from pathlib import Path
 
-
-from numpy import linspace
-from scipy import optimize
-from jinja2 import Environment, FileSystemLoader
-
-from koozie import fr_u
-
 from dimes import (
-    LineProperties,
-    MarkersOnly,
-    LinesOnly,
+    DimensionalData,
     DimensionalPlot,
     DisplayData,
-    DimensionalData,
+    LineProperties,
+    LinesOnly,
+    MarkersOnly,
 )
+from jinja2 import Environment, FileSystemLoader
+from koozie import fr_u
+from numpy import linspace
+from scipy import optimize
 
-
+from resdx import RESNETDXModel, StagingType
+from resdx.models.tabular_data import neep_cap47_from_cap95
 from resdx.util import (
-    linear,
-    linear_string,
-    quadratic,
-    quadratic_string,
     # cubic,
     # cubic_string,
     # quartic,
     # quartic_string,
     calculate_r_squared,
     geometric_space,
+    linear,
+    linear_string,
+    quadratic,
+    quadratic_string,
 )
-
-from resdx import RESNETDXModel, StagingType
-from resdx.models.tabular_data import neep_cap47_from_cap95
 
 
 class CurveFit:
@@ -50,18 +45,18 @@ quadratic_curve_fit = CurveFit(quadratic, quadratic_string, (1, 1, 1))
 
 
 class RatingRegression:
-    input_data: List[List[float]]
+    input_data: list[list[float]]
 
     def __init__(
         self,
         staging_type: StagingType,
-        calculation,
+        calculation: Callable[[float, float, StagingType, float], float],
         input_title: str,
-        initial_guess,
+        initial_guess: Callable[[float], float],
         rating_range: DisplayData,
         secondary_range: DisplayData,
         curve_fit: CurveFit,
-    ):
+    ) -> None:
         self.staging_type = staging_type
         self.calculation = calculation
         self.input_title = input_title
@@ -70,9 +65,9 @@ class RatingRegression:
         self.secondary_range = secondary_range
         self.curve_fit = curve_fit
 
-    def evaluate(self, output_name, do_curve_fit=False):
+    def evaluate(self, output_name: str, do_curve_fit: bool = False) -> None:
         display_data = []
-        csv_output_data = {
+        csv_output_data: dict[str, list] = {
             self.rating_range.name: [],
             self.secondary_range.name: [],
             self.input_title: [],
@@ -138,7 +133,7 @@ class RatingRegression:
         # time.sleep(2)
         # plot.write_image_plot(f"output/{figure_name}.pdf")
 
-    def write_csv(self, column_dictionary: Dict[str, List[float]], table_name: str):
+    def write_csv(self, column_dictionary: dict[str, list[float]], table_name: str) -> None:
         with open(f"output/{table_name}-points.csv", "w", encoding="utf-8") as csv_file:
             writer = csv.writer(csv_file)
             key_list = list(column_dictionary.keys())
@@ -146,7 +141,7 @@ class RatingRegression:
             for index in range(len(column_dictionary[key_list[0]])):
                 writer.writerow([column_dictionary[key][index] for key in key_list])
 
-    def write_csv2(self, table_name: str, write_mode: str = "w"):
+    def write_csv2(self, table_name: str, write_mode: str = "w") -> None:
         with open(f"output/{table_name}-table.csv", write_mode, encoding="utf-8") as csv_file:
             writer = csv.writer(csv_file)
             writer.writerow([f"{self.staging_type.name} {self.input_title}", self.rating_range.name])

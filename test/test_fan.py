@@ -1,6 +1,7 @@
-import resdx
-from pytest import approx
 from koozie import fr_u
+from pytest import approx
+
+import resdx
 
 
 def test_psc_fan():

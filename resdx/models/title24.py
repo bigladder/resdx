@@ -1,12 +1,13 @@
 from enum import Enum
+
+from koozie import fr_u, to_u
 from scipy import optimize
 
 from resdx.fan import ConstantEfficacyFan
 
-from koozie import fr_u, to_u
 from ..defrost import DefrostStrategy
-
 from ..dx_unit import DXUnit
+from ..conditions import CoolingConditions
 
 
 class Title24DXModel(DXUnit):
@@ -31,7 +32,7 @@ class Title24DXModel(DXUnit):
             + coeffs[11]
         )
 
-    def gross_shr(self, conditions):
+    def gross_shr(self, conditions: CoolingConditions) -> float:
         T_iwb = to_u(conditions.indoor.wb, "°F")  # Cutler curves use °F
         T_odb = to_u(conditions.outdoor.db, "°F")  # Title 24 curves use °F
         T_idb = to_u(conditions.indoor.db, "°F")  # Title 24 curves use °F

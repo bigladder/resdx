@@ -1,7 +1,7 @@
-from koozie import fr_u, to_u
-
 import sys
+
 import psychrolib
+from koozie import fr_u, to_u
 
 psychrolib.SetUnitSystem(psychrolib.SI)
 

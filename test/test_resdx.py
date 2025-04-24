@@ -1,12 +1,9 @@
+from koozie import fr_u
 from pytest import approx
-
 from scipy import optimize
 
-from koozie import fr_u
-
-from resdx import RESNETDXModel, StagingType, AHRIVersion, make_neep_model_data
+from resdx import AHRIVersion, RESNETDXModel, StagingType, make_neep_model_data
 from resdx.rating_solver import make_rating_unit
-
 
 # Single speed gross COP values used for regression testing
 COP_C = 3.312

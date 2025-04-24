@@ -1,6 +1,6 @@
-'''
+"""
 This file is generated from a template. To modify, edit the *.py.jinja file.
-'''
+"""
 from scipy.interpolate import RegularGridInterpolator
 
 from ..enums import StagingType

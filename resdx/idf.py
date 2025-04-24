@@ -1,17 +1,17 @@
+"""
+Functionality to generate EnergyPlus IDF snippets from a DXUnit object
+"""
+
 import sys
 from enum import Enum
 
 import koozie
 
-from .dx_unit import DXUnit
 from .conditions import CoolingConditions, HeatingConditions
-from .psychrometrics import PsychState
-from .defrost import DefrostStrategy, DefrostControl
+from .defrost import DefrostControl, DefrostStrategy
+from .dx_unit import DXUnit
 from .models.nrel import NRELDXModel
-
-"""
-Functionality to generate EnergyPlus IDF snippets from a DXUnit object
-"""
+from .psychrometrics import PsychState
 
 
 class IDFField:

@@ -1,21 +1,21 @@
-from scipy import optimize
 import copy
 from enum import Enum
 
 from koozie import fr_u, to_u
-from ..util import calc_biquad, calc_quad, limit_check, bracket
-from ..psychrometrics import psychrolib, PsychState
-from ..defrost import DefrostControl, DefrostStrategy
-from ..conditions import CoolingConditions, HeatingConditions
-from ..fan import Fan
+from scipy import optimize
 
+from ..conditions import CoolingConditions, HeatingConditions
+from ..defrost import DefrostControl, DefrostStrategy
 from ..dx_unit import DXUnit
+from ..fan import Fan
+from ..psychrometrics import PsychState, psychrolib
+from ..util import bracket, calc_biquad, calc_quad, limit_check
 
 
 class NRELDXModel(DXUnit):
-    """Based on Cutler et al, but also includes internal EnergyPlus calculations"""
+    """Based on Cutler et al, but also includes internal EnergyPlus calculations
 
-    """Also, some assumptions from: https://github.com/NREL/OpenStudio-ERI/blob/master/hpxml-measures/HPXMLtoOpenStudio/resources/hvac.rb"""
+    Also, some assumptions from: https://github.com/NREL/OpenStudio-ERI/blob/master/hpxml-measures/HPXMLtoOpenStudio/resources/hvac.rb"""
 
     COOLING_EIR_FT_COEFFICIENTS = [
         -3.400341169,
