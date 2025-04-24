@@ -24,9 +24,8 @@ from dimes import (
 from .psychrometrics import PsychState, psychrolib, STANDARD_CONDITIONS
 from .conditions import HeatingConditions, CoolingConditions, OperatingConditions
 from .defrost import Defrost, DefrostControl
-from .util import find_nearest, limit_check
-from .models import RESNETDXModel, DXModel
-from .fan import Fan, FanMotorType
+from .util import find_nearest, limit_check, set_default
+from .fan import Fan, FanMotorType, ConstantEfficacyFan
 from .enums import StagingType
 
 
@@ -141,23 +140,24 @@ class DXUnit:
     def __init__(
         # defaults of None are defaulted within this function based on other argument values
         self,
-        model: Union[DXModel, None] = None,
-        staging_type=None,  # Allow default based on inputs
+        staging_type: StagingType | None = None,  # Allow default based on inputs
         # Cooling (rating = AHRI A conditions)
-        rated_net_total_cooling_capacity=fr_u(3.0, "ton_ref"),
-        rated_gross_cooling_cop=3.72,
-        rated_net_cooling_cop=None,
-        rated_cooling_airflow_per_rated_net_capacity=None,
-        c_d_cooling=None,
-        cooling_off_temperature=fr_u(125.0, "°F"),
+        rated_net_total_cooling_capacity: float = fr_u(3.0, "ton_ref"),
+        rated_gross_cooling_cop: float | None = 3.72,
+        rated_net_cooling_cop: float | None = None,
+        rated_cooling_airflow_per_rated_net_capacity: float | None = None,
+        c_d_cooling: float | None = None,
+        cooling_off_temperature: float = fr_u(125.0, "°F"),
         # Heating (rating = AHRI H1 conditions)
-        rated_net_heating_capacity=None,
+        rated_net_heating_capacity: float | None = None,
         rated_gross_heating_cop=3.82,
-        rated_net_heating_cop=None,
-        rated_heating_airflow_per_rated_net_capacity=None,
-        c_d_heating=None,
-        heating_off_temperature=None,
-        heating_on_temperature=None,  # default to heating_off_temperature
+        rated_net_heating_cop: float | None = None,
+        rated_heating_airflow_per_rated_net_capacity: float | None = None,
+        c_d_heating: float | None = None,
+        heating_off_temperature: float | None = None,
+        heating_on_temperature: (
+            float | None
+        ) = None,  # default to heating_off_temperature
         defrost=None,
         # Fan
         fan=None,
@@ -179,20 +179,20 @@ class DXUnit:
         is_ducted=True,
         rating_standard=AHRIVersion.AHRI_210_240_2023,
         # Used for comparisons and to inform some defaults
-        input_seer=None,  # SEER value input (may not match calculated SEER of the model)
-        input_eer=None,  # EER value input (may not match calculated EER of the model)
-        input_hspf=None,  # HSPF value input (may not match calculated HSPF of the model)
+        input_seer: (
+            float | None
+        ) = None,  # SEER value input (may not match calculated SEER of the model)
+        input_eer: (
+            float | None
+        ) = None,  # EER value input (may not match calculated EER of the model)
+        input_hspf: (
+            float | None
+        ) = None,  # HSPF value input (may not match calculated HSPF of the model)
         metadata=None,
-        **kwargs,
     ):  # Additional inputs used for specific models
         # Initialize direct values
-        self.kwargs = kwargs
-
-        self.model: DXModel = RESNETDXModel() if model is None else model
 
         self.metadata = DXUnitMetadata() if metadata is None else metadata
-
-        self.model.set_system(self)
 
         # Inputs used by some models
         # Ratings
@@ -202,6 +202,7 @@ class DXUnit:
 
         if self.input_seer is not None:
             if self.input_eer is None:
+                # Default EER based on Title 24 ACM
                 self.input_eer = (
                     10.0 + 0.84 * (self.input_seer - 11.5)
                     if self.input_seer < 13.0
@@ -225,9 +226,6 @@ class DXUnit:
         )
         self.rating_standard = rating_standard
         self.refrigerant_charge_deviation = refrigerant_charge_deviation
-
-        # Placeholder for additional data set specific to the model
-        self.model_data: dict = {}
 
         # Number of stages/speeds
         if type(rated_net_total_cooling_capacity) is list:
@@ -312,14 +310,14 @@ class DXUnit:
         # Degradation coefficients
         self.c_d_cooling: float
         self.c_d_heating: float
-        self.model.set_c_d_cooling(c_d_cooling)
-        self.model.set_c_d_heating(c_d_heating)
+        self.set_c_d_cooling(c_d_cooling)
+        self.set_c_d_heating(c_d_heating)
 
         # Set net capacities and fan
         self.rated_net_total_cooling_capacity: List[float]
         self.rated_net_heating_capacity: List[float]
         self.fan: Fan
-        self.model.set_net_capacities_and_fan(
+        self.set_net_capacities_and_fan(
             rated_net_total_cooling_capacity, rated_net_heating_capacity, fan
         )
 
@@ -366,16 +364,16 @@ class DXUnit:
             )
 
         if rated_net_cooling_cop is not None:
-            self.model.set_rated_net_cooling_cop(rated_net_cooling_cop)
+            self.set_rated_net_cooling_cop(rated_net_cooling_cop)
 
         if rated_gross_cooling_cop is not None:
-            self.model.set_rated_gross_cooling_cop(rated_gross_cooling_cop)
+            self.set_rated_gross_cooling_cop(rated_gross_cooling_cop)
 
         if rated_net_heating_cop is not None:
-            self.model.set_rated_net_heating_cop(rated_net_heating_cop)
+            self.set_rated_net_heating_cop(rated_net_heating_cop)
 
         if rated_gross_heating_cop is not None:
-            self.model.set_rated_gross_heating_cop(rated_gross_heating_cop)
+            self.set_rated_gross_heating_cop(rated_gross_heating_cop)
 
         ## Check for errors
 
@@ -385,6 +383,91 @@ class DXUnit:
         # Check to make sure arrays are in descending order
         self.check_array_order(self.rated_net_total_cooling_capacity)
         self.check_array_order(self.rated_net_heating_capacity)
+
+    def set_c_d_cooling(self, input):
+        self.c_d_cooling = set_default(input, 0.25)
+
+    def set_c_d_heating(self, input):
+        self.c_d_heating = set_default(input, 0.25)
+
+    def set_rated_net_cooling_cop(self, input):
+        # No default, but need to set to list (and default lower speeds)
+        if type(input) is list:
+            self.rated_net_cooling_cop = input
+        else:
+            self.rated_net_cooling_cop = [input] * self.number_of_cooling_speeds
+        self.rated_net_cooling_power = [
+            self.rated_net_total_cooling_capacity[i] / self.rated_net_cooling_cop[i]
+            for i in range(self.number_of_cooling_speeds)
+        ]
+        self.rated_gross_cooling_power = [
+            self.rated_net_cooling_power[i] - self.rated_cooling_fan_power[i]
+            for i in range(self.number_of_cooling_speeds)
+        ]
+        self.rated_gross_cooling_cop = [
+            self.rated_gross_total_cooling_capacity[i]
+            / self.rated_gross_cooling_power[i]
+            for i in range(self.number_of_cooling_speeds)
+        ]
+
+    def set_rated_gross_cooling_cop(self, input):
+        # No default, but need to set to list (and default lower speeds)
+        if type(input) is list:
+            self.rated_gross_cooling_cop = input
+        else:
+            self.rated_gross_cooling_cop = [input] * self.number_of_cooling_speeds
+            self.rated_gross_cooling_power = [
+                self.rated_gross_total_cooling_capacity[i]
+                / self.rated_gross_cooling_cop[i]
+                for i in range(self.number_of_cooling_speeds)
+            ]
+            self.rated_net_cooling_power = [
+                self.rated_gross_cooling_power[i] + self.rated_cooling_fan_power[i]
+                for i in range(self.number_of_cooling_speeds)
+            ]
+            self.rated_net_cooling_cop = [
+                self.rated_net_total_cooling_capacity[i]
+                / self.rated_net_cooling_power[i]
+                for i in range(self.number_of_cooling_speeds)
+            ]
+
+    def set_rated_net_heating_cop(self, input):
+        # No default, but need to set to list (and default lower speeds)
+        if type(input) is list:
+            self.rated_net_heating_cop = input
+        else:
+            self.rated_net_heating_cop = [input] * self.number_of_heating_speeds
+        self.rated_net_heating_power = [
+            self.rated_net_heating_capacity[i] / self.rated_net_heating_cop[i]
+            for i in range(self.number_of_heating_speeds)
+        ]
+        self.rated_gross_heating_power = [
+            self.rated_net_heating_power[i] - self.rated_heating_fan_power[i]
+            for i in range(self.number_of_heating_speeds)
+        ]
+        self.rated_gross_heating_cop = [
+            self.rated_gross_heating_capacity[i] / self.rated_gross_heating_power[i]
+            for i in range(self.number_of_heating_speeds)
+        ]
+
+    def set_rated_gross_heating_cop(self, input):
+        # No default, but need to set to list (and default lower speeds)
+        if type(input) is list:
+            self.rated_gross_heating_cop = input
+        else:
+            self.rated_gross_heating_cop = [input] * self.number_of_heating_speeds
+            self.rated_gross_heating_power = [
+                self.rated_gross_heating_capacity[i] / self.rated_gross_heating_cop[i]
+                for i in range(self.number_of_heating_speeds)
+            ]
+            self.rated_net_heating_power = [
+                self.rated_gross_heating_power[i] + self.rated_heating_fan_power[i]
+                for i in range(self.number_of_heating_speeds)
+            ]
+            self.rated_net_heating_cop = [
+                self.rated_net_heating_capacity[i] / self.rated_net_heating_power[i]
+                for i in range(self.number_of_heating_speeds)
+            ]
 
     def set_rating_conditions(self) -> None:
         self.rated_full_flow_external_static_pressure = (
@@ -480,25 +563,25 @@ class DXUnit:
 
     def set_sensible_cooling_variables(self):
         self.rated_gross_shr_cooling[self.cooling_full_load_speed] = (
-            self.model.gross_shr(self.A_full_cond)
+            self.get_rated_gross_shr(self.A_full_cond)
         )
         self.calculate_rated_bypass_factor(self.A_full_cond)
 
         if self.staging_type != StagingType.SINGLE_STAGE:
             if self.staging_type == StagingType.VARIABLE_SPEED:
                 self.rated_gross_shr_cooling[self.cooling_intermediate_speed] = (
-                    self.model.gross_shr(self.A_int_cond)
+                    self.get_rated_gross_shr(self.A_int_cond)
                 )
                 self.calculate_rated_bypass_factor(self.A_int_cond)
 
                 if self.cooling_boost_speed is not None:
                     self.rated_gross_shr_cooling[self.cooling_boost_speed] = (
-                        self.model.gross_shr(self.A_boost_cond)
+                        self.get_rated_gross_shr(self.A_boost_cond)
                     )
                     self.calculate_rated_bypass_factor(self.A_boost_cond)
 
-            self.rated_gross_shr_cooling[self.cooling_low_speed] = self.model.gross_shr(
-                self.A_low_cond
+            self.rated_gross_shr_cooling[self.cooling_low_speed] = (
+                self.get_rated_gross_shr(self.A_low_cond)
             )
             self.calculate_rated_bypass_factor(self.A_low_cond)
 
@@ -670,6 +753,73 @@ class DXUnit:
         # Reset rating conditions to use the any differences between standards
         self.set_rating_conditions()
 
+    def set_rated_net_total_cooling_capacity(self, input):
+        # No default, but need to set to list (and default lower speeds)
+        if type(input) is list:
+            self.rated_net_total_cooling_capacity = input
+        else:
+            self.rated_net_total_cooling_capacity = [
+                input
+            ] * self.number_of_cooling_speeds
+
+    def set_rated_net_heating_capacity(self, input):
+        input = self.set_heating_default(
+            input, self.rated_net_total_cooling_capacity[0]
+        )
+        if type(input) is list:
+            self.rated_net_heating_capacity = input
+        else:
+            self.rated_net_heating_capacity = [input] * self.number_of_heating_speeds
+
+    def set_fan(self, input):
+        if input is not None:
+            # TODO: Handle default mappings?
+            self.fan = input
+        else:
+            airflows = []
+            self.cooling_fan_speed = []
+            self.heating_fan_speed = []
+            self.rated_cooling_fan_speed = []
+            self.rated_heating_fan_speed = []
+
+            design_efficacy = fr_u(0.365, "W/cfm")
+            for i, net_capacity in enumerate(self.rated_net_total_cooling_capacity):
+                self.rated_cooling_airflow[i] = net_capacity * fr_u(
+                    375.0, "cfm/ton_ref"
+                )
+                airflows.append(self.rated_cooling_airflow[i])
+                self.rated_cooling_fan_power[i] = (
+                    self.rated_cooling_airflow[i] * design_efficacy
+                )
+                self.cooling_fan_speed.append(len(airflows) - 1)
+                self.rated_cooling_fan_speed.append(len(airflows) - 1)
+
+            for i, net_capacity in enumerate(self.rated_net_heating_capacity):
+                self.rated_heating_airflow[i] = net_capacity * fr_u(
+                    375.0, "cfm/ton_ref"
+                )
+                airflows.append(self.rated_heating_airflow[i])
+                self.rated_heating_fan_power[i] = (
+                    self.rated_heating_airflow[i] * design_efficacy
+                )
+                self.heating_fan_speed.append(len(airflows) - 1)
+                self.rated_heating_fan_speed.append(len(airflows) - 1)
+
+            self.rated_cooling_fan_speed = self.cooling_fan_speed
+            self.rated_heating_fan_speed = self.heating_fan_speed
+
+            fan = ConstantEfficacyFan(
+                airflows, fr_u(0.50, "in_H2O"), design_efficacy=design_efficacy
+            )
+            self.fan = fan
+
+    def set_net_capacities_and_fan(
+        self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan
+    ):
+        self.set_rated_net_total_cooling_capacity(rated_net_total_cooling_capacity)
+        self.set_rated_net_heating_capacity(rated_net_heating_capacity)
+        self.set_fan(fan)
+
     ### For cooling ###
     def cooling_fan_power(self, conditions=None):
         if conditions is None:
@@ -679,12 +829,34 @@ class DXUnit:
     def cooling_fan_heat(self, conditions):
         return self.cooling_fan_power(conditions)
 
+    def full_charge_gross_cooling_power(self, conditions):
+        raise NotImplementedError()
+
+    def full_charge_gross_total_cooling_capacity(self, conditions):
+        raise NotImplementedError()
+
+    def full_charge_gross_sensible_cooling_capacity(self, conditions):
+        raise NotImplementedError()
+
+    def gross_total_cooling_capacity_charge_factor(
+        self, conditions  # pylint: disable=unused-argument
+    ):
+        return 1.0
+
+    def gross_cooling_power_charge_factor(
+        self, conditions  # pylint: disable=unused-argument
+    ):
+        return 1.0
+
+    def get_rated_gross_shr(self, conditions):
+        raise NotImplementedError()
+
     def gross_total_cooling_capacity(self, conditions=None):
         if conditions is None:
             conditions = self.A_full_cond
         return limit_check(
-            self.model.gross_total_cooling_capacity(conditions)
-            * self.model.gross_total_cooling_capacity_charge_factor(conditions),
+            self.full_charge_gross_total_cooling_capacity(conditions)
+            * self.gross_total_cooling_capacity_charge_factor(conditions),
             min=0.0,
         )
 
@@ -692,7 +864,7 @@ class DXUnit:
         if conditions is None:
             conditions = self.A_full_cond
         return limit_check(
-            self.model.gross_sensible_cooling_capacity(conditions), min=0.0
+            self.full_charge_gross_sensible_cooling_capacity(conditions), min=0.0
         )
 
     def gross_shr(self, conditions=None):
@@ -707,8 +879,8 @@ class DXUnit:
         if conditions is None:
             conditions = self.A_full_cond
         return limit_check(
-            self.model.gross_cooling_power(conditions)
-            * self.model.gross_cooling_power_charge_factor(conditions),
+            self.full_charge_gross_cooling_power(conditions)
+            * self.gross_cooling_power_charge_factor(conditions),
             min=0.0,
         )
 
@@ -969,6 +1141,28 @@ class DXUnit:
         return to_u(seer, "Btu/Wh")
 
     ### For heating ###
+    def full_charge_gross_steady_state_heating_capacity(self, conditions):
+        raise NotImplementedError()
+
+    def full_charge_gross_integrated_heating_capacity(self, conditions):
+        raise NotImplementedError()
+
+    def full_charge_gross_steady_state_heating_power(self, conditions):
+        raise NotImplementedError()
+
+    def full_charge_gross_integrated_heating_power(self, conditions):
+        raise NotImplementedError()
+
+    def gross_steady_state_heating_capacity_charge_factor(
+        self, conditions  # pylint: disable=unused-argument
+    ):
+        return 1.0
+
+    def gross_steady_state_heating_power_charge_factor(
+        self, conditions  # pylint: disable=unused-argument
+    ):
+        return 1.0
+
     def heating_fan_power(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
@@ -980,26 +1174,26 @@ class DXUnit:
     def gross_steady_state_heating_capacity(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
-        return self.model.gross_steady_state_heating_capacity(
+        return self.full_charge_gross_steady_state_heating_capacity(
             conditions
-        ) * self.model.gross_steady_state_heating_capacity_charge_factor(conditions)
+        ) * self.gross_steady_state_heating_capacity_charge_factor(conditions)
 
     def gross_steady_state_heating_power(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
-        return self.model.gross_steady_state_heating_power(
+        return self.full_charge_gross_steady_state_heating_power(
             conditions
-        ) * self.model.gross_steady_state_heating_power_charge_factor(conditions)
+        ) * self.gross_steady_state_heating_power_charge_factor(conditions)
 
     def gross_integrated_heating_capacity(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
-        return self.model.gross_integrated_heating_capacity(conditions)
+        return self.full_charge_gross_integrated_heating_capacity(conditions)
 
     def gross_integrated_heating_power(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
-        return self.model.gross_integrated_heating_power(conditions)
+        return self.full_charge_gross_integrated_heating_power(conditions)
 
     def net_steady_state_heating_capacity(self, conditions=None):
         return self.gross_steady_state_heating_capacity(
@@ -1899,3 +2093,9 @@ class DXUnit:
         #     writer = DictWriter(cooling_file, fieldnames=[k for k in cooling_data])
         #     writer.writeheader()
         #     writer.writerows([cooling_data])
+
+    def set_cooling_default(self, input, default):
+        return set_default(input, default, self.number_of_cooling_speeds)
+
+    def set_heating_default(self, input, default):
+        return set_default(input, default, self.number_of_heating_speeds)

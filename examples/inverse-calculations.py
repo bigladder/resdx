@@ -3,7 +3,7 @@ import csv
 from copy import deepcopy
 from typing import Dict, List
 from pathlib import Path
-import time
+
 
 from numpy import linspace
 from scipy import optimize
@@ -34,7 +34,8 @@ from resdx.util import (
     geometric_space,
 )
 
-import resdx
+from resdx import RESNETDXModel, StagingType
+from resdx.models.tabular_data import neep_cap47_from_cap95
 
 
 class CurveFit:
@@ -54,7 +55,7 @@ class RatingRegression:
 
     def __init__(
         self,
-        staging_type: resdx.StagingType,
+        staging_type: StagingType,
         calculation,
         input_title: str,
         initial_guess,
@@ -216,7 +217,7 @@ def get_inverse_values(
 # Cooling
 def seer_function(cop_82_min, target_seer, staging_type, seer_eer_ratio):
     eer = target_seer / seer_eer_ratio
-    seer = resdx.DXUnit(
+    seer = RESNETDXModel(
         staging_type=staging_type,
         input_seer=target_seer,
         input_eer=eer,
@@ -227,7 +228,7 @@ def seer_function(cop_82_min, target_seer, staging_type, seer_eer_ratio):
 
 
 two_speed_cooling_regression = RatingRegression(
-    staging_type=resdx.StagingType.TWO_STAGE,
+    staging_type=StagingType.TWO_STAGE,
     calculation=seer_function,
     input_title="$COP_{82°F,low}$",
     initial_guess=lambda target: target / 3.0,
@@ -245,7 +246,7 @@ two_speed_cooling_regression = RatingRegression(
 )
 
 variable_speed_cooling_regression = deepcopy(two_speed_cooling_regression)
-variable_speed_cooling_regression.staging_type = resdx.StagingType.VARIABLE_SPEED
+variable_speed_cooling_regression.staging_type = StagingType.VARIABLE_SPEED
 variable_speed_cooling_regression.rating_range = DimensionalData(
     [float(v) for v in list(linspace(14, 35, 3))], name="$SEER2$", native_units="Btu/Wh"
 )  # Slight inflection, three points should suffice
@@ -262,11 +263,11 @@ def hspf_function(cop_47, hspf, staging_type, cap17m):
     cap95 = fr_u(3.0, "ton_ref")
     cap47 = (
         cap95
-        if staging_type != resdx.StagingType.VARIABLE_SPEED
-        else resdx.models.tabular_data.neep_cap47_from_cap95(cap95)
+        if staging_type != StagingType.VARIABLE_SPEED
+        else neep_cap47_from_cap95(cap95)
     )
     cap17 = cap47 * cap17m
-    return resdx.DXUnit(
+    return RESNETDXModel(
         staging_type=staging_type,
         rated_net_total_cooling_capacity=cap95,
         rated_net_heating_capacity=cap47,
@@ -279,7 +280,7 @@ def hspf_function(cop_47, hspf, staging_type, cap17m):
 
 
 single_speed_heating_regression = RatingRegression(
-    staging_type=resdx.StagingType.SINGLE_STAGE,
+    staging_type=StagingType.SINGLE_STAGE,
     calculation=hspf_function,
     input_title="$COP_{47°F,full}$",
     initial_guess=lambda target: target / 2.0,
@@ -297,10 +298,10 @@ single_speed_heating_regression = RatingRegression(
 )
 
 two_speed_heating_regression = deepcopy(single_speed_heating_regression)
-two_speed_heating_regression.staging_type = resdx.StagingType.TWO_STAGE
+two_speed_heating_regression.staging_type = StagingType.TWO_STAGE
 
 variable_speed_heating_regression = deepcopy(single_speed_heating_regression)
-variable_speed_heating_regression.staging_type = resdx.StagingType.VARIABLE_SPEED
+variable_speed_heating_regression.staging_type = StagingType.VARIABLE_SPEED
 variable_speed_heating_regression.rating_range = DimensionalData(
     [float(v) for v in list(linspace(7, 16, 5))], name="$HSPF2$", native_units="Btu/Wh"
 )

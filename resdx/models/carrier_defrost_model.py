@@ -1,13 +1,11 @@
-import sys
-
 from scipy import interpolate
 
 from koozie import fr_u
 
-from .base_model import DXModel
+from ..dx_unit import DXUnit
 
 
-class CarrierDefrostModel(DXModel):
+class CarrierDefrostModel(DXUnit):
     """Based on Piotr A. Domanski et al: Sensitivity Analysis of Installation Faults on Heat Pump Performance (NIST Technical Note 1848)
     and Hugh I. Henderson et al: Savings Calculations for Residential Air Source Heat Pumps (NYSERDA and NYS Department of Public Service)
     """
@@ -20,7 +18,7 @@ class CarrierDefrostModel(DXModel):
     ]
     defrost_fractions = [0.075, 0.085, 0.11, 0.09]
 
-    def gross_integrated_heating_capacity(self, conditions):
+    def full_charge_gross_integrated_heating_capacity(self, conditions):
         if self.system.defrost.in_defrost(conditions):
             return self.system.gross_steady_state_heating_capacity(conditions) * (
                 1 - CarrierDefrostModel.fdef(conditions)
@@ -28,7 +26,7 @@ class CarrierDefrostModel(DXModel):
         else:
             return self.system.gross_steady_state_heating_capacity(conditions)
 
-    def gross_integrated_heating_power(self, conditions):
+    def full_charge_gross_integrated_heating_power(self, conditions):
         return self.system.gross_steady_state_heating_power(conditions)
 
     @staticmethod

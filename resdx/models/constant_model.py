@@ -1,38 +1,35 @@
-from .base_model import DXModel
+from ..dx_unit import DXUnit
 
 
-class ConstantDXModel(DXModel):
-
+class ConstantDXModel(DXUnit):
     """This model is developed for testing purposes where the performance is constant across all conditions"""
 
-    def gross_cooling_power(self, conditions):
+    def full_charge_gross_cooling_power(self, conditions):
         return (
-            self.system.rated_gross_total_cooling_capacity[conditions.compressor_speed]
-            / self.system.rated_gross_cooling_cop[conditions.compressor_speed]
+            self.rated_gross_total_cooling_capacity[conditions.compressor_speed]
+            / self.rated_gross_cooling_cop[conditions.compressor_speed]
         )
 
-    def gross_total_cooling_capacity(self, conditions):
-        return self.system.rated_gross_total_cooling_capacity[
-            conditions.compressor_speed
-        ]
+    def full_charge_gross_total_cooling_capacity(self, conditions):
+        return self.rated_gross_total_cooling_capacity[conditions.compressor_speed]
 
-    def gross_steady_state_heating_power(self, conditions):
+    def full_charge_gross_steady_state_heating_power(self, conditions):
         return (
-            self.system.rated_gross_heating_capacity[conditions.compressor_speed]
-            / self.system.rated_gross_heating_cop[conditions.compressor_speed]
+            self.rated_gross_heating_capacity[conditions.compressor_speed]
+            / self.rated_gross_heating_cop[conditions.compressor_speed]
         )
 
-    def gross_steady_state_heating_capacity(self, conditions):
-        return self.system.rated_gross_heating_capacity[conditions.compressor_speed]
+    def full_charge_gross_steady_state_heating_capacity(self, conditions):
+        return self.rated_gross_heating_capacity[conditions.compressor_speed]
 
-    def gross_integrated_heating_capacity(self, conditions):
-        return self.system.gross_steady_state_heating_capacity(conditions)
+    def full_charge_gross_integrated_heating_capacity(self, conditions):
+        return self.gross_steady_state_heating_capacity(conditions)
 
-    def gross_integrated_heating_power(self, conditions):
-        return self.system.gross_steady_state_heating_power(conditions)
+    def full_charge_gross_integrated_heating_power(self, conditions):
+        return self.gross_steady_state_heating_power(conditions)
 
-    def gross_sensible_cooling_capacity(self, conditions):
-        return self.system.gross_total_cooling_capacity(conditions) * self.gross_shr(
+    def full_charge_gross_sensible_cooling_capacity(self, conditions):
+        return self.gross_total_cooling_capacity(conditions) * self.gross_shr(
             conditions
         )
 

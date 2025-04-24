@@ -3,8 +3,9 @@ from scipy import optimize
 
 from koozie import fr_u
 
-from .dx_unit import DXUnit, AHRIVersion, StagingType
+from .dx_unit import AHRIVersion, StagingType
 from .defrost import Defrost
+from .models.unified_resnet import RESNETDXModel
 
 
 def make_rating_unit(
@@ -19,7 +20,7 @@ def make_rating_unit(
     t_max: float = fr_u(125.0, "degF"),
     t_defrost: float = fr_u(40.0, "degF"),
     rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
-) -> DXUnit:
+) -> RESNETDXModel:
 
     q47_: float
     if q47 is None:
@@ -31,7 +32,7 @@ def make_rating_unit(
     cop_82_min = 3.0  # Arbitrary value if it's not needed
     if staging_type != StagingType.SINGLE_STAGE:
         cop_82_min = optimize.newton(
-            lambda cop_82_min_guess: DXUnit(
+            lambda cop_82_min_guess: RESNETDXModel(
                 staging_type=staging_type,
                 rating_standard=rating_standard,
                 rated_net_total_cooling_capacity=q95,
@@ -41,9 +42,8 @@ def make_rating_unit(
                 input_eer=eer,
                 input_hspf=hspf,
                 rated_net_total_cooling_cop_82_min=cop_82_min_guess,
-                cooling_off_temperature=t_max,
                 heating_off_temperature=t_min,
-                defrost=Defrost(high_temperature=t_defrost),
+                defrost_temperature=t_defrost,
             ).seer()
             - seer,
             seer / 3.0,
@@ -51,7 +51,7 @@ def make_rating_unit(
 
     # Heating COP 47 (H1 Full)
     cop_47 = optimize.newton(
-        lambda cop_47_guess: DXUnit(
+        lambda cop_47_guess: RESNETDXModel(
             staging_type=staging_type,
             rating_standard=rating_standard,
             rated_net_total_cooling_capacity=q95,
@@ -62,15 +62,14 @@ def make_rating_unit(
             input_hspf=hspf,
             rated_net_heating_cop=cop_47_guess,
             rated_net_total_cooling_cop_82_min=cop_82_min,
-            cooling_off_temperature=t_max,
             heating_off_temperature=t_min,
-            defrost=Defrost(high_temperature=t_defrost),
+            defrost_temperature=t_defrost,
         ).hspf()
         - hspf,
         hspf / 2.0,
     )
 
-    return DXUnit(
+    return RESNETDXModel(
         staging_type=staging_type,
         rating_standard=rating_standard,
         rated_net_total_cooling_capacity=q95,
@@ -81,7 +80,6 @@ def make_rating_unit(
         input_seer=seer,
         input_eer=eer,
         input_hspf=hspf,
-        cooling_off_temperature=t_max,
         heating_off_temperature=t_min,
-        defrost=Defrost(high_temperature=t_defrost),
+        defrost_temperature=t_defrost,
     )

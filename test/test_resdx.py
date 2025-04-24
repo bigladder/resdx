@@ -1,21 +1,11 @@
-import resdx
-from koozie import fr_u
+from pytest import approx
 
 from scipy import optimize
 
-from resdx.dx_unit import AHRIVersion
+from koozie import fr_u
+
+from resdx import RESNETDXModel, StagingType, AHRIVersion, make_neep_model_data
 from resdx.rating_solver import make_rating_unit
-
-import numpy as np
-
-from pytest import approx
-
-
-DXUnit = resdx.DXUnit
-StagingType = resdx.StagingType
-PsychState = resdx.psychrometrics.PsychState
-HeatingConditions = resdx.dx_unit.HeatingConditions
-CoolingConditions = resdx.dx_unit.CoolingConditions
 
 
 # Single speed gross COP values used for regression testing
@@ -96,22 +86,19 @@ def test_1_speed_rating_version():
     # Single speed, SEER 13, HSPF 8
     seer_1 = 13.0
     hspf_1 = 8.0
-    eer_1 = seer_1 / 1.2
-    dx_unit_2017 = DXUnit(
+    dx_unit_2017 = RESNETDXModel(
         rated_net_cooling_cop=COP_C,
         rated_net_heating_cop=COP_H,
         rating_standard=AHRIVersion.AHRI_210_240_2017,
         input_seer=seer_1,
         input_hspf=hspf_1,
-        input_eer=eer_1,
     )
-    dx_unit_2023 = DXUnit(
+    dx_unit_2023 = RESNETDXModel(
         rated_net_cooling_cop=COP_C,
         rated_net_heating_cop=COP_H,
         rating_standard=AHRIVersion.AHRI_210_240_2023,
         input_seer=seer_1,
         input_hspf=hspf_1,
-        input_eer=eer_1,
     )
 
     assert dx_unit_2017.rated_cooling_airflow[0] == approx(
@@ -127,7 +114,7 @@ def test_2_speed_regression():
     hspf_2 = 10.0
 
     dx_unit_2_speed = make_rating_unit(
-        resdx.StagingType.TWO_STAGE,
+        StagingType.TWO_STAGE,
         seer_2,
         hspf_2,
         rating_standard=AHRIVersion.AHRI_210_240_2017,
@@ -151,7 +138,7 @@ def test_2_speed_regression():
 def test_neep_statistical_vchp_regression():
     # AHRI Certification #: 202680596 https://ashp.neep.org/#!/product/34439/7/25000/95/7500/0///0
     # SEER2 21, EER2 13, HSPF(4) = 11
-    vchp_unit = DXUnit(
+    vchp_unit = RESNETDXModel(
         staging_type=StagingType.VARIABLE_SPEED,
         input_seer=21,
         input_eer=13,
@@ -211,8 +198,8 @@ def test_neep_vchp_regression():
         [0.2, 1.6, 2.01],  # 47
     ]
 
-    vchp_unit = resdx.DXUnit(
-        tabular_data=resdx.models.tabular_data.make_neep_model_data(
+    vchp_unit = RESNETDXModel(
+        tabular_data=make_neep_model_data(
             cooling_capacities, cooling_powers, heating_capacities, heating_powers
         ),
         rating_standard=AHRIVersion.AHRI_210_240_2017,
@@ -248,7 +235,7 @@ def test_plot():
     hspf_1 = 8.0
     eer_1 = seer_1 / 1.2
     cop_1_h, _ = optimize.newton(
-        lambda x: DXUnit(
+        lambda x: RESNETDXModel(
             rated_net_heating_cop=x,
             input_seer=seer_1,
             input_eer=eer_1,
@@ -259,7 +246,7 @@ def test_plot():
         hspf_1 / 2.0,
         full_output=True,
     )
-    dx_unit_1_speed = DXUnit(
+    dx_unit_1_speed = RESNETDXModel(
         rated_net_heating_cop=cop_1_h,
         input_seer=seer_1,
         input_eer=eer_1,

@@ -215,7 +215,7 @@ def write_idf(
                     ),
                     IDFField(f"{system_name}Heating Coil", "Heating Coil Name"),
                     IDFField(
-                        unit.gross_integrated_heating_capacity()
+                        unit.gross_steady_state_heating_capacity()
                         / unit.gross_total_cooling_capacity(),
                         "DX Heating Coil Sizing Ratio",
                     ),
@@ -793,7 +793,7 @@ def write_idf(
             [
                 IDFField(f"{system_name}Defrost EIR", "Name"),
                 IDFField(
-                    1.0 / NRELDXModel.get_cooling_cop60(unit.model),
+                    1.0 / NRELDXModel.get_cooling_cop60(unit),
                     "Coefficient1 Constant",
                     4,
                 ),

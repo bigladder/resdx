@@ -1,7 +1,17 @@
-import resdx
 from koozie import fr_u
 from dimes.griddeddata import GridAxis, GridPointData, RegularGridData, DataSelection
 from dimes import DimensionalPlot, DimensionalData, DisplayData, LinesOnly
+
+from resdx import (
+    RESNETDXModel,
+    AHRIVersion,
+    StagingType,
+    HeatingConditions,
+    CoolingConditions,
+    PsychState,
+    HeatingDistribution,
+)
+
 from resdx.util import geometric_space
 
 output_directory_path = "output"
@@ -12,8 +22,8 @@ seer2 = 21.0
 eer2 = 13.0
 hspf2 = 11.0
 
-dx_unit = resdx.DXUnit(
-    staging_type=resdx.StagingType.VARIABLE_SPEED,
+dx_unit = RESNETDXModel(
+    staging_type=StagingType.VARIABLE_SPEED,
     rated_net_heating_capacity=fr_u(Q47rated, "Btu/h"),
     rated_net_total_cooling_capacity=fr_u(Q95rated, "Btu/h"),
     input_seer=seer2,
@@ -33,11 +43,9 @@ indoor_airflow_rates = GridAxis(
 for indoor_temperature in indoor_temperatures.data_values:
     for air_flow in indoor_airflow_rates.data_values:
         condition = dx_unit.make_condition(
-            resdx.HeatingConditions,
+            HeatingConditions,
             compressor_speed=dx_unit.heating_full_load_speed,
-            indoor=resdx.PsychState(
-                drybulb=fr_u(indoor_temperature, "degF"), rel_hum=0.4
-            ),
+            indoor=PsychState(drybulb=fr_u(indoor_temperature, "degF"), rel_hum=0.4),
         )
         condition.set_mass_airflow_ratio(air_flow / 400.0)
         cop_values.append(dx_unit.net_steady_state_heating_cop(condition))
@@ -56,7 +64,7 @@ plot.write_html_plot(f"{output_directory_path}/indoor_conditions.html")
 shr_values = []
 for air_flow in indoor_airflow_rates.data_values:
     condition = dx_unit.make_condition(
-        resdx.CoolingConditions,
+        CoolingConditions,
         compressor_speed=dx_unit.heating_full_load_speed,
     )
     condition.set_mass_airflow_ratio(air_flow / 400.0)
@@ -72,13 +80,11 @@ plot.add_display_data(shrs)
 plot.write_html_plot(f"{output_directory_path}/shr.html")
 
 # Heating temperature bins
-distributions = resdx.DXUnit.regional_heating_distributions[
-    resdx.AHRIVersion.AHRI_210_240_2023
+distributions = RESNETDXModel.regional_heating_distributions[
+    AHRIVersion.AHRI_210_240_2023
 ]
 regions = GridAxis([1, 2, 3, 4, 5, 6], "Region", "")
-dry_bulbs = GridAxis(
-    resdx.HeatingDistribution.outdoor_drybulbs, "Outdoor Temperature", "K"
-)
+dry_bulbs = GridAxis(HeatingDistribution.outdoor_drybulbs, "Outdoor Temperature", "K")
 fraction_values = []
 for region in regions.data_values:
     for index, _ in enumerate(dry_bulbs.data_values):
@@ -105,10 +111,7 @@ outdoor_temperatures = DimensionalData(
 
 capacity_degradation = DisplayData(
     [
-        1.0
-        - resdx.models.unified_resnet.RESNETDXModel.defrost_capacity_multiplier(
-            outdoor_temperature
-        )
+        1.0 - RESNETDXModel.defrost_capacity_multiplier(outdoor_temperature)
         for outdoor_temperature in outdoor_temperatures.data_values
     ],
     "Capacity",
@@ -119,10 +122,7 @@ capacity_degradation = DisplayData(
 
 power_degradation = DisplayData(
     [
-        1.0
-        - resdx.models.unified_resnet.RESNETDXModel.defrost_power_multiplier(
-            outdoor_temperature
-        )
+        1.0 - RESNETDXModel.defrost_power_multiplier(outdoor_temperature)
         for outdoor_temperature in outdoor_temperatures.data_values
     ],
     "Power",

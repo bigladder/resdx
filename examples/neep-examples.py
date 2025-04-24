@@ -1,10 +1,19 @@
-import resdx
-from koozie import fr_u
 from typing import Dict
+
+from koozie import fr_u
+
+from resdx import (
+    RESNETDXModel,
+    make_neep_model_data,
+    make_neep_statistical_model_data,
+    StagingType,
+    write_idf,
+    EnergyPlusSystemType,
+)
 
 output_directory_path = "output"
 
-dx_units: Dict[str, resdx.DXUnit] = {}
+dx_units: Dict[str, RESNETDXModel] = {}
 
 # Mitsubishi Electric M-Series
 # MUZ-GL15NAH2 AHRI Certification #: 202680596 https://ashp.neep.org/#!/product/34439/7/25000/95/7500/0///0
@@ -39,8 +48,8 @@ heating_powers = [
 ]
 
 
-dx_units[name] = resdx.DXUnit(
-    tabular_data=resdx.models.tabular_data.make_neep_model_data(
+dx_units[name] = RESNETDXModel(
+    tabular_data=make_neep_model_data(
         cooling_capacities, cooling_powers, heating_capacities, heating_powers
     ),
     input_seer=seer2,
@@ -48,8 +57,8 @@ dx_units[name] = resdx.DXUnit(
     input_hspf=hspf2,
 )
 
-dx_units[f"{name}-Statistical"] = resdx.DXUnit(
-    staging_type=resdx.StagingType.VARIABLE_SPEED,
+dx_units[f"{name}-Statistical"] = RESNETDXModel(
+    staging_type=StagingType.VARIABLE_SPEED,
     rated_net_heating_capacity=fr_u(Q47rated, "Btu/h"),
     rated_net_total_cooling_capacity=fr_u(Q95rated, "Btu/h"),
     input_seer=seer2,
@@ -89,8 +98,8 @@ heating_powers = [
     [0.85, 1.77, 3.4],  # 47
 ]
 
-dx_units[name] = resdx.DXUnit(
-    tabular_data=resdx.models.tabular_data.make_neep_model_data(
+dx_units[name] = RESNETDXModel(
+    tabular_data=make_neep_model_data(
         cooling_capacities, cooling_powers, heating_capacities, heating_powers
     ),
     input_seer=seer2,
@@ -98,8 +107,8 @@ dx_units[name] = resdx.DXUnit(
     input_hspf=hspf2,
 )
 
-dx_units[f"{name}-Statistical"] = resdx.DXUnit(
-    staging_type=resdx.StagingType.VARIABLE_SPEED,
+dx_units[f"{name}-Statistical"] = RESNETDXModel(
+    staging_type=StagingType.VARIABLE_SPEED,
     rated_net_heating_capacity=fr_u(Q47rated, "Btu/h"),
     rated_net_total_cooling_capacity=fr_u(Q95rated, "Btu/h"),
     input_seer=seer2,
@@ -139,8 +148,8 @@ heating_powers = [
     [1.2, 3.13, 3.75],  # 47
 ]
 
-dx_units[name] = resdx.DXUnit(
-    tabular_data=resdx.models.tabular_data.make_neep_model_data(
+dx_units[name] = RESNETDXModel(
+    tabular_data=make_neep_model_data(
         cooling_capacities, cooling_powers, heating_capacities, heating_powers
     ),
     input_seer=seer2,
@@ -148,8 +157,8 @@ dx_units[name] = resdx.DXUnit(
     input_hspf=hspf2,
 )
 
-dx_units[f"{name}-Statistical"] = resdx.DXUnit(
-    staging_type=resdx.StagingType.VARIABLE_SPEED,
+dx_units[f"{name}-Statistical"] = RESNETDXModel(
+    staging_type=StagingType.VARIABLE_SPEED,
     rated_net_heating_capacity=fr_u(Q47rated, "Btu/h"),
     rated_net_total_cooling_capacity=fr_u(Q95rated, "Btu/h"),
     input_seer=seer2,
@@ -189,8 +198,8 @@ heating_powers = [
     [0.45, 2.07, 2.07],  # 47
 ]
 
-dx_units[name] = resdx.DXUnit(
-    tabular_data=resdx.models.tabular_data.make_neep_model_data(
+dx_units[name] = RESNETDXModel(
+    tabular_data=make_neep_model_data(
         cooling_capacities, cooling_powers, heating_capacities, heating_powers
     ),
     input_seer=seer2,
@@ -198,8 +207,8 @@ dx_units[name] = resdx.DXUnit(
     input_hspf=hspf2,
 )
 
-dx_units[f"{name}-Statistical"] = resdx.DXUnit(
-    staging_type=resdx.StagingType.VARIABLE_SPEED,
+dx_units[f"{name}-Statistical"] = RESNETDXModel(
+    staging_type=StagingType.VARIABLE_SPEED,
     rated_net_heating_capacity=fr_u(Q47rated, "Btu/h"),
     rated_net_total_cooling_capacity=fr_u(Q95rated, "Btu/h"),
     input_seer=seer2,
@@ -213,11 +222,11 @@ for name, unit in dx_units.items():
     unit.print_cooling_info()
     print(f"Heating info for {name}:")
     unit.print_heating_info()
-    resdx.write_idf(
+    write_idf(
         unit,
         output_path=f"{output_directory_path}/{name}.idf",
         system_name="living_unit1 ZN-MSHP",
-        system_type=resdx.EnergyPlusSystemType.ZONEHVAC_PTHP,
+        system_type=EnergyPlusSystemType.ZONEHVAC_PTHP,
         autosize=True,
         normalize=True,
     )
