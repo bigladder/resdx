@@ -29,6 +29,26 @@ def bracket(value, min=None, max=None):
     return value
 
 
+def set_default(input, default, number_of_speeds=1):
+    if input is None:
+        return default
+    else:
+        if isinstance(default, list):
+            if isinstance(input, list):
+                return input
+            else:
+                return [input] * number_of_speeds
+        else:
+            return input
+
+
+def make_list(input) -> list:
+    if isinstance(input, list):
+        return input
+    else:
+        return [input]
+
+
 def calc_biquad(coeff, in_1, in_2):
     return (
         coeff[0]

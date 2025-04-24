@@ -1,5 +1,4 @@
 import resdx
-from scipy import optimize
 
 # import yaml
 # import cbor2
