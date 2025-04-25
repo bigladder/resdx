@@ -1,12 +1,6 @@
 from koozie import fr_u
 
-from resdx import (
-    EnergyPlusSystemType,
-    RESNETDXModel,
-    StagingType,
-    make_neep_model_data,
-    write_idf,
-)
+from resdx import EnergyPlusSystemType, RESNETDXModel, StagingType, make_neep_model_data, write_cse, write_idf
 
 output_directory_path = "output"
 
@@ -218,6 +212,12 @@ for name, unit in dx_units.items():
         system_type=EnergyPlusSystemType.ZONEHVAC_PTHP,
         autosize=True,
         normalize=True,
+    )
+    write_cse(
+        unit,
+        output_path=f"{output_directory_path}/{name}.cse",
+        system_name="living_unit1 ZN-MSHP",
+        autosize=True,
     )
     unit.plot(f"{output_directory_path}/{name}.html")
     unit.write_validation_tables(output_directory_path, name)

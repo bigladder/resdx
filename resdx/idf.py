@@ -41,7 +41,9 @@ def write_idf_objects(objects, output_path=None):
         file_handle.close()
 
 
-def make_independent_variable(name: str, unit_type: str, rated_value: float, values: list, precision: int = 2):
+def make_independent_variable(
+    name: str, unit_type: str, rated_value: float, values: list, precision: int = 2
+) -> tuple[str, list[IDFField]]:
     fields = [
         IDFField(name, "Name"),
         IDFField("Linear", "Interpolation Method"),
@@ -64,8 +66,8 @@ def make_lookup_table(
     unit_type: str,
     values: list,
     precision: int = 2,
-    rated_value=None,
-):
+    rated_value: float | None = None,
+) -> tuple[str, list[IDFField]]:
     fields = [
         IDFField(name, "Name"),
         IDFField(list_name, "Independent Variable List Name"),
@@ -99,12 +101,12 @@ class EnergyPlusSystemType(Enum):
 
 def write_idf(
     unit: DXUnit,
-    output_path: str = None,
-    system_name: str = None,
+    output_path: str | None = None,
+    system_name: str | None = None,
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
     autosize: bool = True,
     normalize: bool = True,
-):
+) -> None:
     if system_name is not None:
         system_name += " "
     else:
@@ -125,36 +127,36 @@ def write_idf(
                     IDFField(f"{system_name}Schedule", "Availability Schedule Name"),
                     IDFField(f"{system_name}Unitary Inlet Node", "Air Inlet Node Name"),
                     IDFField(f"{system_name}Unitary Outlet Node", "Air Outlet Node Name"),
-                    IDFField(f"", "Outdoor Air Mixer Object Type"),
-                    IDFField(f"", "Outdoor Air Mixer Name"),
-                    IDFField(f"Autosize", "Cooling Supply Air Flow Rate {m3/s}"),
-                    IDFField(f"Autosize", "Heating Supply Air Flow Rate {m3/s}"),
-                    IDFField(f"Autosize", "No Load Supply Air Flow Rate {m3/s}"),
+                    IDFField("", "Outdoor Air Mixer Object Type"),
+                    IDFField("", "Outdoor Air Mixer Name"),
+                    IDFField("Autosize", "Cooling Supply Air Flow Rate {m3/s}"),
+                    IDFField("Autosize", "Heating Supply Air Flow Rate {m3/s}"),
+                    IDFField("Autosize", "No Load Supply Air Flow Rate {m3/s}"),
                     IDFField(0.0, "Cooling Outdoor Air Flow Rate {m3/s}"),
                     IDFField(0.0, "Heating Outdoor Air Flow Rate {m3/s}"),
                     IDFField(0.0, "No Load Outdoor Air Flow Rate {m3/s}"),
-                    IDFField(f"Fan:SystemModel", "Supply Fan Object Type"),
+                    IDFField("Fan:SystemModel", "Supply Fan Object Type"),
                     IDFField(f"{system_name}Supply Fan", "Supply Fan Name"),
-                    IDFField(f"Coil:Heating:DX:VariableSpeed", "Heating Coil Object Type"),
+                    IDFField("Coil:Heating:DX:VariableSpeed", "Heating Coil Object Type"),
                     IDFField(f"{system_name}Heating Coil", "Heating Coil Name"),
-                    IDFField(f"", "Heating Convergence Tolerance"),
-                    IDFField(f"Coil:Cooling:DX:VariableSpeed", "Cooling Coil Object Type"),
+                    IDFField("", "Heating Convergence Tolerance"),
+                    IDFField("Coil:Cooling:DX:VariableSpeed", "Cooling Coil Object Type"),
                     IDFField(f"{system_name}Cooling Coil", "Cooling Coil Name"),
-                    IDFField(f"", "Cooling Convergence Tolerance"),
+                    IDFField("", "Cooling Convergence Tolerance"),
                     IDFField("Coil:Heating:Electric", "Supplemental Heating Coil Object Type"),
                     IDFField(
                         f"{system_name}Supp Heating Coil",
                         "Supplemental Heating Coil Name",
                     ),
                     IDFField(
-                        f"Autosize",
+                        "Autosize",
                         "Maximum Supply Air Temperature from Supplemental Heater {C}",
                     ),
                     IDFField(
-                        f"",
+                        "",
                         "Maximum Outdoor Dry-Bulb Temperature for Supplemental Heater Operation {C}",
                     ),
-                    IDFField(f"DrawThrough", "Fan Placement"),
+                    IDFField("DrawThrough", "Fan Placement"),
                     IDFField(
                         f"{system_name}Fan Mode Schedule",
                         "Supply Air Fan Operating Mode Schedule Name",
@@ -181,15 +183,15 @@ def write_idf(
                 "AirLoopHVAC:UnitarySystem",
                 [
                     IDFField(f"{system_name}Unitary", "Name"),
-                    IDFField(f"Load", "Control Type"),
-                    IDFField(f"", "Controlling Zone or Thermostat Location"),
-                    IDFField(f"", "Dehumidification Control Type"),
+                    IDFField("Load", "Control Type"),
+                    IDFField("", "Controlling Zone or Thermostat Location"),
+                    IDFField("", "Dehumidification Control Type"),
                     IDFField(f"{system_name}Schedule", "Availability Schedule Name"),
                     IDFField(f"{system_name}Unitary Inlet Node", "Air Inlet Node Name"),
                     IDFField(f"{system_name}Unitary Outlet Node", "Air Outlet Node Name"),
-                    IDFField(f"Fan:SystemModel", "Supply Fan Object Type"),
+                    IDFField("Fan:SystemModel", "Supply Fan Object Type"),
                     IDFField(f"{system_name}Supply Fan", "Supply Fan Name"),
-                    IDFField(f"DrawThrough", "Fan Placement"),
+                    IDFField("DrawThrough", "Fan Placement"),
                     IDFField(
                         f"{system_name}Fan Mode Schedule",
                         "Supply Air Fan Operating Mode Schedule Name",
@@ -200,72 +202,72 @@ def write_idf(
                         unit.gross_steady_state_heating_capacity() / unit.gross_total_cooling_capacity(),
                         "DX Heating Coil Sizing Ratio",
                     ),
-                    IDFField(f"Coil:Cooling:DX:VariableSpeed", "Cooling Coil Object Type"),
+                    IDFField("Coil:Cooling:DX:VariableSpeed", "Cooling Coil Object Type"),
                     IDFField(f"{system_name}Cooling Coil", "Cooling Coil Name"),
-                    IDFField(f"No", "Use DOAS DX Cooling Coil"),
-                    IDFField(f"", "Minimum Supply Air Temperature {C}"),
-                    IDFField(f"", "Latent Load Control"),
-                    IDFField(f"", "Supplemental Heating Coil Object Type"),
-                    IDFField(f"", "Supplemental Heating Coil Name"),
-                    IDFField(f"SupplyAirFlowRate", "Cooling Supply Air Flow Rate Method"),
-                    IDFField(f"Autosize", "Cooling Supply Air Flow Rate {m3/s}"),
-                    IDFField(f"", "Cooling Supply Air Flow Rate Per Floor Area {m3/s-m2}"),
+                    IDFField("No", "Use DOAS DX Cooling Coil"),
+                    IDFField("", "Minimum Supply Air Temperature {C}"),
+                    IDFField("", "Latent Load Control"),
+                    IDFField("", "Supplemental Heating Coil Object Type"),
+                    IDFField("", "Supplemental Heating Coil Name"),
+                    IDFField("SupplyAirFlowRate", "Cooling Supply Air Flow Rate Method"),
+                    IDFField("Autosize", "Cooling Supply Air Flow Rate {m3/s}"),
+                    IDFField("", "Cooling Supply Air Flow Rate Per Floor Area {m3/s-m2}"),
                     IDFField(
-                        f"",
+                        "",
                         "Cooling Fraction of Autosized Cooling Supply Air Flow Rate",
                     ),
                     IDFField(
-                        f"",
+                        "",
                         "Cooling Supply Air Flow Rate Per Unit of Capacity {m3/s-W}",
                     ),
                     IDFField(f"SupplyAirFlowRate", "Heating Supply Air Flow Rate Method"),
-                    IDFField(f"Autosize", "Heating Supply Air Flow Rate {m3/s}"),
-                    IDFField(f"", "Heating Supply Air Flow Rate Per Floor Area {m3/s-m2}"),
+                    IDFField("Autosize", "Heating Supply Air Flow Rate {m3/s}"),
+                    IDFField("", "Heating Supply Air Flow Rate Per Floor Area {m3/s-m2}"),
                     IDFField(
-                        f"",
+                        "",
                         "Heating Fraction of Autosized Heating Supply Air Flow Rate",
                     ),
                     IDFField(
-                        f"",
+                        "",
                         "Heating Supply Air Flow Rate Per Unit of Capacity {m3/s-W}",
                     ),
                     IDFField(f"SupplyAirFlowRate", "No Load Supply Air Flow Rate Method"),
-                    IDFField(f"Autosize", "No Load Supply Air Flow Rate {m3/s}"),
-                    IDFField(f"", "No Load Supply Air Flow Rate Per Floor Area {m3/s-m2}"),
+                    IDFField("Autosize", "No Load Supply Air Flow Rate {m3/s}"),
+                    IDFField("", "No Load Supply Air Flow Rate Per Floor Area {m3/s-m2}"),
                     IDFField(
-                        f"",
+                        "",
                         "No Load Fraction of Autosized Cooling Supply Air Flow Rate",
                     ),
                     IDFField(
-                        f"",
+                        "",
                         "No Load Fraction of Autosized Heating Supply Air Flow Rate",
                     ),
                     IDFField(
-                        f"",
+                        "",
                         "No Load Supply Air Flow Rate Per Unit of Capacity During Cooling Operation {m3/s-W}",
                     ),
                     IDFField(
-                        f"",
+                        "",
                         "No Load Supply Air Flow Rate Per Unit of Capacity During Heating Operation {m3/s-W}",
                     ),
-                    IDFField(f"Autosize", "Maximum Supply Air Temperature {C}"),
+                    IDFField("Autosize", "Maximum Supply Air Temperature {C}"),
                     IDFField(
-                        f"",
+                        "",
                         "Maximum Outdoor Dry-Bulb Temperature for Supplemental Heater Operation {C}",
                     ),
-                    IDFField(f"", "Outdoor Dry-Bulb Temperature Sensor Node Name"),
-                    IDFField(f"", "Maximum Cycling Rate {cycles/hr}"),
-                    IDFField(f"", "Heat Pump Time Constant {s}"),
-                    IDFField(f"", "Fraction of On-Cycle Power Use"),
-                    IDFField(f"", "Heat Pump Fan Delay Time {s}"),
-                    IDFField(f"", "Ancilliary On-Cycle Electric Power {W}"),
-                    IDFField(f"", "Ancilliary Off-Cycle Electric Power {W}"),
-                    IDFField(f"", "Design Heat Recovery Water Flow Rate {m3/s}"),
-                    IDFField(f"", "Maximum Temperature for Heat Recovery {C}"),
-                    IDFField(f"", "Heat Recovery Water Inlet Node Name"),
-                    IDFField(f"", "Heat Recovery Water Outlet Node Name"),
-                    IDFField(f"", "Design Specification Multispeed Heat Pump Object Type"),
-                    IDFField(f"", "Design Specification Multispeed Heat Pump Object Name"),
+                    IDFField("", "Outdoor Dry-Bulb Temperature Sensor Node Name"),
+                    IDFField("", "Maximum Cycling Rate {cycles/hr}"),
+                    IDFField("", "Heat Pump Time Constant {s}"),
+                    IDFField("", "Fraction of On-Cycle Power Use"),
+                    IDFField("", "Heat Pump Fan Delay Time {s}"),
+                    IDFField("", "Ancilliary On-Cycle Electric Power {W}"),
+                    IDFField("", "Ancilliary Off-Cycle Electric Power {W}"),
+                    IDFField("", "Design Heat Recovery Water Flow Rate {m3/s}"),
+                    IDFField("", "Maximum Temperature for Heat Recovery {C}"),
+                    IDFField("", "Heat Recovery Water Inlet Node Name"),
+                    IDFField("", "Heat Recovery Water Outlet Node Name"),
+                    IDFField("", "Design Specification Multispeed Heat Pump Object Type"),
+                    IDFField("", "Design Specification Multispeed Heat Pump Object Name"),
                 ],
             )
         )
@@ -277,10 +279,10 @@ def write_idf(
             "Schedule:Compact",
             [
                 IDFField(f"{system_name}Schedule", "Name"),
-                IDFField(f"Binary Control", "Schedule Type Limits Name"),
-                IDFField(f"Through: 12/31", ""),
-                IDFField(f"For: AllDays", ""),
-                IDFField(f"Until: 24:00", ""),
+                IDFField("Binary Control", "Schedule Type Limits Name"),
+                IDFField("Through: 12/31", ""),
+                IDFField("For: AllDays", ""),
+                IDFField("Until: 24:00", ""),
                 IDFField(1, "Value"),
             ],
         )
@@ -291,10 +293,10 @@ def write_idf(
             "Schedule:Compact",
             [
                 IDFField(f"{system_name}Fan Mode Schedule", "Name"),
-                IDFField(f"Fan Mode Control", "Schedule Type Limits Name"),
-                IDFField(f"Through: 12/31", ""),
-                IDFField(f"For: AllDays", ""),
-                IDFField(f"Until: 24:00", ""),
+                IDFField("Through: 12/31", ""),
+                IDFField("Fan Mode Control", "Schedule Type Limits Name"),
+                IDFField("For: AllDays", ""),
+                IDFField("Until: 24:00", ""),
                 IDFField(0, "Value"),
             ],
         )
@@ -335,14 +337,14 @@ def write_idf(
             "Design Electric Power Consumption",
         ),
         IDFField(f"TotalEfficiencyAndPressure", "Design Power Sizing Method"),
-        IDFField(f"", "Electric Power Per Unit Flow Rate"),
-        IDFField(f"", "Electric Power Per Unit Flow Rate Per Unit Pressure"),
+        IDFField("", "Electric Power Per Unit Flow Rate"),
+        IDFField("", "Electric Power Per Unit Flow Rate Per Unit Pressure"),
         IDFField(unit.fan.efficiency(max_fan_speed), "Fan Total Efficiency"),
-        IDFField(f"", "Electric Power Function of Flow Fraction Curve Name"),
+        IDFField("", "Electric Power Function of Flow Fraction Curve Name"),
         IDFField(max_fan_speed_pressure, "Night Ventilation Mode Pressure Rise"),
-        IDFField(f"", "Night Ventilation Mode Flow Fraction"),
-        IDFField(f"", "Motor Loss Zone Name"),
-        IDFField(f"", "Motor Loss Radiative Fraction"),
+        IDFField("", "Night Ventilation Mode Flow Fraction"),
+        IDFField("", "Motor Loss Zone Name"),
+        IDFField("", "Motor Loss Radiative Fraction"),
         IDFField(f"ZN-MSHP Fans", "End-Use Subcategory"),
         IDFField(unit.fan.number_of_speeds, "Number of Speeds"),
     ]
@@ -397,37 +399,33 @@ def write_idf(
         )
     )
 
-    (
-        objects.append(
-            (
-                "Table:IndependentVariableList",
-                [
-                    IDFField(f"{system_name}Cooling fT List", "Name"),
-                    IDFField(
-                        f"{system_name}Cooling Indoor Wetbulb",
-                        "Independent Variable 1 Name",
-                    ),
-                    IDFField(
-                        f"{system_name}Cooling Outdoor Drybulb",
-                        "Independent Variable 2 Name",
-                    ),
-                ],
-            )
-        ),
+    objects.append(
+        (
+            "Table:IndependentVariableList",
+            [
+                IDFField(f"{system_name}Cooling fT List", "Name"),
+                IDFField(
+                    f"{system_name}Cooling Indoor Wetbulb",
+                    "Independent Variable 1 Name",
+                ),
+                IDFField(
+                    f"{system_name}Cooling Outdoor Drybulb",
+                    "Independent Variable 2 Name",
+                ),
+            ],
+        )
     )
 
     objects.append(make_independent_variable(f"{system_name}Coil Flow Fraction", "Dimensionless", 1.0, flow_fractions))
 
-    (
-        objects.append(
-            (
-                "Table:IndependentVariableList",
-                [
-                    IDFField(f"{system_name}fFF List", "Name"),
-                    IDFField(f"{system_name}Coil Flow Fraction", "Independent Variable 1 Name"),
-                ],
-            )
-        ),
+    objects.append(
+        (
+            "Table:IndependentVariableList",
+            [
+                IDFField(f"{system_name}fFF List", "Name"),
+                IDFField(f"{system_name}Coil Flow Fraction", "Independent Variable 1 Name"),
+            ],
+        )
     )
 
     objects.append(
@@ -448,23 +446,21 @@ def write_idf(
         )
     )
 
-    (
-        objects.append(
-            (
-                "Table:IndependentVariableList",
-                [
-                    IDFField(f"{system_name}Heating fT List", "Name"),
-                    IDFField(
-                        f"{system_name}Heating Indoor Drybulb",
-                        "Independent Variable 1 Name",
-                    ),
-                    IDFField(
-                        f"{system_name}Heating Outdoor Drybulb",
-                        "Independent Variable 2 Name",
-                    ),
-                ],
-            )
-        ),
+    objects.append(
+        (
+            "Table:IndependentVariableList",
+            [
+                IDFField(f"{system_name}Heating fT List", "Name"),
+                IDFField(
+                    f"{system_name}Heating Indoor Drybulb",
+                    "Independent Variable 1 Name",
+                ),
+                IDFField(
+                    f"{system_name}Heating Outdoor Drybulb",
+                    "Independent Variable 2 Name",
+                ),
+            ],
+        )
     )
 
     # ------------------------------------------------------------------
@@ -515,19 +511,17 @@ def write_idf(
         IDFField("", "Basin Heater Operating Schedule Name"),
     ]
 
-    (
-        objects.append(
-            (
-                "Curve:Linear",
-                [
-                    IDFField(f"{system_name}Cooling fPLR", "Name"),
-                    IDFField(1.0 - unit.c_d_cooling, "Coefficient1 Constant"),
-                    IDFField(unit.c_d_cooling, "Coefficient2 x"),
-                    IDFField(0.0, "Minimum Value of x"),
-                    IDFField(1.0, "Maximum Value of x"),
-                ],
-            )
-        ),
+    objects.append(
+        (
+            "Curve:Linear",
+            [
+                IDFField(f"{system_name}Cooling fPLR", "Name"),
+                IDFField(1.0 - unit.c_d_cooling, "Coefficient1 Constant"),
+                IDFField(unit.c_d_cooling, "Coefficient2 x"),
+                IDFField(0.0, "Minimum Value of x"),
+                IDFField(1.0, "Maximum Value of x"),
+            ],
+        )
     )
 
     for speed in reversed(range(unit.number_of_cooling_speeds)):
