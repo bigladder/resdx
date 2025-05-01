@@ -10,7 +10,7 @@ def test_psc_fan():
     psc_fan = resdx.PSCFan(
         design_airflow=[fr_u(v, "cfm") for v in [1179.0, 1003.0, 740.0]],
         design_external_static_pressure=design_external_static_pressure,
-        design_efficacy=fr_u(0.33, "W/cfm"),
+        design_specific_fan_power=fr_u(0.33, "W/cfm"),
     )
 
     # Open flow conditions
@@ -40,7 +40,7 @@ def test_ecm_fan():
     ecm_fan = resdx.ECMFlowFan(
         design_airflow=[fr_u(v, "cfm") for v in [2405.0, 2200.0, 1987.0, 1760.0, 1537.0, 1310.0, 1169.0, 1099.0]],
         design_external_static_pressure=design_external_static_pressure,
-        design_efficacy=fr_u(0.3665, "W/cfm"),
+        design_specific_fan_power=fr_u(0.3665, "W/cfm"),
         maximum_power=fr_u(1000, "W"),
     )
 
@@ -86,21 +86,25 @@ def test_resnet_fans():
     airflows = [fr_u(v * 100 + 1, "cfm") for v in reversed(range(11))]
 
     psc_fan = resdx.RESNETPSCFan(airflows)
-    assert psc_fan.efficacy(0) == psc_fan.design_efficacy
-    assert psc_fan.efficacy(10) / psc_fan.efficacy(0) == approx(1.0 - psc_fan.EFFICACY_SLOPE, 0.01)
+    assert psc_fan.specific_fan_power(0) == psc_fan.design_specific_fan_power
+    assert psc_fan.specific_fan_power(10) / psc_fan.specific_fan_power(0) == approx(
+        1.0 - psc_fan.SPECIFIC_FAN_POWER_SLOPE, 0.01
+    )
 
     bpm_fan = resdx.RESNETBPMFan(airflows)
 
     # Ducted fan
-    assert bpm_fan.efficacy(0, fr_u(0.5, "in_H2O")) == approx(bpm_fan.DUCTED_DESIGN_EFFICACY, 1e-5)
+    assert bpm_fan.specific_fan_power(0, fr_u(0.5, "in_H2O")) == approx(bpm_fan.DUCTED_DESIGN_SPECIFIC_FAN_POWER, 1e-5)
 
     # Ductless fan
-    assert bpm_fan.efficacy(0, 0.0) == approx(bpm_fan.DUCTLESS_DESIGN_EFFICACY, 1e-5)
+    assert bpm_fan.specific_fan_power(0, 0.0) == approx(bpm_fan.DUCTLESS_DESIGN_SPECIFIC_FAN_POWER, 1e-5)
 
-    # Ductless BPM efficacy ratio <= Ducted BPM efficacy <= PSC efficacy
+    # Ductless BPM specific fan power ratio <= Ducted BPM specific fan power <= PSC specific fan power
     for speed in range(11):
-        ductless_bpm_efficacy_ratio = bpm_fan.efficacy(speed, 0.0) / bpm_fan.efficacy(0, 0.0)
-        ducted_bpm_efficacy_ratio = bpm_fan.efficacy(speed) / bpm_fan.efficacy(0)
-        psc_efficacy_ratio = psc_fan.efficacy(speed) / psc_fan.efficacy(0)
-        assert ductless_bpm_efficacy_ratio <= ducted_bpm_efficacy_ratio
-        assert ducted_bpm_efficacy_ratio <= psc_efficacy_ratio
+        ductless_bpm_specific_fan_power_ratio = bpm_fan.specific_fan_power(speed, 0.0) / bpm_fan.specific_fan_power(
+            0, 0.0
+        )
+        ducted_bpm_specific_fan_power_ratio = bpm_fan.specific_fan_power(speed) / bpm_fan.specific_fan_power(0)
+        psc_specific_fan_power_ratio = psc_fan.specific_fan_power(speed) / psc_fan.specific_fan_power(0)
+        assert ductless_bpm_specific_fan_power_ratio <= ducted_bpm_specific_fan_power_ratio
+        assert ducted_bpm_specific_fan_power_ratio <= psc_specific_fan_power_ratio

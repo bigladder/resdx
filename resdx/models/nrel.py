@@ -335,18 +335,18 @@ class NRELDXModel(DXUnit):
         else:
             if self.input_seer is not None:
                 if self.input_seer <= 14.0:
-                    fan_efficacy = fr_u(0.25, "W/cfm")
+                    fan_specific_fan_power = fr_u(0.25, "W/cfm")
                 elif self.input_seer >= 16.0:
-                    fan_efficacy = fr_u(0.18, "W/cfm")
+                    fan_specific_fan_power = fr_u(0.18, "W/cfm")
                 else:
-                    fan_efficacy = (
+                    fan_specific_fan_power = (
                         fr_u(0.25, "W/cfm")
                         + (fr_u(0.18, "W/cfm") - fr_u(0.25, "W/cfm")) * (self.input_seer - 14.0) / 2.0
                     )  # W/cfm
             else:
-                fan_efficacy = fr_u(0.25, "W/cfm")
-            self.rated_cooling_fan_efficacy = [fan_efficacy] * self.number_of_cooling_speeds
-            self.rated_heating_fan_efficacy = [fan_efficacy] * self.number_of_heating_speeds
+                fan_specific_fan_power = fr_u(0.25, "W/cfm")
+            self.rated_cooling_fan_specific_fan_power = [fan_specific_fan_power] * self.number_of_cooling_speeds
+            self.rated_heating_fan_specific_fan_power = [fan_specific_fan_power] * self.number_of_heating_speeds
             if self.number_of_cooling_speeds == 1:
                 self.rated_cooling_airflow_per_rated_net_capacity = [fr_u(394.2, "cfm/ton_ref")]
             elif self.number_of_cooling_speeds == 2:
@@ -375,12 +375,16 @@ class NRELDXModel(DXUnit):
             elif self.number_of_cooling_speeds == 2:
                 cap_ratio = 0.72
                 fan_power_0 = (
-                    input * self.rated_cooling_fan_efficacy[0] * self.rated_cooling_airflow_per_rated_net_capacity[0]
+                    input
+                    * self.rated_cooling_fan_specific_fan_power[0]
+                    * self.rated_cooling_airflow_per_rated_net_capacity[0]
                 )
                 gross_cap_0 = input + fan_power_0
                 gross_cap_1 = gross_cap_0 * cap_ratio
                 net_cap_1 = gross_cap_1 / (
-                    1.0 + self.rated_cooling_fan_efficacy[1] * self.rated_cooling_airflow_per_rated_net_capacity[1]
+                    1.0
+                    + self.rated_cooling_fan_specific_fan_power[1]
+                    * self.rated_cooling_airflow_per_rated_net_capacity[1]
                 )
                 self.rated_net_total_cooling_capacity = [input, net_cap_1]
 
@@ -394,12 +398,16 @@ class NRELDXModel(DXUnit):
             elif self.number_of_heating_speeds == 2:
                 cap_ratio = 0.72
                 fan_power_0 = (
-                    input * self.rated_heating_fan_efficacy[0] * self.rated_heating_airflow_per_rated_net_capacity[0]
+                    input
+                    * self.rated_heating_fan_specific_fan_power[0]
+                    * self.rated_heating_airflow_per_rated_net_capacity[0]
                 )
                 gross_cap_0 = input - fan_power_0
                 gross_cap_1 = gross_cap_0 * cap_ratio
                 net_cap_1 = gross_cap_1 / (
-                    1.0 - self.rated_heating_fan_efficacy[1] * self.rated_heating_airflow_per_rated_net_capacity[1]
+                    1.0
+                    - self.rated_heating_fan_specific_fan_power[1]
+                    * self.rated_heating_airflow_per_rated_net_capacity[1]
                 )
                 self.rated_net_heating_capacity = [input, net_cap_1]
 
@@ -421,19 +429,19 @@ class NRELDXModel(DXUnit):
 
             for i, cap in enumerate(self.rated_net_total_cooling_capacity):
                 airflows.append(cap * self.rated_cooling_airflow_per_rated_net_capacity[i])
-                efficacies.append(self.rated_cooling_fan_efficacy[i])
+                efficacies.append(self.rated_cooling_fan_specific_fan_power[i])
                 if set_cooling_fan_speed:
                     self.cooling_fan_speed.append(fan_speed)
                     fan_speed += 1
 
             for i, cap in enumerate(self.rated_net_total_cooling_capacity):
                 airflows.append(cap * self.rated_heating_airflow_per_rated_net_capacity[i])
-                efficacies.append(self.rated_heating_fan_efficacy[i])
+                efficacies.append(self.rated_heating_fan_specific_fan_power[i])
                 if set_heating_fan_speed:
                     self.heating_fan_speed.append(fan_speed)
                     fan_speed += 1
 
-            fan = NRELFan(airflows, fr_u(0.20, "in_H2O"), design_efficacy=efficacies)
+            fan = NRELFan(airflows, fr_u(0.20, "in_H2O"), design_specific_fan_power=efficacies)
             self.fan = fan
 
     def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
@@ -567,16 +575,16 @@ class NRELFan(Fan):
         self,
         design_airflow,
         design_external_static_pressure=fr_u(0.5, "in_H2O"),
-        design_efficacy=fr_u(0.365, "W/cfm"),
+        design_specific_fan_power=fr_u(0.365, "W/cfm"),
     ):
         self.power_ratio = []
         self.design_power = []
-        super().__init__(design_airflow, design_external_static_pressure, design_efficacy)
+        super().__init__(design_airflow, design_external_static_pressure, design_specific_fan_power)
 
     def add_speed(self, airflow):
         super().add_speed(airflow)
         self.power_ratio.append(self.design_airflow_ratio[-1] ** 3.0)
-        self.design_power.append(self.design_airflow[0] * self.design_efficacy * self.power_ratio[-1])
+        self.design_power.append(self.design_airflow[0] * self.design_specific_fan_power * self.power_ratio[-1])
 
     def remove_speed(self, speed_setting):
         super().remove_speed(speed_setting)
@@ -589,5 +597,5 @@ class NRELFan(Fan):
     def power(self, conditions):
         return self.design_power[conditions.speed_setting]
 
-    def efficacy(self, conditions):
+    def specific_fan_power(self, conditions):
         return self.power(conditions) / self.airflow(conditions)

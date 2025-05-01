@@ -22,7 +22,7 @@ from scipy import optimize
 from .conditions import CoolingConditions, HeatingConditions, OperatingConditions
 from .defrost import Defrost, DefrostControl
 from .enums import StagingType
-from .fan import ConstantEfficacyFan, Fan, FanMotorType
+from .fan import ConstantSpecificFanPowerFan, Fan, FanMotorType
 from .psychrometrics import STANDARD_CONDITIONS, PsychState, psychrolib
 from .util import find_nearest, limit_check, set_default
 
@@ -713,25 +713,27 @@ class DXUnit:
             self.rated_cooling_fan_speed = []
             self.rated_heating_fan_speed = []
 
-            design_efficacy = fr_u(0.365, "W/cfm")
+            design_specific_fan_power = fr_u(0.365, "W/cfm")
             for i, net_capacity in enumerate(self.rated_net_total_cooling_capacity):
                 self.rated_cooling_airflow[i] = net_capacity * fr_u(375.0, "cfm/ton_ref")
                 airflows.append(self.rated_cooling_airflow[i])
-                self.rated_cooling_fan_power[i] = self.rated_cooling_airflow[i] * design_efficacy
+                self.rated_cooling_fan_power[i] = self.rated_cooling_airflow[i] * design_specific_fan_power
                 self.cooling_fan_speed.append(len(airflows) - 1)
                 self.rated_cooling_fan_speed.append(len(airflows) - 1)
 
             for i, net_capacity in enumerate(self.rated_net_heating_capacity):
                 self.rated_heating_airflow[i] = net_capacity * fr_u(375.0, "cfm/ton_ref")
                 airflows.append(self.rated_heating_airflow[i])
-                self.rated_heating_fan_power[i] = self.rated_heating_airflow[i] * design_efficacy
+                self.rated_heating_fan_power[i] = self.rated_heating_airflow[i] * design_specific_fan_power
                 self.heating_fan_speed.append(len(airflows) - 1)
                 self.rated_heating_fan_speed.append(len(airflows) - 1)
 
             self.rated_cooling_fan_speed = self.cooling_fan_speed
             self.rated_heating_fan_speed = self.heating_fan_speed
 
-            fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), design_efficacy=design_efficacy)
+            fan = ConstantSpecificFanPowerFan(
+                airflows, fr_u(0.50, "in_H2O"), design_specific_fan_power=design_specific_fan_power
+            )
             self.fan = fan
 
     def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
