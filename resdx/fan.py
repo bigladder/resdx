@@ -388,7 +388,7 @@ class PSCFan(Fan):
     AIRFLOW_COEFFICIENT = fr_u(10.0, "cfm")
     AIRFLOW_EXP_COEFFICIENT = fr_u(5.35, "1/in_H2O")
     SPECIFIC_FAN_POWER_SLOPE = (
-        0.3  # Relative change in specific_fan_power at lower flow ratios (data is fairly inconsistent on this value)
+        0.3  # Relative change in specific fan power at lower flow ratios (data is fairly inconsistent on this value)
     )
 
     def __init__(
@@ -474,7 +474,7 @@ class ECMFlowFan(Fan):
 
     SPECIFIC_FAN_POWER_SLOPE_ESP = fr_u(
         0.235, "(W/cfm)/in_H2O"
-    )  # Relative change in specific_fan_power at different external static pressures
+    )  # Relative change in specific fan power at different external static pressures
     SPEED_SLOPE_ESP = fr_u(
         463.5, "rpm/in_H2O"
     )  # Relative change in rotational speed at different external static pressures
