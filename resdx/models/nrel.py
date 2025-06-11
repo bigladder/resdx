@@ -103,7 +103,7 @@ class NRELDXModel(DXUnit):
         cap_FF = calc_quad(NRELDXModel.COOLING_CAP_FF_COEFFICIENTS, conditions.mass_airflow_ratio)
         return cap_FF * cap_FT * self.rated_gross_total_cooling_capacity[conditions.compressor_speed]
 
-    def gross_steady_state_heating_power(self, conditions):
+    def full_charge_gross_steady_state_heating_power(self, conditions):
         """From Cutler et al."""
         T_idb = to_u(conditions.indoor.db, "°F")  # Cutler curves use °F
         T_odb = to_u(conditions.outdoor.db, "°F")  # Cutler curves use °F
@@ -140,7 +140,7 @@ class NRELDXModel(DXUnit):
         cap_FF = calc_quad(NRELDXModel.HEATING_CAP_FF_COEFFICIENTS, conditions.mass_airflow_ratio)
         return cap_FF * cap_FT * self.rated_gross_heating_capacity[conditions.compressor_speed]
 
-    def gross_integrated_heating_capacity(self, conditions):
+    def full_charge_gross_integrated_heating_capacity(self, conditions):
         """EPRI algorithm as described in EnergyPlus documentation"""
         if self.defrost.in_defrost(conditions):
             t_defrost = self.defrost.time_fraction(conditions)

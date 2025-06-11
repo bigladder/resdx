@@ -1394,7 +1394,13 @@ class DXUnit:
         return to_u(hspf, "Btu/Wh")
 
     def print_cooling_info(self, power_units="W", capacity_units="ton_ref"):
-        print(f"SEER: {self.seer():.2f}")
+        seasonal_metric = "SEER"
+        efficiency_metric = "EER"
+        if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+            seasonal_metric = "SEER2"
+            efficiency_metric = "EER2"
+
+        print(f"{seasonal_metric}: {self.seer():.2f}")
         for speed in range(self.number_of_cooling_speeds):
             conditions = self.make_condition(CoolingConditions, compressor_speed=speed)
             print(
@@ -1403,13 +1409,16 @@ class DXUnit:
             print(
                 f"Net cooling capacity for stage {speed + 1} : {to_u(self.net_total_cooling_capacity(conditions), capacity_units):.2f} {capacity_units}"
             )
-            print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions):.2f}")
+            print(f"Net cooling {efficiency_metric} for stage {speed + 1} : {self.eer(conditions):.2f}")
             print(f"Gross cooling COP for stage {speed + 1} : {self.gross_total_cooling_cop(conditions):.3f}")
             print(f"Net SHR for stage {speed + 1} : {self.net_shr(conditions):.3f}")
         print("")
 
     def print_heating_info(self, power_units="W", capacity_units="ton_ref", region=4):
-        print(f"HSPF (region {region}): {self.hspf(region):.2f}")
+        seasonal_metric = "HSPF"
+        if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+            seasonal_metric = "HSPF2"
+        print(f"{seasonal_metric} (region {region}): {self.hspf(region):.2f}")
         for speed in range(self.number_of_heating_speeds):
             conditions = self.make_condition(HeatingConditions, compressor_speed=speed)
             print(
@@ -1418,6 +1427,7 @@ class DXUnit:
             print(
                 f"Net heating capacity for stage {speed + 1} : {to_u(self.net_integrated_heating_capacity(conditions), capacity_units):.2f} {capacity_units}"
             )
+            print(f"Net heating COP for stage {speed + 1} : {self.net_integrated_heating_cop(conditions):.3f}")
             print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions):.3f}")
         print("")
 
