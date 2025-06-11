@@ -1,5 +1,6 @@
 from copy import deepcopy
 from enum import Enum
+from typing import Callable
 
 from koozie import fr_u, to_u
 
@@ -129,14 +130,15 @@ class RESNETDXModel(DXUnit):
 
         return self.gross_steady_state_heating_capacity(conditions)
 
-    def full_charge_gross_steady_state_heating_power(self, conditions):
+    def full_charge_gross_steady_state_heating_power(self, conditions: HeatingConditions) -> float:
         if self.net_tabular_data is not None:
+            assert self.gross_tabular_data is not None
             return self.gross_tabular_data.heating_power(
                 self.tabular_heating_speed_map[conditions.compressor_speed],
                 conditions.outdoor.db,
-            ) * self.get_heating_correction_factor(conditions, NRELDXModel.gross_steady_state_heating_power)
+            ) * self.get_heating_correction_factor(conditions, NRELDXModel.full_charge_gross_steady_state_heating_power)
         else:
-            return NRELDXModel.gross_steady_state_heating_power(self, conditions)
+            return NRELDXModel.full_charge_gross_steady_state_heating_power(self, conditions)
 
     def full_charge_gross_integrated_heating_power(self, conditions: HeatingConditions) -> float:
         if self.defrost.in_defrost(conditions):
@@ -556,7 +558,9 @@ class RESNETDXModel(DXUnit):
         )
         self.rated_net_heating_capacity.append(self.rated_gross_heating_capacity[1] + self.rated_heating_fan_power[1])
 
-    def get_cooling_correction_factor(self, conditions: CoolingConditions, function):
+    def get_cooling_correction_factor(
+        self, conditions: CoolingConditions, function: Callable[[DXUnit, CoolingConditions], float]
+    ) -> float:
         rated_conditions = self.make_condition(
             CoolingConditions,
             compressor_speed=conditions.compressor_speed,
@@ -564,7 +568,9 @@ class RESNETDXModel(DXUnit):
         )
         return function(self, conditions) / function(self, rated_conditions)
 
-    def get_heating_correction_factor(self, conditions: HeatingConditions, function):
+    def get_heating_correction_factor(
+        self, conditions: HeatingConditions, function: Callable[[DXUnit, HeatingConditions], float]
+    ) -> float:
         rated_conditions = self.make_condition(
             HeatingConditions,
             compressor_speed=conditions.compressor_speed,
