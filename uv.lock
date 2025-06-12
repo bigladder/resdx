@@ -159,7 +159,7 @@ wheels = [
 [[package]]
 name = "dimes"
 version = "0.0.0"
-source = { git = "https://github.com/bigladder/dimes.git?branch=main#e3d6166be1edecabf42a717956b9949f8a0c7c89" }
+source = { git = "https://github.com/bigladder/dimes.git?branch=forge-update#42ee6e3a4f199ae11321487c78dd8ea925a5a846" }
 dependencies = [
     { name = "kaleido" },
     { name = "koozie" },
@@ -848,7 +848,7 @@ extras = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dimes", git = "https://github.com/bigladder/dimes.git?branch=main" },
+    { name = "dimes", git = "https://github.com/bigladder/dimes.git?branch=forge-update" },
     { name = "koozie", specifier = ">=1.2.2" },
     { name = "psychrolib", specifier = ">=2.5.0" },
     { name = "scipy", specifier = ">=1.6.3" },

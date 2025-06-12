@@ -144,6 +144,7 @@ class TemperatureSpeedPerformanceTable:
         """Using a line between two points for a given speed, calculate the temperature corresponding to a given value"""
         v_1 = self.data[self.get_temperature_index(temperature_1)][speed - 1]
         v_2 = self.data[self.get_temperature_index(temperature_2)][speed - 1]
+        assert v_1 is not None and v_2 is not None
         return temperature_1 + (value - v_1) / (v_2 - v_1) * (temperature_2 - temperature_1)
 
     def set_by_maintenance(self, speed: int, temperature: float, reference_temperature: float, ratio: float) -> None:
@@ -153,7 +154,10 @@ class TemperatureSpeedPerformanceTable:
         speed_index = speed - 1
         temperature_index = self.get_temperature_index(temperature)
         reference_temperature_index = self.get_temperature_index(reference_temperature)
-        return self.data[temperature_index][speed_index] / self.data[reference_temperature_index][speed_index]
+        value = self.data[temperature_index][speed_index]
+        reference_value = self.data[reference_temperature_index][speed_index]
+        assert value is not None and reference_value is not None
+        return value / reference_value
 
     def set_interpolator(self):
         self.interpolator = RegularGridInterpolator(
@@ -764,6 +768,102 @@ def make_two_speed_model_data(
     Q_h.set_interpolator()
     P_h.set_interpolator()
 
+    return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
+
+
+def make_packaged_terminal_model_data(
+    cooling_capacity_95: float,  # Net total cooling capacity at 95F and rated speed
+    eer_95: float,
+    heating_capacity_47: float,
+    heating_cop_47: float,
+) -> TemperatureSpeedPerformance:
+    Qrated = 1
+
+    # COOLING
+
+    t_82 = fr_u(82.0, "degF")
+    t_95 = fr_u(95.0, "degF")
+
+    t_c = [
+        t_82,
+        t_95,
+    ]
+
+    Qm95rated = 1.0 / calc_biquad(NRELDXModel.COOLING_CAP_FT_COEFFICIENTS, 67.0, 82.0)
+    EIRm95rated = 1.0 / calc_biquad(NRELDXModel.COOLING_EIR_FT_COEFFICIENTS, 67.0, 82.0)
+
+    Q_c = TemperatureSpeedCoolingPerformanceTable(t_c, 1)
+    P_c = TemperatureSpeedCoolingPerformanceTable(t_c, 1)
+
+    # Net Total Capacity
+
+    # 95 F
+    Q_c.set(Qrated, t_95, cooling_capacity_95)
+
+    # 82 F
+    Q_c.set_by_maintenance(Qrated, t_82, t_95, Qm95rated)
+
+    # Net Power
+
+    # 95/82 F
+    P_c.set(Qrated, t_95, Q_c.get(Qrated, t_95) / fr_u(eer_95, "Btu/Wh"))
+
+    Pm95rated = Qm95rated * EIRm95rated
+
+    P_c.set_by_maintenance(Qrated, t_82, t_95, Pm95rated)
+
+    # Tmin
+    # Find temperature where power is half of 82F value to avoide division by zero
+
+    t_c_min = P_c.get_temperature_at_value(P_c.get(1, t_82) * 0.5, t_82, t_95, 1)
+
+    Q_c.add_temperature(t_c_min)
+    P_c.add_temperature(t_c_min)
+
+    t_40 = fr_u(40.0, "degF")
+    if t_c_min > t_40:
+        Q_c.add_temperature(t_40, extrapolate=True)
+        P_c.add_temperature(t_40, extrapolate=False)
+
+    # HEATING
+
+    t_17 = fr_u(17, "degF")
+    t_47 = fr_u(47, "degF")
+
+    t_h = [
+        t_17,
+        t_47,
+    ]
+
+    EIRm17rated = calc_biquad(NRELDXModel.HEATING_EIR_FT_COEFFICIENTS, 70.0, 17.0)
+
+    Qm17rated = calc_biquad(NRELDXModel.HEATING_CAP_FT_COEFFICIENTS, 70.0, 17.0)
+
+    Q_h = TemperatureSpeedHeatingPerformanceTable(t_h, 1)
+    P_h = TemperatureSpeedHeatingPerformanceTable(t_h, 1)
+
+    # Net Total Capacity
+
+    # 47 F
+    Q_h.set(Qrated, t_47, heating_capacity_47)
+
+    # 17 F
+    Q_h.set_by_maintenance(Qrated, t_17, t_47, Qm17rated)
+
+    # Net Power
+
+    Pm17rated = Qm17rated * EIRm17rated
+
+    # 47 F
+    P_h.set(Qrated, t_47, Q_h.get(Qrated, t_47) / heating_cop_47)
+
+    # 17 F
+    P_h.set_by_maintenance(Qrated, t_17, t_47, Pm17rated)
+
+    Q_c.set_interpolator()
+    P_c.set_interpolator()
+    Q_h.set_interpolator()
+    P_h.set_interpolator()
     return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
 
 

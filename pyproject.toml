@@ -14,7 +14,7 @@ extras = ["ipykernel>=6.29.4"]
 default-groups = ["dev", "extras"]
 
 [tool.uv.sources]
-dimes = { git = "https://github.com/bigladder/dimes.git", branch = "main" }
+dimes = { git = "https://github.com/bigladder/dimes.git", branch = "main" } #  { git = "https://github.com/bigladder/dimes.git", branch = "main" } { path = "../dimes", editable = true }
 
 [tool.ruff]
 line-length = 120

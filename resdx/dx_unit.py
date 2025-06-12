@@ -22,7 +22,7 @@ from scipy import optimize
 from .conditions import CoolingConditions, HeatingConditions, OperatingConditions
 from .defrost import Defrost, DefrostControl
 from .enums import StagingType
-from .fan import ConstantEfficacyFan, Fan, FanMotorType
+from .fan import ConstantSpecificFanPowerFan, Fan, FanMotorType
 from .psychrometrics import STANDARD_CONDITIONS, PsychState, psychrolib
 from .util import find_nearest, limit_check, set_default
 
@@ -713,25 +713,27 @@ class DXUnit:
             self.rated_cooling_fan_speed = []
             self.rated_heating_fan_speed = []
 
-            design_efficacy = fr_u(0.365, "W/cfm")
+            design_specific_fan_power = fr_u(0.365, "W/cfm")
             for i, net_capacity in enumerate(self.rated_net_total_cooling_capacity):
                 self.rated_cooling_airflow[i] = net_capacity * fr_u(375.0, "cfm/ton_ref")
                 airflows.append(self.rated_cooling_airflow[i])
-                self.rated_cooling_fan_power[i] = self.rated_cooling_airflow[i] * design_efficacy
+                self.rated_cooling_fan_power[i] = self.rated_cooling_airflow[i] * design_specific_fan_power
                 self.cooling_fan_speed.append(len(airflows) - 1)
                 self.rated_cooling_fan_speed.append(len(airflows) - 1)
 
             for i, net_capacity in enumerate(self.rated_net_heating_capacity):
                 self.rated_heating_airflow[i] = net_capacity * fr_u(375.0, "cfm/ton_ref")
                 airflows.append(self.rated_heating_airflow[i])
-                self.rated_heating_fan_power[i] = self.rated_heating_airflow[i] * design_efficacy
+                self.rated_heating_fan_power[i] = self.rated_heating_airflow[i] * design_specific_fan_power
                 self.heating_fan_speed.append(len(airflows) - 1)
                 self.rated_heating_fan_speed.append(len(airflows) - 1)
 
             self.rated_cooling_fan_speed = self.cooling_fan_speed
             self.rated_heating_fan_speed = self.heating_fan_speed
 
-            fan = ConstantEfficacyFan(airflows, fr_u(0.50, "in_H2O"), design_efficacy=design_efficacy)
+            fan = ConstantSpecificFanPowerFan(
+                airflows, fr_u(0.50, "in_H2O"), design_specific_fan_power=design_specific_fan_power
+            )
             self.fan = fan
 
     def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
@@ -1392,7 +1394,13 @@ class DXUnit:
         return to_u(hspf, "Btu/Wh")
 
     def print_cooling_info(self, power_units="W", capacity_units="ton_ref"):
-        print(f"SEER: {self.seer():.2f}")
+        seasonal_metric = "SEER"
+        efficiency_metric = "EER"
+        if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+            seasonal_metric = "SEER2"
+            efficiency_metric = "EER2"
+
+        print(f"{seasonal_metric}: {self.seer():.2f}")
         for speed in range(self.number_of_cooling_speeds):
             conditions = self.make_condition(CoolingConditions, compressor_speed=speed)
             print(
@@ -1401,13 +1409,16 @@ class DXUnit:
             print(
                 f"Net cooling capacity for stage {speed + 1} : {to_u(self.net_total_cooling_capacity(conditions), capacity_units):.2f} {capacity_units}"
             )
-            print(f"Net cooling EER for stage {speed + 1} : {self.eer(conditions):.2f}")
+            print(f"Net cooling {efficiency_metric} for stage {speed + 1} : {self.eer(conditions):.2f}")
             print(f"Gross cooling COP for stage {speed + 1} : {self.gross_total_cooling_cop(conditions):.3f}")
             print(f"Net SHR for stage {speed + 1} : {self.net_shr(conditions):.3f}")
         print("")
 
     def print_heating_info(self, power_units="W", capacity_units="ton_ref", region=4):
-        print(f"HSPF (region {region}): {self.hspf(region):.2f}")
+        seasonal_metric = "HSPF"
+        if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+            seasonal_metric = "HSPF2"
+        print(f"{seasonal_metric} (region {region}): {self.hspf(region):.2f}")
         for speed in range(self.number_of_heating_speeds):
             conditions = self.make_condition(HeatingConditions, compressor_speed=speed)
             print(
@@ -1416,6 +1427,7 @@ class DXUnit:
             print(
                 f"Net heating capacity for stage {speed + 1} : {to_u(self.net_integrated_heating_capacity(conditions), capacity_units):.2f} {capacity_units}"
             )
+            print(f"Net heating COP for stage {speed + 1} : {self.net_integrated_heating_cop(conditions):.3f}")
             print(f"Gross heating COP for stage {speed + 1} : {self.gross_integrated_heating_cop(conditions):.3f}")
         print("")
 
