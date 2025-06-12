@@ -136,7 +136,10 @@ class RESNETDXModel(DXUnit):
             return self.gross_tabular_data.heating_power(
                 self.tabular_heating_speed_map[conditions.compressor_speed],
                 conditions.outdoor.db,
-            ) * self.get_heating_correction_factor(conditions, NRELDXModel.full_charge_gross_steady_state_heating_power)
+            ) * self.get_heating_correction_factor(
+                conditions,
+                NRELDXModel.full_charge_gross_steady_state_heating_power,  # type: Callable[[DXUnit, HeatingConditions], float]
+            )
         else:
             return NRELDXModel.full_charge_gross_steady_state_heating_power(self, conditions)
 
