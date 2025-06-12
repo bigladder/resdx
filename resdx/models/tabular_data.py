@@ -8,6 +8,7 @@ from ..enums import StagingType
 from ..util import bracket, calc_biquad
 from .nrel import NRELDXModel
 from .rating_correlations import cop_47_h1_full, cop_82_b_low
+from .statistical_set import StatisticalSet, original_statistics
 
 
 class TemperatureSpeedPerformanceTable:
@@ -271,6 +272,7 @@ def make_neep_statistical_model_data(
     cooling_capacity_ratio: float | None = None,  # min/max capacity ratio at 95F
     cooling_cop_82_min: float | None = None,
     heating_cop_47: float | None = None,
+    default_statistics: StatisticalSet = original_statistics,
 ) -> TemperatureSpeedPerformance:
     Qmin = 1
     Qrated = 2
@@ -286,12 +288,12 @@ def make_neep_statistical_model_data(
         t_95,
     ]
 
-    Qr95rated = 0.934
-    Qm95max = 0.940
-    Qm95min = 0.948
-    EIRr95rated = 0.928
-    EIRm95max = 1.326
-    EIRm95min = 1.315
+    Qr95rated = default_statistics.Qr95Rated
+    Qm95max = default_statistics.Qm95Max
+    Qm95min = default_statistics.Qm95Min
+    EIRr95rated = default_statistics.EIRr95Rated
+    EIRm95max = default_statistics.EIRm95Max
+    EIRm95min = default_statistics.EIRm95Min
 
     Q_c = TemperatureSpeedCoolingPerformanceTable(t_c, 3)
     P_c = TemperatureSpeedCoolingPerformanceTable(t_c, 3)
@@ -323,7 +325,14 @@ def make_neep_statistical_model_data(
     if cooling_capacity_ratio is not None:
         Qr95min = cooling_capacity_ratio
     else:
-        Qr95min = bracket(0.029 + 0.369 * EIRr82min, 0.1, Qr95rated)
+        m1 = default_statistics.EIRr82MinvSEER2_over_EER2.slope
+        b1 = default_statistics.EIRr82MinvSEER2_over_EER2.intercept
+        m2 = default_statistics.Qr95MinvSEER2_over_EER2.slope
+        b2 = default_statistics.Qr95MinvSEER2_over_EER2.intercept
+        # Algebraicly solve for Qr95min as a function of EIRr82min in case COP82min is explcicitly set
+        slope = m2 / m1
+        intercept = b2 - slope * b1
+        Qr95min = bracket(intercept + slope * EIRr82min, 0.1, Qr95rated)
 
     # Back to capacities
     Q_c.set_by_ratio(Qmin, t_95, Qr95min)
@@ -362,30 +371,30 @@ def make_neep_statistical_model_data(
         t_47,
     ]
 
-    Qr47rated = 0.908
-    Qr47min = 0.272
-    Qr17rated = 0.817
-    Qr17min = 0.341
-    Qm5max = 0.866
-    Qr5rated = 0.988
-    Qr5min = 0.321
-    QmslopeLCTmax = -0.025
-    QmslopeLCTmin = -0.024
-    EIRr47rated = 0.939
-    EIRr47min = 0.730
-    EIRm17rated = 1.351
-    EIRr17rated = 0.902
-    EIRr17min = 0.798
-    EIRm5max = 1.164
-    EIRr5rated = 1.000
-    EIRr5min = 0.866
-    EIRmslopeLCTmax = 0.012
-    EIRmslopeLCTmin = 0.012
+    Qr47rated = default_statistics.Qr47Rated
+    Qr47min = default_statistics.Qr47Min
+    Qr17rated = default_statistics.Qr17Rated
+    Qr17min = default_statistics.Qr17Min
+    Qm5max = default_statistics.Qm5Max
+    Qr5rated = default_statistics.Qr5Rated
+    Qr5min = default_statistics.Qr5Min
+    QmslopeLCTmax = default_statistics.QmslopeLCTMax
+    QmslopeLCTmin = default_statistics.QmslopeLCTMin
+    EIRr47rated = default_statistics.EIRr47Rated
+    EIRr47min = default_statistics.EIRr47Min
+    EIRm17rated = default_statistics.EIRm17Rated
+    EIRr17rated = default_statistics.EIRr17Rated
+    EIRr17min = default_statistics.EIRr17Min
+    EIRm5max = default_statistics.EIRm5Max
+    EIRr5rated = default_statistics.EIRr5Rated
+    EIRr5min = default_statistics.EIRr5Min
+    EIRmslopeLCTmax = default_statistics.EIRmslopeLCTMax
+    EIRmslopeLCTmin = default_statistics.EIRmslopeLCTMin
 
     if heating_capacity_17 is not None:
         Qm17rated = heating_capacity_17 / heating_capacity_47
     else:
-        Qm17rated = 0.689
+        Qm17rated = default_statistics.Qm17rated
 
     Q_h = TemperatureSpeedHeatingPerformanceTable(t_h, 3)
     P_h = TemperatureSpeedHeatingPerformanceTable(t_h, 3)
