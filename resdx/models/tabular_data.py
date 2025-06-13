@@ -263,11 +263,11 @@ class TemperatureSpeedPerformance:
 
 def make_neep_statistical_model_data(
     cooling_capacity_95: float,  # Net total cooling capacity at 95F and rated speed
-    seer2: float,
     eer2: float,
     heating_capacity_47: float,
-    heating_capacity_17: float | None,
-    hspf2: float,
+    heating_capacity_17: float | None = None,
+    seer2: float | None = None,
+    hspf2: float | None = None,
     min_heating_temperature: float = fr_u(-20, "degF"),
     cooling_capacity_ratio: float | None = None,  # min/max capacity ratio at 95F
     cooling_cop_82_min: float | None = None,
@@ -318,6 +318,8 @@ def make_neep_statistical_model_data(
     P_c.set_by_ratio(Qmax, t_95, Pr95rated)
     P_c.set_by_maintenance(Qmax, t_82, t_95, Pm95max)
     if cooling_cop_82_min is None:
+        if seer2 is None:
+            raise ValueError("seer2 cannot be None.")
         cooling_cop_82_min = cop_82_b_low(StagingType.VARIABLE_SPEED, seer2, seer2 / eer2)
 
     EIRr82min = (Q_c.get(Qmax, t_82) / P_c.get(Qmax, t_82)) / cooling_cop_82_min
@@ -426,6 +428,8 @@ def make_neep_statistical_model_data(
 
     # Net Power
     if heating_cop_47 is None:
+        if hspf2 is None:
+            raise ValueError("hspf2 cannot be None")
         heating_cop_47 = cop_47_h1_full(StagingType.VARIABLE_SPEED, hspf2, Qm17rated)
 
     Pr47rated = Qr47rated * EIRr47rated
