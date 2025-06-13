@@ -394,7 +394,7 @@ def make_neep_statistical_model_data(
     if heating_capacity_17 is not None:
         Qm17rated = heating_capacity_17 / heating_capacity_47
     else:
-        Qm17rated = default_statistics.Qm17rated
+        Qm17rated = default_statistics.Qm17Rated
 
     Q_h = TemperatureSpeedHeatingPerformanceTable(t_h, 3)
     P_h = TemperatureSpeedHeatingPerformanceTable(t_h, 3)
@@ -668,8 +668,6 @@ def make_two_speed_model_data(
     Qmin = 1
     Qrated = 2
 
-    t_60 = fr_u(60.0, "degF")
-
     # COOLING
 
     t_82 = fr_u(82.0, "degF")
@@ -874,7 +872,3 @@ def make_packaged_terminal_model_data(
     Q_h.set_interpolator()
     P_h.set_interpolator()
     return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
-
-
-def neep_cap47_from_cap95(cap95: float) -> float:
-    return cap95 * 1.022 + fr_u(607.0, "Btu/h")

@@ -13,12 +13,12 @@ from dimes import (
     MarkersOnly,
 )
 from jinja2 import Environment, FileSystemLoader
-from koozie import fr_u
+from koozie import fr_u, to_u
 from numpy import linspace
 from scipy import optimize
 
 from resdx import RESNETDXModel, StagingType
-from resdx.models.tabular_data import neep_cap47_from_cap95
+from resdx.models.statistical_set import original_statistics
 from resdx.util import (
     # cubic,
     # cubic_string,
@@ -235,7 +235,14 @@ variable_speed_cooling_regression.secondary_range = DimensionalData(
 def hspf_function(cop_47, hspf, staging_type, cap17m):
     # Note: results are sensitive to cap95 since it is used to set the building load and external static pressure.
     cap95 = fr_u(3.0, "ton_ref")
-    cap47 = cap95 if staging_type != StagingType.VARIABLE_SPEED else neep_cap47_from_cap95(cap95)
+    cap47 = (
+        cap95
+        if staging_type != StagingType.VARIABLE_SPEED
+        else fr_u(
+            original_statistics.Q47RatedvQ95Rated.evaluate(to_u(cap95, "Btu/h")),
+            "Btu/h",
+        )
+    )
     cap17 = cap47 * cap17m
     return RESNETDXModel(
         staging_type=staging_type,

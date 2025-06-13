@@ -6,6 +6,12 @@ class RegressionResult:
     slope: float
     intercept: float
 
+    def evaluate(self, x: float):
+        return self.slope * x + self.intercept
+
+    def inverse(self, y: float):
+        return (y - self.intercept) / self.slope
+
 
 class StatisticalSet:
     def __init__(self, statistical_data: dict[str, dict[str]]):
@@ -22,6 +28,7 @@ class StatisticalSet:
             setattr(self, regression_name, regression_result)
 
 
+# Statistical means and regressions from original NEEP analysis (prior to 2025)
 original_statistics = StatisticalSet(
     {
         "quantities": {
@@ -55,6 +62,7 @@ original_statistics = StatisticalSet(
         "regressions": {
             "EIRr82MinvSEER2_over_EER2": {"slope": -0.324, "intercept": 1.305},
             "Qr95MinvSEER2_over_EER2": {"slope": -0.119, "intercept": 0.510},
+            "Q47RatedvQ95Rated": {"slope": 1.022, "intercept": 607.0},  # In Btu/h
         },
     }
 )
