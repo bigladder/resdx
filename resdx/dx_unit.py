@@ -1616,7 +1616,7 @@ class DXUnit:
                 "K",
                 "°F",
             ),
-            title=title.replace("\n", "<br>"),
+            title=title.replace("\n", "<br>") if isinstance(title, str) else title,
         )
 
         @dataclass
