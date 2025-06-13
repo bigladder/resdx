@@ -1578,7 +1578,7 @@ class DXUnit:
 
         return representation
 
-    def plot(self, output_path: Path | str) -> None:
+    def plot(self, output_path: Path | str, title: str | None = None) -> None:
         """Generate an HTML plot for this system."""
 
         # Heating Temperatures
@@ -1615,7 +1615,8 @@ class DXUnit:
                 "Outdoor Drybulb Temperature",
                 "K",
                 "°F",
-            )
+            ),
+            title=title.replace("\n", "<br>"),
         )
 
         @dataclass
@@ -1724,6 +1725,7 @@ class DXUnit:
             line_type = "solid"
             if display_spec.version in ["Integrated", "Sensible"]:
                 line_type = "dot"
+                is_visible = False
 
             for speed in range(number_of_speeds):
                 color_ratio = (number_of_speeds - speed) / number_of_speeds
