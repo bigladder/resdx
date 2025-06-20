@@ -5,13 +5,11 @@ Functionality to generate CSE object snippets from a DXUnit object
 import sys
 from enum import Enum
 
-from koozie import to_u, fr_u
+from koozie import fr_u, to_u
 
 from .conditions import CoolingConditions, HeatingConditions
-from .defrost import DefrostControl, DefrostStrategy
 from .dx_unit import DXUnit, StagingType
-from .psychrometrics import PsychState
-
+from .psychrometrics import cooling_psych_state, heating_psych_state
 
 INDENT = "  "
 
@@ -244,7 +242,7 @@ def write_cse(
             condition = unit.make_condition(
                 HeatingConditions,
                 compressor_speed=speed,
-                outdoor=PsychState(drybulb=fr_u(t_odb, "°F"), rel_hum=0.4),
+                outdoor=heating_psych_state(drybulb=fr_u(t_odb, "°F")),
             )
             capacity_ratios.append(unit.net_steady_state_heating_capacity(condition) / reference_capacity)
             cops.append(unit.net_steady_state_heating_cop(condition))
@@ -284,7 +282,7 @@ def write_cse(
             condition = unit.make_condition(
                 CoolingConditions,
                 compressor_speed=speed,
-                outdoor=PsychState(drybulb=fr_u(t_odb, "°F"), rel_hum=0.4),
+                outdoor=cooling_psych_state(drybulb=fr_u(t_odb, "°F")),
             )
             capacity_ratios.append(unit.net_total_cooling_capacity(condition) / reference_capacity)
             cops.append(unit.net_total_cooling_cop(condition))

@@ -9,7 +9,7 @@ from ..defrost import Defrost
 from ..dx_unit import AHRIVersion, DXUnit
 from ..enums import StagingType
 from ..fan import RESNETBPMFan, RESNETPSCFan
-from ..psychrometrics import PsychState
+from ..psychrometrics import cooling_psych_state, heating_psych_state
 from ..util import make_list, set_default
 from .nrel import NRELDXModel
 from .statistical_set import original_statistics
@@ -570,7 +570,7 @@ class RESNETDXModel(DXUnit):
         rated_conditions = self.make_condition(
             CoolingConditions,
             compressor_speed=conditions.compressor_speed,
-            outdoor=PsychState(drybulb=conditions.outdoor.db, rel_hum=0.4),
+            outdoor=cooling_psych_state(drybulb=conditions.outdoor.db),
         )
         return function(self, conditions) / function(self, rated_conditions)
 
@@ -580,6 +580,6 @@ class RESNETDXModel(DXUnit):
         rated_conditions = self.make_condition(
             HeatingConditions,
             compressor_speed=conditions.compressor_speed,
-            outdoor=PsychState(drybulb=conditions.outdoor.db, rel_hum=0.4),
+            outdoor=heating_psych_state(drybulb=conditions.outdoor.db),
         )
         return function(self, conditions) / function(self, rated_conditions)

@@ -23,7 +23,7 @@ from .conditions import CoolingConditions, HeatingConditions, OperatingCondition
 from .defrost import Defrost, DefrostControl
 from .enums import StagingType
 from .fan import ConstantSpecificFanPowerFan, Fan, FanMotorType
-from .psychrometrics import STANDARD_CONDITIONS, PsychState, psychrolib
+from .psychrometrics import STANDARD_CONDITIONS, PsychState, cooling_psych_state, heating_psych_state, psychrolib
 from .util import find_nearest, limit_check, set_default
 
 
@@ -1503,7 +1503,7 @@ class DXUnit:
                             for p in ambient_absolute_air_pressures:
                                 conditions = self.make_condition(
                                     CoolingConditions,
-                                    outdoor=PsychState(drybulb=tdb_o, rel_hum=0.4, pressure=p),
+                                    outdoor=cooling_psych_state(drybulb=tdb_o, pressure=p),
                                     indoor=PsychState(drybulb=tdb_i, rel_hum=rh_o, pressure=p),
                                     compressor_speed=speed,
                                 )
@@ -1659,7 +1659,7 @@ class DXUnit:
                 self.make_condition(
                     HeatingConditions,
                     compressor_speed=speed,
-                    outdoor=PsychState(drybulb=tdb, rel_hum=0.4),
+                    outdoor=heating_psych_state(drybulb=tdb),
                 )
                 for tdb in heating_temperatures.data_values
             ]
@@ -1670,7 +1670,7 @@ class DXUnit:
                 self.make_condition(
                     CoolingConditions,
                     compressor_speed=speed,
-                    outdoor=PsychState(drybulb=tdb, rel_hum=0.4),
+                    outdoor=cooling_psych_state(drybulb=tdb),
                 )
                 for tdb in cooling_temperatures.data_values
             ]
