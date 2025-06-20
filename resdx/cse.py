@@ -4,6 +4,7 @@ Functionality to generate CSE object snippets from a DXUnit object
 
 import sys
 from enum import Enum
+from math import isclose
 
 from koozie import fr_u, to_u
 
@@ -61,9 +62,10 @@ class CSEMember:
             if self.row_labels is None and self.column_labels is None:
                 value_string = ", ".join([f"{v:.{self.precision}f}" for v in values])
             else:
+                number_of_row_labels = len(self.row_labels)
                 assert isinstance(self.row_labels, list)
-                n = len(self.value) // len(self.row_labels)  # Number of columns
-                assert len(self.row_labels) * n == len(self.value)
+                n = len(self.value) // number_of_row_labels  # Number of columns
+                assert number_of_row_labels * n == len(self.value)
                 if self.column_labels is not None:
                     padded_labels = "  ".join([f"{label:{self.precision + 2}}" for label in self.column_labels])
                     member_string += "\n" + f"{INDENT * (level + 2)}// {padded_labels} Speed"
@@ -71,10 +73,13 @@ class CSEMember:
                 for i, row_label in enumerate(self.row_labels):
                     start = i * n
                     end = n * (i + 1)
+                    row_label_string = f", // {row_label}"
+                    if i == number_of_row_labels - 1:
+                        row_label_string = f"  // {row_label}"
                     value_string += (
                         f"\n{INDENT * (level + 2)}"
                         + ", ".join([f"{v:.{self.precision}f}" for v in values[start:end]])
-                        + f" // {row_label}"
+                        + row_label_string
                     )
 
         elif isinstance(self.value, str):
@@ -237,6 +242,8 @@ def write_cse(
     capacity_ratios = []
     cops = []
     reference_capacity = unit.net_steady_state_heating_capacity()
+    reference_temperature = to_u(unit.H1_full_cond.outdoor.db, "°F")
+    reference_speed = heating_speeds.index(unit.H1_full_cond.compressor_speed) + 1
     for t_odb in heating_outdoor_dry_bulbs:
         for speed in heating_speeds:
             condition = unit.make_condition(
@@ -244,16 +251,23 @@ def write_cse(
                 compressor_speed=speed,
                 outdoor=heating_psych_state(drybulb=fr_u(t_odb, "°F")),
             )
-            capacity_ratios.append(unit.net_steady_state_heating_capacity(condition) / reference_capacity)
+            capacity = unit.net_steady_state_heating_capacity(condition)
+            capacity_ratio = capacity / reference_capacity
+            if isclose(t_odb, reference_temperature, abs_tol=0.1) and speed == reference_speed:
+                assert capacity_ratio == 1.0, (
+                    f"{t_odb:.0f}°F/{speed}: cap={capacity:.0f}, ref={reference_capacity:.0f}, full load speed= {unit.H1_full_cond.compressor_speed}, speed={heating_speeds}"
+                )
+            capacity_ratios.append(capacity_ratio)
+
             cops.append(unit.net_steady_state_heating_cop(condition))
 
     objects.append(
         CSEPerformanceMap(
             f"{system_name} Heating Performance Map",
             temperatures=heating_outdoor_dry_bulbs,
-            reference_temperature=to_u(unit.H1_full_cond.outdoor.db, "°F"),
+            reference_temperature=reference_temperature,
             speeds=[i + 1 for i in range(len(heating_speeds))],
-            reference_speed=unit.H1_full_cond.compressor_speed,
+            reference_speed=reference_speed,
             capacity_ratios=capacity_ratios,
             cops=cops,
         )
@@ -277,6 +291,8 @@ def write_cse(
     capacity_ratios = []
     cops = []
     reference_capacity = unit.net_total_cooling_capacity()
+    reference_temperature = to_u(unit.A_full_cond.outdoor.db, "°F")
+    reference_speed = cooling_speeds.index(unit.A_full_cond.compressor_speed) + 1
     for t_odb in cooling_outdoor_dry_bulbs:
         for speed in cooling_speeds:
             condition = unit.make_condition(
@@ -284,16 +300,20 @@ def write_cse(
                 compressor_speed=speed,
                 outdoor=cooling_psych_state(drybulb=fr_u(t_odb, "°F")),
             )
-            capacity_ratios.append(unit.net_total_cooling_capacity(condition) / reference_capacity)
+            capacity = unit.net_total_cooling_capacity(condition)
+            capacity_ratio = capacity / reference_capacity
+            if isclose(t_odb, reference_temperature, abs_tol=0.1) and speed == reference_speed:
+                assert capacity_ratio == 1.0, f"{t_odb:.0f}°F/{speed}: cap={capacity:.0f}, ref={reference_capacity:.0f}"
+            capacity_ratios.append(capacity_ratio)
             cops.append(unit.net_total_cooling_cop(condition))
 
     objects.append(
         CSEPerformanceMap(
             f"{system_name} Cooling Performance Map",
             temperatures=cooling_outdoor_dry_bulbs,
-            reference_temperature=to_u(unit.A_full_cond.outdoor.db, "°F"),
+            reference_temperature=reference_temperature,
             speeds=[i + 1 for i in range(len(cooling_speeds))],
-            reference_speed=unit.A_full_cond.compressor_speed,
+            reference_speed=reference_speed,
             capacity_ratios=capacity_ratios,
             cops=cops,
         )
@@ -311,6 +331,8 @@ def write_cse(
                     AutoSize.AUTOSIZE if autosize else unit.net_steady_state_heating_capacity(),
                     "Btu/h",
                 ),
+                CSEMember("rsHSPF", unit.hspf(), precision=1),
+                CSEMember("rsSEER", unit.seer(), precision=1),
                 CSEMember(
                     "rsVfPerTon",
                     unit.rated_cooling_airflow_per_rated_net_capacity[unit.cooling_full_load_speed],
@@ -335,7 +357,7 @@ def write_cse(
                 CSEMember(
                     "rsParElec",
                     CSEExpression(
-                        f'($tdboHrAv < {to_u(unit.crankcase_heater_setpoint_temperature, "°F"):.1f}) * (1.-@RSYSRes["rsys-HVACHeatpump"].prior.H.hrsOn) * {10 * to_u(unit.net_total_cooling_capacity(), "ton_ref"):.2f}'
+                        f'($tdboHrAv < {to_u(unit.crankcase_heater_setpoint_temperature, "°F"):.1f}) * (1.-@RSYSRes["{system_name}"].prior.H.hrsOn) * {10 * to_u(unit.net_total_cooling_capacity(), "ton_ref"):.2f}'  # TODO: Fix for autosized systems
                     ),
                     "W",
                 ),
