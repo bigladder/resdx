@@ -78,7 +78,7 @@ class PsychState:
         if self.rh_set:
             return self._rh
         else:
-            self.rh = psychrolib.GetHumRatioFromTWetBulb(self.db_C, self.get_wb_C(), self.p)
+            self.rh = psychrolib.GetRelHumFromTWetBulb(self.db_C, self.get_wb_C(), self.p)
             return self._rh
 
     @rh.setter
