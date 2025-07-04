@@ -357,7 +357,7 @@ def write_cse(
                 CSEMember(
                     "rsParElec",
                     CSEExpression(
-                        f'($tdboHrAv < {to_u(unit.crankcase_heater_setpoint_temperature, "°F"):.1f}) * (1.-@RSYSRes["{system_name}"].prior.H.hrsOn) * {10 * to_u(unit.net_total_cooling_capacity(), "ton_ref"):.2f}'  # TODO: Fix for autosized systems
+                        f'($tdboHrAv < {to_u(unit.crankcase_heater_setpoint_temperature, "°F"):.1f}) * (1.-@RSYSRes["{system_name}"].prior.H.hrsOn) * @RSYS["{system_name}"].capNomC * {10 / 12000.0}'
                     ),
                     "W",
                 ),
