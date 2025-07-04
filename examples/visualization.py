@@ -1,17 +1,16 @@
+from dimes import DimensionalData, DimensionalPlot, DisplayData, LinesOnly
+from dimes.griddeddata import DataSelection, GridAxis, GridPointData, RegularGridData
 from koozie import fr_u
-from dimes.griddeddata import GridAxis, GridPointData, RegularGridData, DataSelection
-from dimes import DimensionalPlot, DimensionalData, DisplayData, LinesOnly
 
 from resdx import (
-    RESNETDXModel,
     AHRIVersion,
-    StagingType,
-    HeatingConditions,
     CoolingConditions,
-    PsychState,
+    HeatingConditions,
     HeatingDistribution,
+    PsychState,
+    RESNETDXModel,
+    StagingType,
 )
-
 from resdx.util import geometric_space
 
 output_directory_path = "output"
@@ -36,12 +35,13 @@ dx_unit = RESNETDXModel(
 cop_values = []
 indoor_temperatures = GridAxis([65.0, 67.5, 70.0, 72.5, 75.0], "Indoor Temperature", "degF")
 indoor_airflow_rates = GridAxis([300.0, 350.0, 400.0, 450.0], "Indoor Airflow Rate", "cfm/ton")
+indoor_relative_humidity = dx_unit.H1_full_cond.indoor.rh
 for indoor_temperature in indoor_temperatures.data_values:
     for air_flow in indoor_airflow_rates.data_values:
         condition = dx_unit.make_condition(
             HeatingConditions,
             compressor_speed=dx_unit.heating_full_load_speed,
-            indoor=PsychState(drybulb=fr_u(indoor_temperature, "degF"), rel_hum=0.4),
+            indoor=PsychState(drybulb=fr_u(indoor_temperature, "degF"), rel_hum=indoor_relative_humidity),
         )
         condition.set_mass_airflow_ratio(air_flow / 400.0)
         cop_values.append(dx_unit.net_steady_state_heating_cop(condition))

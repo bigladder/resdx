@@ -9,15 +9,15 @@ from ..defrost import Defrost
 from ..dx_unit import AHRIVersion, DXUnit
 from ..enums import StagingType
 from ..fan import RESNETBPMFan, RESNETPSCFan
-from ..psychrometrics import PsychState
+from ..psychrometrics import cooling_psych_state, heating_psych_state
 from ..util import make_list, set_default
 from .nrel import NRELDXModel
+from .statistical_set import original_statistics
 from .tabular_data import (
     TemperatureSpeedPerformance,
     make_neep_statistical_model_data,
     make_single_speed_model_data,
     make_two_speed_model_data,
-    neep_cap47_from_cap95,
 )
 from .title24 import Title24DXModel
 
@@ -225,7 +225,10 @@ class RESNETDXModel(DXUnit):
             else:
                 rated_net_heating_capacity = set_default(
                     rated_net_heating_capacity,
-                    neep_cap47_from_cap95(rated_net_total_cooling_capacity),
+                    fr_u(
+                        original_statistics.Q47RatedvQ95Rated.evaluate(to_u(rated_net_total_cooling_capacity, "Btu/h")),
+                        "Btu/h",
+                    ),
                     number_of_speeds=self.number_of_heating_speeds,
                 )
                 if self.rated_net_heating_capacity_17 is None:
@@ -567,7 +570,7 @@ class RESNETDXModel(DXUnit):
         rated_conditions = self.make_condition(
             CoolingConditions,
             compressor_speed=conditions.compressor_speed,
-            outdoor=PsychState(drybulb=conditions.outdoor.db, rel_hum=0.4),
+            outdoor=cooling_psych_state(drybulb=conditions.outdoor.db),
         )
         return function(self, conditions) / function(self, rated_conditions)
 
@@ -577,6 +580,6 @@ class RESNETDXModel(DXUnit):
         rated_conditions = self.make_condition(
             HeatingConditions,
             compressor_speed=conditions.compressor_speed,
-            outdoor=PsychState(drybulb=conditions.outdoor.db, rel_hum=0.4),
+            outdoor=heating_psych_state(drybulb=conditions.outdoor.db),
         )
         return function(self, conditions) / function(self, rated_conditions)

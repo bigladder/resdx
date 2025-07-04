@@ -1,6 +1,6 @@
 from koozie import fr_u
 
-from .psychrometrics import STANDARD_CONDITIONS, PsychState, psychrolib
+from .psychrometrics import STANDARD_CONDITIONS, PsychState
 
 
 class OperatingConditions:

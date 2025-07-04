@@ -1,5 +1,3 @@
-import sys
-
 import psychrolib
 from koozie import fr_u, to_u
 
@@ -80,7 +78,7 @@ class PsychState:
         if self.rh_set:
             return self._rh
         else:
-            self.rh = psychrolib.GetHumRatioFromTWetBulb(self.db_C, self.get_wb_C(), self.p)
+            self.rh = psychrolib.GetRelHumFromTWetBulb(self.db_C, self.get_wb_C(), self.p)
             return self._rh
 
     @rh.setter
@@ -120,3 +118,13 @@ class PsychState:
 
 
 STANDARD_CONDITIONS = PsychState(drybulb=fr_u(70.0, "°F"), hum_rat=0.0)
+
+
+def cooling_psych_state(drybulb=fr_u(95.0, "°F"), pressure=fr_u(1.0, "atm")):
+    "Applies default assumption for outdoor cooling humidity conditions in AHRI Standards"
+    return PsychState(drybulb=drybulb, rel_hum=0.4, pressure=pressure)
+
+
+def heating_psych_state(drybulb=fr_u(95.0, "°F"), pressure=fr_u(1.0, "atm")):
+    "Applies default assumption for outdoor heating humidity conditions in AHRI Standards"
+    return PsychState(drybulb=drybulb, wetbulb=drybulb - fr_u(2.0, "delta_degF"), pressure=pressure)

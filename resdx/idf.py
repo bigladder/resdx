@@ -11,7 +11,7 @@ from .conditions import CoolingConditions, HeatingConditions
 from .defrost import DefrostControl, DefrostStrategy
 from .dx_unit import DXUnit
 from .models.nrel import NRELDXModel
-from .psychrometrics import PsychState
+from .psychrometrics import PsychState, cooling_psych_state, heating_psych_state
 
 
 class IDFField:
@@ -609,7 +609,7 @@ def write_idf(
                         drybulb=koozie.fr_u(80.0, "°F"),
                         wetbulb=koozie.fr_u(t_ewb, "°F"),
                     ),
-                    outdoor=PsychState(drybulb=koozie.fr_u(t_odb, "°F"), rel_hum=0.4),
+                    outdoor=cooling_psych_state(drybulb=koozie.fr_u(t_odb, "°F")),
                 )
                 capacities.append(unit.gross_total_cooling_capacity(condition))
                 eirs.append(1.0 / unit.gross_total_cooling_cop(condition))
@@ -818,13 +818,14 @@ def write_idf(
 
         capacities = []
         eirs = []
+        heating_indoor_rh = unit.H1_full_cond.indoor.rh
         for t_edb in heating_indoor_dry_bulbs:
             for t_odb in heating_outdoor_dry_bulbs:
                 condition = unit.make_condition(
                     HeatingConditions,
                     compressor_speed=speed,
-                    indoor=PsychState(drybulb=koozie.fr_u(t_edb, "°F"), rel_hum=0.4),
-                    outdoor=PsychState(drybulb=koozie.fr_u(t_odb, "°F"), rel_hum=0.4),
+                    indoor=PsychState(drybulb=koozie.fr_u(t_edb, "°F"), rel_hum=heating_indoor_rh),
+                    outdoor=heating_psych_state(drybulb=koozie.fr_u(t_odb, "°F")),
                 )
                 capacities.append(unit.gross_steady_state_heating_capacity(condition))
                 eirs.append(1.0 / unit.gross_steady_state_heating_cop(condition))

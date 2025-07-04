@@ -23,7 +23,7 @@ from .conditions import CoolingConditions, HeatingConditions, OperatingCondition
 from .defrost import Defrost, DefrostControl
 from .enums import StagingType
 from .fan import ConstantSpecificFanPowerFan, Fan, FanMotorType
-from .psychrometrics import STANDARD_CONDITIONS, PsychState, psychrolib
+from .psychrometrics import STANDARD_CONDITIONS, PsychState, cooling_psych_state, heating_psych_state, psychrolib
 from .util import find_nearest, limit_check, set_default
 
 
@@ -637,7 +637,13 @@ class DXUnit:
         self.rated_heating_airflow = [None] * self.number_of_heating_speeds
         self.rated_heating_external_static_pressure = [None] * self.number_of_heating_speeds
 
-    def make_condition(self, condition_type, compressor_speed=0, indoor=None, outdoor=None):
+    def make_condition(
+        self,
+        condition_type: type[CoolingConditions] | type[HeatingConditions],
+        compressor_speed: int = 0,
+        indoor: PsychState = None,
+        outdoor: PsychState = None,
+    ) -> OperatingConditions:
         if indoor is None:
             indoor = condition_type().indoor
         if outdoor is None:
@@ -664,6 +670,25 @@ class DXUnit:
         )
         condition.set_rated_volumetric_airflow(rated_airflow, rated_net_capacity)
         return condition
+
+    def outdoor_temperature_condition(
+        self,
+        outdoor_temperature: float,
+        speed: int | None,
+        condition_type: type[CoolingConditions] | type[HeatingConditions] | None = None,
+    ) -> OperatingConditions:
+        if condition_type is None:
+            if outdoor_temperature < fr_u(65.0, "°F"):
+                condition_type = HeatingConditions
+                outdoor_state = heating_psych_state(outdoor_temperature)
+            else:
+                condition_type = CoolingConditions
+                outdoor_state = cooling_psych_state(outdoor_temperature)
+        if speed is None:
+            speed = (
+                self.cooling_full_load_speed if condition_type == CoolingConditions else self.heating_full_load_speed
+            )
+        return self.make_condition(condition_type, speed, outdoor=outdoor_state)
 
     def get_rated_full_flow_rated_pressure(self):
         if not self.is_ducted:
@@ -1503,7 +1528,7 @@ class DXUnit:
                             for p in ambient_absolute_air_pressures:
                                 conditions = self.make_condition(
                                     CoolingConditions,
-                                    outdoor=PsychState(drybulb=tdb_o, rel_hum=0.4, pressure=p),
+                                    outdoor=cooling_psych_state(drybulb=tdb_o, pressure=p),
                                     indoor=PsychState(drybulb=tdb_i, rel_hum=rh_o, pressure=p),
                                     compressor_speed=speed,
                                 )
@@ -1578,7 +1603,7 @@ class DXUnit:
 
         return representation
 
-    def plot(self, output_path: Path | str) -> None:
+    def plot(self, output_path: Path | str, title: str | None = None) -> None:
         """Generate an HTML plot for this system."""
 
         # Heating Temperatures
@@ -1615,7 +1640,8 @@ class DXUnit:
                 "Outdoor Drybulb Temperature",
                 "K",
                 "°F",
-            )
+            ),
+            title=title.replace("\n", "<br>") if isinstance(title, str) else title,
         )
 
         @dataclass
@@ -1658,7 +1684,7 @@ class DXUnit:
                 self.make_condition(
                     HeatingConditions,
                     compressor_speed=speed,
-                    outdoor=PsychState(drybulb=tdb, rel_hum=0.4),
+                    outdoor=heating_psych_state(drybulb=tdb),
                 )
                 for tdb in heating_temperatures.data_values
             ]
@@ -1669,7 +1695,7 @@ class DXUnit:
                 self.make_condition(
                     CoolingConditions,
                     compressor_speed=speed,
-                    outdoor=PsychState(drybulb=tdb, rel_hum=0.4),
+                    outdoor=cooling_psych_state(drybulb=tdb),
                 )
                 for tdb in cooling_temperatures.data_values
             ]
@@ -1724,6 +1750,7 @@ class DXUnit:
             line_type = "solid"
             if display_spec.version in ["Integrated", "Sensible"]:
                 line_type = "dot"
+                is_visible = False
 
             for speed in range(number_of_speeds):
                 color_ratio = (number_of_speeds - speed) / number_of_speeds
