@@ -637,7 +637,13 @@ class DXUnit:
         self.rated_heating_airflow = [None] * self.number_of_heating_speeds
         self.rated_heating_external_static_pressure = [None] * self.number_of_heating_speeds
 
-    def make_condition(self, condition_type, compressor_speed=0, indoor=None, outdoor=None):
+    def make_condition(
+        self,
+        condition_type: type[CoolingConditions] | type[HeatingConditions],
+        compressor_speed: int = 0,
+        indoor: PsychState = None,
+        outdoor: PsychState = None,
+    ) -> OperatingConditions:
         if indoor is None:
             indoor = condition_type().indoor
         if outdoor is None:
@@ -664,6 +670,25 @@ class DXUnit:
         )
         condition.set_rated_volumetric_airflow(rated_airflow, rated_net_capacity)
         return condition
+
+    def outdoor_temperature_condition(
+        self,
+        outdoor_temperature: float,
+        speed: int | None,
+        condition_type: type[CoolingConditions] | type[HeatingConditions] | None = None,
+    ) -> OperatingConditions:
+        if condition_type is None:
+            if outdoor_temperature < fr_u(65.0, "°F"):
+                condition_type = HeatingConditions
+                outdoor_state = heating_psych_state(outdoor_temperature)
+            else:
+                condition_type = CoolingConditions
+                outdoor_state = cooling_psych_state(outdoor_temperature)
+        if speed is None:
+            speed = (
+                self.cooling_full_load_speed if condition_type == CoolingConditions else self.heating_full_load_speed
+            )
+        return self.make_condition(condition_type, speed, outdoor=outdoor_state)
 
     def get_rated_full_flow_rated_pressure(self):
         if not self.is_ducted:
