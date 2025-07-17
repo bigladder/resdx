@@ -133,6 +133,20 @@ class DXUnit:
         (fr_u(50000, "Btu/h") + i * fr_u(10000, "Btu/h")) for i in range(0, 9)
     ]
 
+    @dataclass
+    class SeasonalRatingBin:
+        fraction: float
+        temperature: float
+        load: float
+        energy: float
+        supplemental: float = 0.0
+
+        def cop(self):
+            total_energy = self.energy + self.supplemental
+            if total_energy == 0.0:
+                return 0.0
+            return self.load / total_energy
+
     def __init__(
         # defaults of None are defaulted within this function based on other argument values
         self,
@@ -357,6 +371,13 @@ class DXUnit:
         self.check_array_order(self.rated_net_total_cooling_capacity)
         self.check_array_order(self.rated_net_heating_capacity)
 
+        self.heating_rating_bins: list[
+            DXUnit.SeasonalRatingBin
+        ] = []  # Store intermediate data used in HSPF calculation
+        self.cooling_rating_bins: list[
+            DXUnit.SeasonalRatingBin
+        ] = []  # Store intermediate data used in SEER calculation
+
     def set_c_d_cooling(self, input):
         self.c_d_cooling = set_default(input, 0.25)
 
@@ -490,7 +511,7 @@ class DXUnit:
             if self.cooling_boost_speed is not None:
                 self.A_boost_cond: CoolingConditions = self.make_condition(
                     CoolingConditions, compressor_speed=self.cooling_boost_speed
-                )  # TODO: Evaluate impacts on AHRI ratings
+                )  # Not used in AHRI ratings, only used for 'rated' SHR calculations at high speeds
 
             self.A_low_cond: CoolingConditions = self.make_condition(
                 CoolingConditions, compressor_speed=self.cooling_low_speed
@@ -524,6 +545,24 @@ class DXUnit:
                 outdoor=PsychState(drybulb=fr_u(17.0, "°F"), wetbulb=fr_u(15.0, "°F")),
                 compressor_speed=self.heating_low_speed,
             )
+
+            if self.heating_boost_speed is not None:
+                self.H2_boost_cond: HeatingConditions = self.make_condition(
+                    HeatingConditions,
+                    outdoor=PsychState(drybulb=fr_u(35.0, "°F"), wetbulb=fr_u(33.0, "°F")),
+                    compressor_speed=self.heating_boost_speed,
+                )
+                self.H3_boost_cond: HeatingConditions = self.make_condition(
+                    HeatingConditions,
+                    outdoor=PsychState(drybulb=fr_u(17.0, "°F"), wetbulb=fr_u(15.0, "°F")),
+                    compressor_speed=self.heating_boost_speed,
+                )
+
+                self.H4_boost_cond: HeatingConditions = self.make_condition(
+                    HeatingConditions,
+                    outdoor=PsychState(drybulb=fr_u(5.0, "°F"), wetbulb=fr_u(3.0, "°F")),
+                    compressor_speed=self.heating_boost_speed,
+                )
 
     def set_sensible_cooling_variables(self):
         self.rated_gross_shr_cooling[self.cooling_full_load_speed] = self.get_rated_gross_shr(self.A_full_cond)
@@ -611,7 +650,8 @@ class DXUnit:
         self.check_array_length(self.rated_gross_heating_cop, self.number_of_heating_speeds)
         self.check_array_length(self.rated_net_heating_capacity, self.number_of_heating_speeds)
 
-    def check_array_order(self, array):
+    @staticmethod
+    def check_array_order(array):
         if not all(earlier >= later for earlier, later in zip(array, array[1:])):
             raise RuntimeError(f"Arrays must be in order of decreasing capacity. Array items are {array}.")
 
@@ -917,6 +957,7 @@ class DXUnit:
 
     def seer(self):
         """Based on AHRI 210/240 2023 (unless otherwise noted)"""
+        self.cooling_rating_bins = []
         if self.staging_type == StagingType.SINGLE_STAGE:
             plf = 1.0 - 0.5 * self.c_d_cooling  # eq. 11.56
             seer = plf * self.net_total_cooling_cop(
@@ -998,21 +1039,21 @@ class DXUnit:
                     if bl <= q_low:
                         clf_low = bl / q_low  # eq. 11.68
                         plf_low = 1.0 - self.c_d_cooling * (1.0 - clf_low)  # eq. 11.69
-                        q = clf_low * q_low * n  # eq. 11.66
-                        e = clf_low * p_low * n / plf_low  # eq. 11.67
+                        q = clf_low * q_low  # eq. 11.66
+                        e = clf_low * p_low / plf_low  # eq. 11.67
                     elif bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
                         clf_low = (q_full - bl) / (q_full - q_low)  # eq. 11.74
                         clf_full = 1.0 - clf_low  # eq. 11.75
-                        q = (clf_low * q_low + clf_full * q_full) * n  # eq. 11.72
-                        e = (clf_low * p_low + clf_full * p_full) * n  # eq. 11.73
+                        q = clf_low * q_low + clf_full * q_full  # eq. 11.72
+                        e = clf_low * p_low + clf_full * p_full  # eq. 11.73
                     elif bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
                         clf_full = bl / q_full  # eq. 11.78
                         plf_full = 1.0 - self.c_d_cooling * (1.0 - clf_full)  # eq. 11.79
-                        q = clf_full * q_full * n  # eq. 11.76
-                        e = clf_full * p_full * n / plf_full  # eq. 11.77
+                        q = clf_full * q_full  # eq. 11.76
+                        e = clf_full * p_full / plf_full  # eq. 11.77
                     else:  # elif bl >= q_full
-                        q = q_full * n
-                        e = p_full * n
+                        q = q_full
+                        e = p_full
                 else:  # if self.staging_type == StagingType.VARIABLE_SPEED
                     q_int = q_E_int + M_Cq * (t - (fr_u(87, "°F")))
                     p_int = p_E_int + M_CE * (t - (fr_u(87, "°F")))
@@ -1023,26 +1064,28 @@ class DXUnit:
                     if bl <= q_low:
                         clf_low = bl / q_low  # eq. 11.68
                         plf_low = 1.0 - self.c_d_cooling * (1.0 - clf_low)  # eq. 11.69
-                        q = clf_low * q_low * n  # eq. 11.66
-                        e = clf_low * p_low * n / plf_low  # eq. 11.67
+                        q = clf_low * q_low  # eq. 11.66
+                        e = clf_low * p_low / plf_low  # eq. 11.67
                     elif bl < q_int:
                         cop_int_bin = cop_low + (cop_int - cop_low) / (q_int - q_low) * (
                             bl - q_low
                         )  # eq. 11.101 (2023)
-                        q = bl * n
+                        q = bl
                         e = q / cop_int_bin
                     elif bl <= q_full:
                         cop_int_bin = cop_int + (cop_full - cop_int) / (q_full - q_int) * (
                             bl - q_int
                         )  # eq. 11.101 (2023)
-                        q = bl * n
+                        q = bl
                         e = q / cop_int_bin
                     else:  # elif bl >= q_full
-                        q = q_full * n
-                        e = p_full * n
+                        q = q_full
+                        e = p_full
 
-                q_sum += q
-                e_sum += e
+                q_sum += q * n
+                e_sum += e * n
+
+                self.cooling_rating_bins.append(DXUnit.SeasonalRatingBin(fraction=n, temperature=t, load=q, energy=e))
 
             seer = q_sum / e_sum  # e.q. 11.59
         return to_u(seer, "Btu/Wh")
@@ -1075,6 +1118,8 @@ class DXUnit:
     def heating_fan_power(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
+        if conditions.outdoor.db < self.heating_off_temperature:
+            return 0.0
         return self.fan.power(conditions.fan_speed, conditions.external_static_pressure)
 
     def heating_fan_heat(self, conditions):
@@ -1083,6 +1128,8 @@ class DXUnit:
     def gross_steady_state_heating_capacity(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
+        if conditions.outdoor.db < self.heating_off_temperature:
+            return 0.0
         return self.full_charge_gross_steady_state_heating_capacity(
             conditions
         ) * self.gross_steady_state_heating_capacity_charge_factor(conditions)
@@ -1090,6 +1137,8 @@ class DXUnit:
     def gross_steady_state_heating_power(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
+        if conditions.outdoor.db < self.heating_off_temperature:
+            return 0.0
         return self.full_charge_gross_steady_state_heating_power(
             conditions
         ) * self.gross_steady_state_heating_power_charge_factor(conditions)
@@ -1097,11 +1146,15 @@ class DXUnit:
     def gross_integrated_heating_capacity(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
+        if conditions.outdoor.db < self.heating_off_temperature:
+            return 0.0
         return self.full_charge_gross_integrated_heating_capacity(conditions)
 
     def gross_integrated_heating_power(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
+        if conditions.outdoor.db < self.heating_off_temperature:
+            return 0.0
         return self.full_charge_gross_integrated_heating_power(conditions)
 
     def net_steady_state_heating_capacity(self, conditions=None):
@@ -1117,32 +1170,50 @@ class DXUnit:
         return self.gross_integrated_heating_power(conditions) + self.heating_fan_power(conditions)
 
     def gross_steady_state_heating_cop(self, conditions=None):
+        if self.gross_steady_state_heating_power(conditions) == 0.0:
+            return 0.0
         return self.gross_steady_state_heating_capacity(conditions) / self.gross_steady_state_heating_power(conditions)
 
     def gross_integrated_heating_cop(self, conditions=None):
+        if self.gross_integrated_heating_power(conditions) == 0.0:
+            return 0.0
         return self.gross_integrated_heating_capacity(conditions) / self.gross_integrated_heating_power(conditions)
 
     def net_steady_state_heating_cop(self, conditions=None):
+        if self.net_steady_state_heating_power(conditions) == 0.0:
+            return 0.0
         return self.net_steady_state_heating_capacity(conditions) / self.net_steady_state_heating_power(conditions)
 
     def net_integrated_heating_cop(self, conditions=None):
+        if self.net_integrated_heating_power(conditions) == 0.0:
+            return 0.0
         return self.net_integrated_heating_capacity(conditions) / self.net_integrated_heating_power(conditions)
 
     def gross_heating_capacity_ratio(self, conditions=None):
+        if self.gross_steady_state_heating_capacity(conditions) == 0.0:
+            return 0.0
         return self.gross_integrated_heating_capacity(conditions) / self.gross_steady_state_heating_capacity(conditions)
 
     def net_heating_capacity_ratio(self, conditions=None):
+        if self.net_steady_state_heating_capacity(conditions) == 0.0:
+            return 0.0
         return self.net_integrated_heating_capacity(conditions) / self.net_steady_state_heating_capacity(conditions)
 
     def gross_heating_power_ratio(self, conditions=None):
+        if self.gross_steady_state_heating_power(conditions) == 0.0:
+            return 0.0
         return self.gross_integrated_heating_power(conditions) / self.gross_steady_state_heating_power(conditions)
 
     def net_heating_power_ratio(self, conditions=None):
+        if self.net_steady_state_heating_power(conditions) == 0.0:
+            return 0.0
         return self.net_integrated_heating_power(conditions) / self.net_steady_state_heating_power(conditions)
 
     def gross_heating_output_state(self, conditions=None):
         if conditions is None:
             conditions = self.H1_full_cond
+        if conditions.outdoor.db < self.heating_off_temperature:
+            return conditions.indoor
         T_odb = conditions.indoor.db + self.gross_steady_state_heating_capacity(conditions) / (
             conditions.mass_airflow * conditions.indoor.C_p
         )
@@ -1153,6 +1224,7 @@ class DXUnit:
         q_sum = 0.0
         e_sum = 0.0
         rh_sum = 0.0
+        self.heating_rating_bins = []
 
         heating_distribution = self.regional_heating_distributions[self.rating_standard][region]
         t_od = heating_distribution.outdoor_design_temperature
@@ -1263,8 +1335,8 @@ class DXUnit:
 
             if self.staging_type == StagingType.SINGLE_STAGE:
                 plf_full = 1.0 - self.c_d_heating * (1.0 - hlf_full)  # eq. 11.125
-                e = p_full * hlf_full * delta_full * n / plf_full  # eq. 11.156 (not shown for single stage)
-                rh = (bl - q_full * hlf_full * delta_full) * n  # eq. 11.126
+                e = p_full * hlf_full * delta_full / plf_full  # eq. 11.156 (not shown for single stage)
+                rh = bl - q_full * hlf_full * delta_full  # eq. 11.126
             elif self.staging_type == StagingType.TWO_STAGE:
                 t_ob = fr_u(40, "°F")  # eq. 11.134
                 if t >= t_ob:
@@ -1320,24 +1392,25 @@ class DXUnit:
 
                     hlf_low = bl / q_low  # eq. 11.155
                     plf_low = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.156
-                    e = p_low * hlf_low * delta_low * n / plf_low  # eq. 11.153
-                    rh = bl * (1.0 - delta_low) * n  # eq. 11.154
+                    e = p_low * hlf_low * delta_low / plf_low  # eq. 11.153
+                    rh = bl * (1.0 - delta_low)  # eq. 11.154
                 elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
                     hlf_low = (q_full - bl) / (q_full - q_low)  # eq. 11.163
                     hlf_full = 1.0 - hlf_low  # eq. 11.164
-                    e = (p_low * hlf_low + p_full * hlf_full) * delta_low * n  # eq. 11.162
-                    rh = bl * (1.0 - delta_low) * n  # eq. 11.154
+                    e = (p_low * hlf_low + p_full * hlf_full) * delta_low  # eq. 11.162
+                    rh = bl * (1.0 - delta_low)  # eq. 11.154
                 elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
                     hlf_low = (q_full - bl) / (q_full - q_low)  # eq. 11.163
                     plf_full = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.166
-                    e = p_full * hlf_full * delta_full * n / plf_full  # eq. 11.165
-                    rh = bl * (1.0 - delta_low) * n  # eq. 11.142
+                    e = p_full * hlf_full * delta_full / plf_full  # eq. 11.165
+                    rh = bl * (1.0 - delta_low)  # eq. 11.142
                 else:  # elif bl >= q_full
                     hlf_full = 1.0  # eq. 11.170
-                    e = p_full * hlf_full * delta_full * n  # eq. 11.168
-                    rh = (bl - q_full * hlf_full * delta_full) * n  # eq. 11.169
+                    e = p_full * hlf_full * delta_full  # eq. 11.168
+                    rh = bl - q_full * hlf_full * delta_full  # eq. 11.169
             else:  # if self.staging_type == StagingType.VARIABLE_SPEED:
                 # Note: this is strange that there is no defrost cut in the low speed and doesn't use H2 or H3 low
+                # TODO: Account for boost speed
                 q_low = interpolate(
                     self.net_steady_state_heating_capacity,
                     self.H0_low_cond,
@@ -1365,8 +1438,8 @@ class DXUnit:
 
                     hlf_low = bl / q_low  # eq. 11.155
                     plf_low = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.156
-                    e = p_low * hlf_low * delta_low * n / plf_low  # eq. 11.153
-                    rh = bl * (1.0 - delta_low) * n  # eq. 11.154
+                    e = p_low * hlf_low * delta_low / plf_low  # eq. 11.153
+                    rh = bl * (1.0 - delta_low)  # eq. 11.154
                 elif bl < q_full:
                     if bl <= q_int:
                         cop_int_bin = cop_low + (cop_int - cop_low) / (q_int - q_low) * (
@@ -1382,8 +1455,8 @@ class DXUnit:
                         delta_int_bin = 1.0  # eq. 11.198
                     else:
                         delta_int_bin = 0.5  # eq. 11.197
-                    rh = bl * (1.0 - delta_int_bin) * n
-                    q = bl * n
+                    rh = bl * (1.0 - delta_int_bin)
+                    q = bl
                     e = q / cop_int_bin * delta_int_bin
                 else:  # if bl >= q_full:
                     # TODO: allow no H4 conditions
@@ -1406,12 +1479,16 @@ class DXUnit:
                         q_full = q_H4_full + (q_H1_full - q_H3_full) * t_ratio  # eq. 11.205
                         p_full = p_H4_full + (p_H1_full - p_H3_full) * t_ratio  # eq. 11.206
                     hlf_full = 1.0  # eq. 11.170
-                    e = p_full * hlf_full * delta_full * n  # eq. 11.168
-                    rh = (bl - q_full * hlf_full * delta_full) * n  # eq. 11.169
+                    e = p_full * hlf_full * delta_full  # eq. 11.168
+                    rh = bl - q_full * hlf_full * delta_full  # eq. 11.169
 
             q_sum += n * bl
-            e_sum += e
-            rh_sum += rh
+            e_sum += n * e
+            rh_sum += n * rh
+
+            self.heating_rating_bins.append(
+                DXUnit.SeasonalRatingBin(fraction=n, temperature=t, load=bl, energy=e, supplemental=rh)
+            )
 
         f_def = self.defrost.demand_credit()
 

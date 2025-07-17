@@ -347,7 +347,7 @@ def make_neep_statistical_model_data(
     P_c.set_by_interpolation(Qrated, t_82)
 
     # Tmin
-    # Find temperature where power is half of 82F value to avoide division by zero
+    # Find temperature where power is half of 82F value to avoid division by zero
 
     t_c_min = P_c.get_temperature_at_value(P_c.get(Qmin, t_82) * 0.5, t_82, t_95, Qmin)
 
