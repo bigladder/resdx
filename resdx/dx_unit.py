@@ -13,6 +13,7 @@ from dimes import (
     DimensionalPlot,
     DisplayData,
     LineProperties,
+    MarkersOnly,
     get_color_from_scale,
 )
 from koozie import fr_u, to_u
@@ -133,19 +134,104 @@ class DXUnit:
         (fr_u(50000, "Btu/h") + i * fr_u(10000, "Btu/h")) for i in range(0, 9)
     ]
 
-    @dataclass
-    class SeasonalRatingBin:
-        fraction: float
-        temperature: float
-        load: float
-        energy: float
-        supplemental: float = 0.0
+    class SeasonalRatingBins:
+        def __init__(self):
+            self.fractions = []
+            self.temperatures = []
+            self.loads = []
+            self.energies = []
+            self.fractional_energies = []
+            self.fractional_loads = []
+            self.maximum_capacities = []
+            self.minimum_capacities = []
+            self.part_load_factors = []
+            self.supplemental_energies = []
+            self.cops = []
+            self.load_ratios = []
+            self.cycling_ratios = []
+            self.total_energy = 0.0
+            self.total_load = 0.0
 
-        def cop(self):
-            total_energy = self.energy + self.supplemental
-            if total_energy == 0.0:
-                return 0.0
-            return self.load / total_energy
+        def add_bin(
+            self,
+            fraction: float,
+            temperature: float,
+            load: float,
+            energy: float,
+            maximum_capacity: float,
+            minimum_capacity: float,
+            part_load_factor: float = 1.0,
+            supplemental_energy: float = 0.0,
+        ):
+            self.fractions.append(fraction)
+            self.temperatures.append(temperature)
+            self.loads.append(load)
+            self.energies.append(energy)
+            self.fractional_loads.append(fraction * load)
+            self.fractional_energies.append(fraction * energy)
+
+            self.maximum_capacities.append(maximum_capacity)
+            self.minimum_capacities.append(minimum_capacity)
+            self.part_load_factors.append(part_load_factor)
+            self.supplemental_energies.append(supplemental_energy)
+            self.cops.append(load / (energy + supplemental_energy) if (energy + supplemental_energy) > 0 else 0.0)
+            if minimum_capacity > 0:
+                load_ratio = load / maximum_capacity
+                if load >= minimum_capacity:
+                    cycling_ratio = 1.0
+                else:
+                    cycling_ratio = load / minimum_capacity
+            else:
+                load_ratio = 0.0
+                cycling_ratio = 1.0
+
+            self.load_ratios.append(load_ratio)
+            self.cycling_ratios.append(cycling_ratio)
+
+            self.total_energy = sum(self.fractional_energies)
+            self.total_load = sum(self.fractional_loads)
+
+        def as_list(self) -> list[dict[str, float]]:
+            return [
+                {
+                    "fraction": fraction,
+                    "temperature": temperature,
+                    "load": to_u(load, "kBtu/h"),
+                    "energy": to_u(energy, "kW"),
+                    "maximum_capacity": to_u(maximum_capacity, "kBtu/h"),
+                    "minimum_capacity": to_u(minimum_capacity, "kBtu/h"),
+                    "part_load_factor": part_load_factor,
+                    "supplemental_energy": to_u(supplemental_energy, "kW"),
+                    "cop": cop,
+                    "load_ratio": load_ratio,
+                    "cycling_ratio": cycling_ratio,
+                }
+                for (
+                    fraction,
+                    temperature,
+                    load,
+                    energy,
+                    maximum_capacity,
+                    minimum_capacity,
+                    part_load_factor,
+                    supplemental_energy,
+                    cop,
+                    load_ratio,
+                    cycling_ratio,
+                ) in zip(
+                    self.fractions,
+                    self.temperatures,
+                    self.loads,
+                    self.energies,
+                    self.maximum_capacities,
+                    self.minimum_capacities,
+                    self.part_load_factors,
+                    self.supplemental_energies,
+                    self.cops,
+                    self.load_ratios,
+                    self.cycling_ratios,
+                )
+            ]
 
     def __init__(
         # defaults of None are defaulted within this function based on other argument values
@@ -371,12 +457,8 @@ class DXUnit:
         self.check_array_order(self.rated_net_total_cooling_capacity)
         self.check_array_order(self.rated_net_heating_capacity)
 
-        self.heating_rating_bins: list[
-            DXUnit.SeasonalRatingBin
-        ] = []  # Store intermediate data used in HSPF calculation
-        self.cooling_rating_bins: list[
-            DXUnit.SeasonalRatingBin
-        ] = []  # Store intermediate data used in SEER calculation
+        self.heating_rating_bins = DXUnit.SeasonalRatingBins()  # Store intermediate data used in HSPF calculation
+        self.cooling_rating_bins = DXUnit.SeasonalRatingBins()  # Store intermediate data used in SEER calculation
 
     def set_c_d_cooling(self, input):
         self.c_d_cooling = set_default(input, 0.25)
@@ -957,12 +1039,22 @@ class DXUnit:
 
     def seer(self):
         """Based on AHRI 210/240 2023 (unless otherwise noted)"""
-        self.cooling_rating_bins = []
+        self.cooling_rating_bins = DXUnit.SeasonalRatingBins()
         if self.staging_type == StagingType.SINGLE_STAGE:
             plf = 1.0 - 0.5 * self.c_d_cooling  # eq. 11.56
-            seer = plf * self.net_total_cooling_cop(
-                self.B_full_cond
-            )  # eq. 11.55 (using COP to keep things in SI units for now)
+            q = self.net_total_cooling_capacity(self.B_full_cond)
+            e = self.net_cooling_power(self.B_full_cond) / plf
+            seer = q / e
+            self.cooling_rating_bins.add_bin(
+                fraction=1.0,
+                temperature=self.B_full_cond.outdoor.db,
+                load=q,
+                energy=e,
+                maximum_capacity=q,
+                minimum_capacity=q,
+                part_load_factor=plf,
+            )
+
         else:  # if self.staging_type == StagingType.TWO_STAGE or self.staging_type == StagingType.VARIABLE_SPEED:
             sizing_factor = 1.1  # eq. 11.61
             q_sum = 0.0
@@ -1017,6 +1109,8 @@ class DXUnit:
             for i in range(self.cooling_distribution.number_of_bins):
                 t = self.cooling_distribution.outdoor_drybulbs[i]
                 n = self.cooling_distribution.fractional_hours[i]
+                if n == 0.0:
+                    continue
                 bl = max(
                     (
                         (t - fr_u(65.0, "°F"))
@@ -1035,12 +1129,13 @@ class DXUnit:
                     t,
                 )  # eq. 11.64
                 p_full = interpolate(self.net_cooling_power, self.B_full_cond, self.A_full_cond, t)  # eq. 11.65
+                plf = 1.0
                 if self.staging_type == StagingType.TWO_STAGE:
                     if bl <= q_low:
                         clf_low = bl / q_low  # eq. 11.68
-                        plf_low = 1.0 - self.c_d_cooling * (1.0 - clf_low)  # eq. 11.69
+                        plf = 1.0 - self.c_d_cooling * (1.0 - clf_low)  # eq. 11.69
                         q = clf_low * q_low  # eq. 11.66
-                        e = clf_low * p_low / plf_low  # eq. 11.67
+                        e = clf_low * p_low / plf  # eq. 11.67
                     elif bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
                         clf_low = (q_full - bl) / (q_full - q_low)  # eq. 11.74
                         clf_full = 1.0 - clf_low  # eq. 11.75
@@ -1048,9 +1143,9 @@ class DXUnit:
                         e = clf_low * p_low + clf_full * p_full  # eq. 11.73
                     elif bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
                         clf_full = bl / q_full  # eq. 11.78
-                        plf_full = 1.0 - self.c_d_cooling * (1.0 - clf_full)  # eq. 11.79
+                        plf = 1.0 - self.c_d_cooling * (1.0 - clf_full)  # eq. 11.79
                         q = clf_full * q_full  # eq. 11.76
-                        e = clf_full * p_full / plf_full  # eq. 11.77
+                        e = clf_full * p_full / plf  # eq. 11.77
                     else:  # elif bl >= q_full
                         q = q_full
                         e = p_full
@@ -1063,9 +1158,9 @@ class DXUnit:
 
                     if bl <= q_low:
                         clf_low = bl / q_low  # eq. 11.68
-                        plf_low = 1.0 - self.c_d_cooling * (1.0 - clf_low)  # eq. 11.69
+                        plf = 1.0 - self.c_d_cooling * (1.0 - clf_low)  # eq. 11.69
                         q = clf_low * q_low  # eq. 11.66
-                        e = clf_low * p_low / plf_low  # eq. 11.67
+                        e = clf_low * p_low / plf  # eq. 11.67
                     elif bl < q_int:
                         cop_int_bin = cop_low + (cop_int - cop_low) / (q_int - q_low) * (
                             bl - q_low
@@ -1085,7 +1180,15 @@ class DXUnit:
                 q_sum += q * n
                 e_sum += e * n
 
-                self.cooling_rating_bins.append(DXUnit.SeasonalRatingBin(fraction=n, temperature=t, load=q, energy=e))
+                self.cooling_rating_bins.add_bin(
+                    fraction=n,
+                    temperature=t,
+                    load=q,
+                    energy=e,
+                    maximum_capacity=q_full,
+                    minimum_capacity=q_low,
+                    part_load_factor=plf,
+                )
 
             seer = q_sum / e_sum  # e.q. 11.59
         return to_u(seer, "Btu/Wh")
@@ -1224,7 +1327,7 @@ class DXUnit:
         q_sum = 0.0
         e_sum = 0.0
         rh_sum = 0.0
-        self.heating_rating_bins = []
+        self.heating_rating_bins = DXUnit.SeasonalRatingBins()
 
         heating_distribution = self.regional_heating_distributions[self.rating_standard][region]
         t_od = heating_distribution.outdoor_design_temperature
@@ -1285,6 +1388,8 @@ class DXUnit:
         for i in range(heating_distribution.number_of_bins):
             t = heating_distribution.outdoor_drybulbs[i]
             n = heating_distribution.fractional_hours[i]
+            if n == 0.0:
+                continue
             if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
                 bl = max((fr_u(65, "°F") - t) / (fr_u(65, "°F") - t_od) * c * dhr_min, 0.0)  # eq. 11.109
             else:  # if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
@@ -1334,9 +1439,10 @@ class DXUnit:
                 hlf_full = 1.0  # eq. 11.116
 
             if self.staging_type == StagingType.SINGLE_STAGE:
-                plf_full = 1.0 - self.c_d_heating * (1.0 - hlf_full)  # eq. 11.125
-                e = p_full * hlf_full * delta_full / plf_full  # eq. 11.156 (not shown for single stage)
+                plf = 1.0 - self.c_d_heating * (1.0 - hlf_full)  # eq. 11.125
+                e = p_full * hlf_full * delta_full / plf  # eq. 11.156 (not shown for single stage)
                 rh = bl - q_full * hlf_full * delta_full  # eq. 11.126
+                q_low = q_full
             elif self.staging_type == StagingType.TWO_STAGE:
                 t_ob = fr_u(40, "°F")  # eq. 11.134
                 if t >= t_ob:
@@ -1382,6 +1488,7 @@ class DXUnit:
                     )  # eq. 11.139
 
                 cop_low = q_low / p_low
+                plf = 1.0
                 if bl <= q_low:
                     if t <= self.heating_off_temperature or cop_low < 1.0:
                         delta_low = 0.0  # eq. 11.159
@@ -1391,8 +1498,8 @@ class DXUnit:
                         delta_low = 0.5  # eq. 11.161
 
                     hlf_low = bl / q_low  # eq. 11.155
-                    plf_low = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.156
-                    e = p_low * hlf_low * delta_low / plf_low  # eq. 11.153
+                    plf = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.156
+                    e = p_low * hlf_low * delta_low / plf  # eq. 11.153
                     rh = bl * (1.0 - delta_low)  # eq. 11.154
                 elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
                     hlf_low = (q_full - bl) / (q_full - q_low)  # eq. 11.163
@@ -1401,8 +1508,8 @@ class DXUnit:
                     rh = bl * (1.0 - delta_low)  # eq. 11.154
                 elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
                     hlf_low = (q_full - bl) / (q_full - q_low)  # eq. 11.163
-                    plf_full = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.166
-                    e = p_full * hlf_full * delta_full / plf_full  # eq. 11.165
+                    plf = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.166
+                    e = p_full * hlf_full * delta_full / plf  # eq. 11.165
                     rh = bl * (1.0 - delta_low)  # eq. 11.142
                 else:  # elif bl >= q_full
                     hlf_full = 1.0  # eq. 11.170
@@ -1428,6 +1535,7 @@ class DXUnit:
                 p_int = p_H2_int + M_HE * (t - (fr_u(35, "°F")))
                 cop_int = q_int / p_int
 
+                plf = 1.0
                 if bl <= q_low:
                     if t <= self.heating_off_temperature or cop_low < 1.0:
                         delta_low = 0.0  # eq. 11.159
@@ -1437,8 +1545,8 @@ class DXUnit:
                         delta_low = 0.5  # eq. 11.161
 
                     hlf_low = bl / q_low  # eq. 11.155
-                    plf_low = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.156
-                    e = p_low * hlf_low * delta_low / plf_low  # eq. 11.153
+                    plf = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.156
+                    e = p_low * hlf_low * delta_low / plf  # eq. 11.153
                     rh = bl * (1.0 - delta_low)  # eq. 11.154
                 elif bl < q_full:
                     if bl <= q_int:
@@ -1486,8 +1594,15 @@ class DXUnit:
             e_sum += n * e
             rh_sum += n * rh
 
-            self.heating_rating_bins.append(
-                DXUnit.SeasonalRatingBin(fraction=n, temperature=t, load=bl, energy=e, supplemental=rh)
+            self.heating_rating_bins.add_bin(
+                fraction=n,
+                temperature=t,
+                load=bl,
+                energy=e,
+                maximum_capacity=q_full,
+                minimum_capacity=q_low,
+                part_load_factor=plf,
+                supplemental_energy=rh,
             )
 
         f_def = self.defrost.demand_credit()
@@ -1680,8 +1795,11 @@ class DXUnit:
 
         return representation
 
-    def plot(self, output_path: Path | str, title: str | None = None) -> None:
+    def plot(self, output_path: Path | str, title: str | None = None, show_seasonal_bins: bool = False) -> None:
         """Generate an HTML plot for this system."""
+
+        if title is None:
+            title = f"{self.hspf():.2f} HSPF2, {self.seer():.2f} SEER2"
 
         # Heating Temperatures
         heating_temperatures = DimensionalData(
@@ -1718,7 +1836,7 @@ class DXUnit:
                 "K",
                 "°F",
             ),
-            title=title.replace("\n", "<br>") if isinstance(title, str) else title,
+            title=title.replace("\n", "<br>"),
         )
 
         @dataclass
@@ -1851,6 +1969,152 @@ class DXUnit:
                     ),
                     subplot_number=subplot_number,
                 )
+
+        if show_seasonal_bins:
+            # Seasonal Ratings Bin Data
+            make_seasonal_bins_visible = True
+            marker_size_multiplier = 100
+            hover_template = (
+                f"%{{y:.2f}}<br>  Bin Fraction: %{{customdata.fraction:.2f}}"
+                f"<br>  Load Ratio: %{{customdata.load_ratio:.2f}}"
+                f"<br>  Part Load Factor: %{{customdata.part_load_factor:.2f}}"
+                f"<br>  Cycling Ratio: %{{customdata.cycling_ratio:.2f}}"
+                f"<br>  Max Capacity: %{{customdata.maximum_capacity:.2f}}"
+                f"<br>  Min Capacity: %{{customdata.minimum_capacity:.2f}}"
+            )
+            heating_bin_temperatures = DimensionalData(
+                self.heating_rating_bins.temperatures,
+                "Heating Temperatures",
+                "K",
+                "°F",
+            )
+            heating_hover_template = hover_template
+            plot.add_display_data(
+                DisplayData(
+                    self.heating_rating_bins.loads,
+                    name="Heating Bin Load",
+                    native_units="W",
+                    display_units="kBtu/h",
+                    x_axis=heating_bin_temperatures,
+                    line_properties=MarkersOnly(
+                        marker_fill_color="black",
+                        marker_size=[
+                            load / self.heating_rating_bins.total_load * marker_size_multiplier
+                            for load in self.heating_rating_bins.fractional_loads
+                        ],
+                    ),
+                    is_visible=make_seasonal_bins_visible,
+                    y_axis_name="Capacity",
+                    hover_data=self.heating_rating_bins.as_list(),
+                    hover_template=heating_hover_template,
+                ),
+            )
+            plot.add_display_data(
+                DisplayData(
+                    self.heating_rating_bins.energies,
+                    name="Heating Bin Power",
+                    native_units="W",
+                    display_units="kW",
+                    x_axis=heating_bin_temperatures,
+                    line_properties=MarkersOnly(
+                        marker_fill_color="black",
+                        marker_size=[
+                            energy / self.heating_rating_bins.total_energy * marker_size_multiplier
+                            for energy in self.heating_rating_bins.fractional_energies
+                        ],
+                    ),
+                    is_visible=make_seasonal_bins_visible,
+                    y_axis_name="Power",
+                    hover_data=self.heating_rating_bins.as_list(),
+                    hover_template=heating_hover_template,
+                ),
+            )
+            plot.add_display_data(
+                DisplayData(
+                    self.heating_rating_bins.cops,
+                    name="Heating Bin COP",
+                    native_units="W/W",
+                    display_units="W/W",
+                    x_axis=heating_bin_temperatures,
+                    line_properties=MarkersOnly(
+                        marker_fill_color="black",
+                        marker_size=[
+                            fraction * marker_size_multiplier for fraction in self.heating_rating_bins.fractions
+                        ],
+                    ),
+                    is_visible=make_seasonal_bins_visible,
+                    y_axis_name="COP",
+                    hover_data=self.heating_rating_bins.as_list(),
+                    hover_template=heating_hover_template,
+                ),
+            )
+
+            cooling_bin_temperatures = DimensionalData(
+                self.cooling_rating_bins.temperatures,
+                "Cooling Temperatures",
+                "K",
+                "°F",
+            )
+            cooling_hover_template = hover_template
+            plot.add_display_data(
+                DisplayData(
+                    self.cooling_rating_bins.loads,
+                    name="Cooling Bin Load",
+                    native_units="W",
+                    display_units="kBtu/h",
+                    x_axis=cooling_bin_temperatures,
+                    line_properties=MarkersOnly(
+                        marker_fill_color="black",
+                        marker_size=[
+                            load / self.cooling_rating_bins.total_load * marker_size_multiplier
+                            for load in self.cooling_rating_bins.fractional_loads
+                        ],
+                    ),
+                    is_visible=make_seasonal_bins_visible,
+                    y_axis_name="Capacity",
+                    hover_data=self.cooling_rating_bins.as_list(),
+                    hover_template=cooling_hover_template,
+                ),
+            )
+            plot.add_display_data(
+                DisplayData(
+                    self.cooling_rating_bins.energies,
+                    name="Cooling Bin Power",
+                    native_units="W",
+                    display_units="kW",
+                    x_axis=cooling_bin_temperatures,
+                    line_properties=MarkersOnly(
+                        marker_fill_color="black",
+                        marker_size=[
+                            energy / self.cooling_rating_bins.total_energy * marker_size_multiplier
+                            for energy in self.cooling_rating_bins.fractional_energies
+                        ],
+                    ),
+                    is_visible=make_seasonal_bins_visible,
+                    y_axis_name="Power",
+                    hover_data=self.cooling_rating_bins.as_list(),
+                    hover_template=cooling_hover_template,
+                ),
+            )
+            plot.add_display_data(
+                DisplayData(
+                    self.cooling_rating_bins.cops,
+                    name="Cooling Bin COP",
+                    native_units="W/W",
+                    display_units="W/W",
+                    x_axis=cooling_bin_temperatures,
+                    line_properties=MarkersOnly(
+                        marker_fill_color="black",
+                        marker_size=[
+                            fraction * marker_size_multiplier for fraction in self.cooling_rating_bins.fractions
+                        ],
+                    ),
+                    is_visible=make_seasonal_bins_visible,
+                    y_axis_name="COP",
+                    hover_data=self.cooling_rating_bins.as_list(),
+                    hover_template=cooling_hover_template,
+                ),
+            )
 
         plot.write_html_plot(output_path)
 
