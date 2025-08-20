@@ -27,7 +27,15 @@ class CSEExpression:
         return self.expression
 
 
-class CSEMember:
+class CSELine:
+    def __init__(self, line: str) -> None:
+        self.line = line
+
+    def __str__(self):
+        return self.line
+
+
+class CSEMember(CSELine):
     def __init__(
         self,
         name: str,  # Name of the CSE data member
@@ -83,7 +91,10 @@ class CSEMember:
                     )
 
         elif isinstance(self.value, str):
-            value_string = f'"{self.value}"'
+            if self.value[:2] == "<%" and self.value[-2:] == "%>":  # Modelkit
+                value_string = self.value
+            else:
+                value_string = f'"{self.value}"'
         elif isinstance(self.value, float):
             value_string = f"{(to_u(self.value, self.units) if self.units else self.value):.{self.precision}f}"
         elif isinstance(self.value, int):
@@ -99,13 +110,13 @@ class CSEMember:
 
 class CSEObject:
     def __init__(
-        self, object_type: str, name: str | None, members: list[CSEMember], parent_object: "CSEObject | None" = None
+        self, object_type: str, name: str | None, lines: list[CSELine], parent_object: "CSEObject | None" = None
     ) -> None:
         self.object_type = object_type
         self.name = name
-        self.members = members
-        for member in self.members:
-            member.parent_object = self
+        self.lines = lines
+        for line in self.lines:
+            line.parent_object = self
         self.parent_object = parent_object
         if self.parent_object is None:
             self.level = 0
@@ -119,11 +130,11 @@ class CSEObject:
         child_object.level = self.level + 1
 
     def __str__(self):
-        if len(self.members) > 0:
-            member_str = "\n".join([str(member) for member in self.members])
+        if len(self.lines) > 0:
+            line_str = "\n".join([str(line) for line in self.lines])
         else:
-            member_str = "\n"
-        return f'{INDENT * self.level}{self.object_type} "{self.name}"\n{member_str}' + "\n\n".join(
+            line_str = "\n"
+        return f'{INDENT * self.level}{self.object_type} "{self.name}"\n{line_str}' + "\n\n".join(
             str(child) for child in self.children_objects
         )
 
@@ -200,12 +211,12 @@ class CSEPerformanceMap(CSEObject):
         )
 
 
-def write_cse_objects(cse_objects, output_path=None):
+def write_cse_objects(cse_objects, output_path=None, preface: str = "") -> None:
     if output_path is not None:
         file_handle = open(output_path, "w")
     else:
         file_handle = sys.stdout
-    print("\n\n".join([str(cse_object) for cse_object in cse_objects]), file=file_handle)
+    print(preface + "\n\n".join([str(cse_object) for cse_object in cse_objects]) + "\n", file=file_handle)
     if output_path is not None:
         file_handle.close()
 
@@ -213,11 +224,15 @@ def write_cse_objects(cse_objects, output_path=None):
 def write_cse(
     unit: DXUnit,
     output_path: str | None = None,
+    modelkit_template: bool = False,
     system_name: str | None = None,
     autosize: bool = True,
 ) -> None:
     if system_name is None:
         system_name = "RSYS"
+
+    if modelkit_template:
+        system_name = "<%= system_name %>"
 
     objects: list[CSEObject] = []
 
@@ -319,18 +334,41 @@ def write_cse(
         )
     )
 
+    if modelkit_template:
+        cooling_capacity_lines = [
+            CSELine("<% if cooling_capacity == Autosize %>"),
+            CSEMember("rsCapC", AutoSize.AUTOSIZE),
+            CSELine("<% else %>"),
+            CSEMember("rsCapC", "<%= cooling_capacity %>", "Btu/h"),
+            CSELine("<% end %>"),
+        ]
+        heating_capacity_lines = [
+            CSELine("<% if heating_capacity == Autosize %>"),
+            CSEMember("rsCap47", AutoSize.AUTOSIZE),
+            CSELine("<% else %>"),
+            CSEMember("rsCap47", "<%= heating_capacity %>", "Btu/h"),
+            CSELine("<% end %>"),
+        ]
+    else:
+        cooling_capacity_lines = [
+            CSEMember("rsCapC", AutoSize.AUTOSIZE if autosize else unit.net_total_cooling_capacity(), "Btu/h"),
+        ]
+        heating_capacity_lines = [
+            CSEMember("rsCap47", AutoSize.AUTOSIZE if autosize else unit.net_steady_state_heating_capacity(), "Btu/h"),
+        ]
+
     objects.append(
         CSEObject(
             "RSYS",
             system_name,
             [
                 CSEMember("rsType", "ASHPPM"),
-                CSEMember("rsCapC", AutoSize.AUTOSIZE if autosize else unit.net_total_cooling_capacity(), "Btu/h"),
-                CSEMember(
-                    "rsCap47",
-                    AutoSize.AUTOSIZE if autosize else unit.net_steady_state_heating_capacity(),
-                    "Btu/h",
-                ),
+            ]
+            + cooling_capacity_lines
+            + [CSEMember("rsFxCapC", 1.0, precision=1)]
+            + heating_capacity_lines
+            + [
+                CSEMember("rsFxCapH", 1.0, precision=1),
                 CSEMember("rsHSPF", unit.hspf(), precision=1),
                 CSEMember("rsSEER", unit.seer(), precision=1),
                 CSEMember(
@@ -364,11 +402,44 @@ def write_cse(
                 CSEMember("rsTypeAuxH", "RESISTANCE"),
                 CSEMember("rsCtrlAuxH", "CYCLE"),
                 CSEMember("rsCapAuxH", AutoSize.AUTOSIZE, "Btu/h"),
+                CSEMember("rsFxCapAuxH", 1.0, precision=1),
                 CSEMember("rsDefrostModel", "REVCYCLEAUX"),
                 CSEMember("rsASHPLockOutT", unit.heating_off_temperature, "°F", precision=1),
-                CSEMember("rsCdH", unit.c_d_heating, precision=3),
-                CSEMember("rsCdC", unit.c_d_cooling, precision=3),
+                CSEMember("rsCdH", unit.c_d_heating, precision=3)
+                if not modelkit_template
+                else CSEMember("rsCdH", "<%= cycling_degradation_coefficient %>"),
+                CSEMember("rsCdC", unit.c_d_cooling, precision=3)
+                if not modelkit_template
+                else CSEMember("rsCdC", "<%= cycling_degradation_coefficient %>"),
+                CSEMember("rsElecMtr", "Electric Meter"),
+                CSEMember("rsFuelMtr", "Gas Meter"),
             ],
         )
     )
-    write_cse_objects(objects, output_path)
+    if modelkit_template:
+        preface = (
+            "<%#INITIALIZE\n"
+            'parameter "system_name", :domain=>String\n'
+            'parameter "cooling_capacity", :default => Autosize\n'
+            'parameter "heating_capacity", :default => Autosize\n'
+            'parameter "cycling_degradation_coefficient", :default => 0.40, :domain => Numeric'
+            "%>\n"
+            "\n"
+            "<%\n"
+            "if cooling_capacity == Autosize\n"
+            "    if heating_capacity != Autosize\n"
+            "        cooling_capacity = heating_capacity\n"
+            "    end\n"
+            "end\n"
+            "\n"
+            "if heating_capacity == Autosize\n"
+            "    if cooling_capacity != Autosize\n"
+            "        heating_capacity = cooling_capacity\n"
+            "    end\n"
+            "end\n"
+            "%>\n"
+            "\n"
+        )
+    else:
+        preface = ""
+    write_cse_objects(objects, output_path, preface=preface)
