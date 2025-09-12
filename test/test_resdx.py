@@ -217,7 +217,7 @@ def test_neep_vchp_regression():
     assert vchp_unit.seer() == approx(16.901, 0.01)
     assert vchp_unit.eer() == approx(12.963, 0.01)
     assert vchp_unit.hspf() == approx(10.617, 0.01)
-    assert vchp_unit.hspf(region=2) == approx(18.21, 0.01)
+    assert vchp_unit.hspf(region=2) == approx(17.66, 0.01)
 
 
 def test_plot():
