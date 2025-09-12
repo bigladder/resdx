@@ -59,6 +59,15 @@ class RESNETDXModel(DXUnit):
         self.tabular_heating_speed_map: dict[int, float]
         self.inverse_tabular_cooling_speed_map: dict[int, int]
         self.inverse_tabular_heating_speed_map: dict[int, int]
+
+        if staging_type is None:
+            if self.net_tabular_data is not None:
+                if self.net_tabular_data.number_of_cooling_speeds == 1:
+                    staging_type = StagingType.SINGLE_STAGE
+                elif self.net_tabular_data.number_of_cooling_speeds == 2:
+                    staging_type = StagingType.TWO_STAGE
+                else:
+                    staging_type = StagingType.VARIABLE_SPEED
         super().__init__(
             staging_type=staging_type,
             rated_net_total_cooling_capacity=rated_net_total_cooling_capacity,
