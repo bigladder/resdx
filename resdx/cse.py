@@ -333,6 +333,7 @@ def write_cse(
             cops=cops,
         )
     )
+    cooling_heating_capacity_ratio = unit.net_total_cooling_capacity() / unit.net_steady_state_heating_capacity()
 
     if modelkit_template:
         cooling_capacity_lines = [
@@ -349,6 +350,12 @@ def write_cse(
             CSEMember("rsCap47", "<%= heating_capacity %>", "Btu/h"),
             CSELine("<% end %>"),
         ]
+        if autosize:
+            cooling_capacity_lines += [
+                CSELine("<% if heating_capacity == Autosize or cooling_capacity == Autosize %>"),
+                CSEMember("rsCapRat9547", cooling_heating_capacity_ratio, precision=3),
+                CSELine("<% end %>"),
+            ]
     else:
         cooling_capacity_lines = [
             CSEMember("rsCapC", AutoSize.AUTOSIZE if autosize else unit.net_total_cooling_capacity(), "Btu/h"),
@@ -356,6 +363,8 @@ def write_cse(
         heating_capacity_lines = [
             CSEMember("rsCap47", AutoSize.AUTOSIZE if autosize else unit.net_steady_state_heating_capacity(), "Btu/h"),
         ]
+        if autosize:
+            cooling_capacity_lines.append(CSEMember("rsCapRat9547", cooling_heating_capacity_ratio, precision=3))
 
     objects.append(
         CSEObject(
@@ -428,13 +437,13 @@ def write_cse(
             "<%\n"
             "if cooling_capacity == Autosize\n"
             "    if heating_capacity != Autosize\n"
-            "        cooling_capacity = heating_capacity\n"
+            f"        cooling_capacity = heating_capacity * {cooling_heating_capacity_ratio}\n"
             "    end\n"
             "end\n"
             "\n"
             "if heating_capacity == Autosize\n"
             "    if cooling_capacity != Autosize\n"
-            "        heating_capacity = cooling_capacity\n"
+            f"        heating_capacity = cooling_capacity / {cooling_heating_capacity_ratio}\n"
             "    end\n"
             "end\n"
             "%>\n"

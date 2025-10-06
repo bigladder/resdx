@@ -401,12 +401,7 @@ class RESNETDXModel(DXUnit):
                 self.rated_net_heating_capacity[hfs] * self.rated_heating_airflow_per_rated_net_capacity[hfs]
             )
 
-            if self.rated_cooling_airflow[cfs] >= self.rated_heating_airflow[hfs]:
-                fan_design_airflow = self.rated_cooling_airflow[cfs]
-                rated_airflow_is_cooling = True
-            else:
-                fan_design_airflow = self.rated_heating_airflow[hfs]
-                rated_airflow_is_cooling = False
+            fan_design_airflow = self.rated_cooling_airflow[cfs]
 
             if self.motor_type is None:
                 if self.staging_type == StagingType.SINGLE_STAGE:
@@ -419,14 +414,9 @@ class RESNETDXModel(DXUnit):
             elif self.motor_type == FanMotorType.BPM:
                 self.fan = RESNETBPMFan(fan_design_airflow)
 
-            if rated_airflow_is_cooling:
-                self.cooling_fan_speed[cfs] = self.fan.number_of_speeds - 1
-                self.fan.add_speed(self.rated_heating_airflow[hfs])
-                self.heating_fan_speed[hfs] = self.fan.number_of_speeds - 1
-            else:
-                self.heating_fan_speed[hfs] = self.fan.number_of_speeds - 1
-                self.fan.add_speed(self.rated_cooling_airflow[cfs])
-                self.cooling_fan_speed[cfs] = self.fan.number_of_speeds - 1
+            self.cooling_fan_speed[cfs] = self.fan.number_of_speeds - 1
+            self.fan.add_speed(self.rated_heating_airflow[hfs])
+            self.heating_fan_speed[hfs] = self.fan.number_of_speeds - 1
 
             # At rated pressure
             self.rated_cooling_external_static_pressure[cfs] = self.rated_full_flow_external_static_pressure
