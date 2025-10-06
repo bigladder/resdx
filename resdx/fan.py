@@ -127,7 +127,7 @@ class Fan:
         p, solution = optimize.brentq(
             lambda x: self.airflow(speed_setting, x) - fx(x),
             0.0,
-            3.0 * self.design_external_static_pressure,
+            4.0 * self.design_external_static_pressure,  # Arbitrary high limit
             full_output=True,
         )
         return p
