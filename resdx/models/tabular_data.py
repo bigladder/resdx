@@ -717,7 +717,7 @@ def make_two_speed_model_data(
     Pm95rated = Qm95rated * EIRm95rated
 
     if cooling_cop_82_min is None:
-        cooling_cop_82_min = cop_82_b_low(StagingType.VARIABLE_SPEED, seer2, seer2 / eer2)
+        cooling_cop_82_min = cop_82_b_low(StagingType.TWO_STAGE, seer2, seer2 / eer2)
 
     # 82 / 95 F
     P_c.set(Qrated, t_95, Q_c.get(Qrated, t_95) / fr_u(eer2, "Btu/Wh"))
@@ -773,7 +773,7 @@ def make_two_speed_model_data(
 
     # Net Power
     if heating_cop_47 is None:
-        heating_cop_47 = cop_47_h1_full(StagingType.SINGLE_STAGE, hspf2, Qm17rated)
+        heating_cop_47 = cop_47_h1_full(StagingType.TWO_STAGE, hspf2, Qm17rated)
 
     Pm17rated = Qm17rated * EIRm17rated
     PrHmin = QrHmin * EIRrHmin

@@ -3,6 +3,7 @@ from pytest import approx
 from scipy import optimize
 
 from resdx import AHRIVersion, RESNETDXModel, StagingType, make_neep_model_data
+from resdx.models.tabular_data import make_two_speed_model_data
 from resdx.rating_solver import make_rating_unit
 
 # Single speed gross COP values used for regression testing
@@ -126,6 +127,37 @@ def test_2_speed_regression():
     assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
     assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(3.347, 0.001)
     assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(3.937, 0.001)
+
+
+def test_2_speed_tabular_regression():
+    # Two speed, SEER 17, HSPF 10
+    seer_2 = 17.0
+    hspf_2 = 10.0
+
+    dx_unit_2_speed = RESNETDXModel(
+        tabular_data=make_two_speed_model_data(
+            cooling_capacity_95=fr_u(3.0, "ton_ref"),
+            seer2=seer_2,
+            eer2=seer_2 / 1.2,
+            hspf2=hspf_2,
+            heating_capacity_47=fr_u(3.0, "ton_ref"),
+            heating_capacity_17=None,
+        )
+    )
+
+    dx_unit_2_speed.print_cooling_info()
+
+    dx_unit_2_speed.print_heating_info()
+    dx_unit_2_speed.print_heating_info(region=2)
+    assert dx_unit_2_speed.gross_total_cooling_capacity() == approx(
+        dx_unit_2_speed.rated_gross_total_cooling_capacity[0], 0.01
+    )
+    assert dx_unit_2_speed.seer() == approx(seer_2, 0.01)
+    assert dx_unit_2_speed.rated_net_cooling_cop[0] == approx(4.152, 0.001)
+    assert dx_unit_2_speed.rated_net_cooling_cop[1] == approx(4.156, 0.001)
+    assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
+    assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(4.480, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(5.271, 0.001)
 
 
 def test_neep_statistical_vchp_regression():
