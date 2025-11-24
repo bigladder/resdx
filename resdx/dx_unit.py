@@ -1995,6 +1995,10 @@ class DXUnit:
                 "°F",
             )
             heating_hover_template = hover_template
+            heating_load_marker_sizes = [
+                load / self.heating_rating_bins.total_load * marker_size_multiplier
+                for load in self.heating_rating_bins.fractional_loads
+            ]
             plot.add_display_data(
                 DisplayData(
                     self.heating_rating_bins.loads,
@@ -2004,10 +2008,7 @@ class DXUnit:
                     x_axis=heating_bin_temperatures,
                     line_properties=MarkersOnly(
                         marker_fill_color="black",
-                        marker_size=[
-                            load / self.heating_rating_bins.total_load * marker_size_multiplier
-                            for load in self.heating_rating_bins.fractional_loads
-                        ],
+                        marker_size=heating_load_marker_sizes,
                     ),
                     is_visible=make_seasonal_bins_visible,
                     y_axis_name="Capacity",
@@ -2015,6 +2016,10 @@ class DXUnit:
                     hover_template=heating_hover_template,
                 ),
             )
+            heating_energy_marker_sizes = [
+                energy / self.heating_rating_bins.total_energy * marker_size_multiplier
+                for energy in self.heating_rating_bins.fractional_energies
+            ]
             plot.add_display_data(
                 DisplayData(
                     self.heating_rating_bins.energies,
@@ -2024,10 +2029,7 @@ class DXUnit:
                     x_axis=heating_bin_temperatures,
                     line_properties=MarkersOnly(
                         marker_fill_color="black",
-                        marker_size=[
-                            energy / self.heating_rating_bins.total_energy * marker_size_multiplier
-                            for energy in self.heating_rating_bins.fractional_energies
-                        ],
+                        marker_size=heating_energy_marker_sizes,
                     ),
                     is_visible=make_seasonal_bins_visible,
                     y_axis_name="Power",
@@ -2035,6 +2037,10 @@ class DXUnit:
                     hover_template=heating_hover_template,
                 ),
             )
+            heating_cop_marker_sizes = []  # Make average of load and energy marker_sizes for COP marker sizing
+            for index, load in enumerate(heating_load_marker_sizes):
+                heating_cop_marker_sizes.append((load + heating_energy_marker_sizes[index]) / 2.0)
+
             plot.add_display_data(
                 DisplayData(
                     self.heating_rating_bins.cops,
@@ -2044,9 +2050,7 @@ class DXUnit:
                     x_axis=heating_bin_temperatures,
                     line_properties=MarkersOnly(
                         marker_fill_color="black",
-                        marker_size=[
-                            fraction * marker_size_multiplier for fraction in self.heating_rating_bins.fractions
-                        ],
+                        marker_size=heating_cop_marker_sizes,
                     ),
                     is_visible=make_seasonal_bins_visible,
                     y_axis_name="COP",
@@ -2062,6 +2066,10 @@ class DXUnit:
                 "°F",
             )
             cooling_hover_template = hover_template
+            cooling_load_marker_sizes = [
+                load / self.cooling_rating_bins.total_load * marker_size_multiplier
+                for load in self.cooling_rating_bins.fractional_loads
+            ]
             plot.add_display_data(
                 DisplayData(
                     self.cooling_rating_bins.loads,
@@ -2071,10 +2079,7 @@ class DXUnit:
                     x_axis=cooling_bin_temperatures,
                     line_properties=MarkersOnly(
                         marker_fill_color="black",
-                        marker_size=[
-                            load / self.cooling_rating_bins.total_load * marker_size_multiplier
-                            for load in self.cooling_rating_bins.fractional_loads
-                        ],
+                        marker_size=cooling_load_marker_sizes,
                     ),
                     is_visible=make_seasonal_bins_visible,
                     y_axis_name="Capacity",
@@ -2082,6 +2087,10 @@ class DXUnit:
                     hover_template=cooling_hover_template,
                 ),
             )
+            cooling_energy_marker_sizes = [
+                energy / self.cooling_rating_bins.total_energy * marker_size_multiplier
+                for energy in self.cooling_rating_bins.fractional_energies
+            ]
             plot.add_display_data(
                 DisplayData(
                     self.cooling_rating_bins.energies,
@@ -2091,10 +2100,7 @@ class DXUnit:
                     x_axis=cooling_bin_temperatures,
                     line_properties=MarkersOnly(
                         marker_fill_color="black",
-                        marker_size=[
-                            energy / self.cooling_rating_bins.total_energy * marker_size_multiplier
-                            for energy in self.cooling_rating_bins.fractional_energies
-                        ],
+                        marker_size=cooling_energy_marker_sizes,
                     ),
                     is_visible=make_seasonal_bins_visible,
                     y_axis_name="Power",
@@ -2102,6 +2108,9 @@ class DXUnit:
                     hover_template=cooling_hover_template,
                 ),
             )
+            cooling_cop_marker_sizes = []  # Make average of load and energy marker_sizes for COP marker sizing
+            for index, load in enumerate(cooling_load_marker_sizes):
+                cooling_cop_marker_sizes.append((load + cooling_energy_marker_sizes[index]) / 2.0)
             plot.add_display_data(
                 DisplayData(
                     self.cooling_rating_bins.cops,
@@ -2111,9 +2120,7 @@ class DXUnit:
                     x_axis=cooling_bin_temperatures,
                     line_properties=MarkersOnly(
                         marker_fill_color="black",
-                        marker_size=[
-                            fraction * marker_size_multiplier for fraction in self.cooling_rating_bins.fractions
-                        ],
+                        marker_size=cooling_cop_marker_sizes,
                     ),
                     is_visible=make_seasonal_bins_visible,
                     y_axis_name="COP",
