@@ -33,7 +33,7 @@ dx_unit = RESNETDXModel(
         heating_capacity_47=fr_u(heating_capacity, "Btu/h"),
         heating_cop_47=heating_cop,
     ),
-    rating_standard=AHRIVersion.AHRI_210_240_2017,
+    rating_standard=AHRIVersion.AHRI_210_240_2023,
 )
 
 dx_unit.print_cooling_info()
