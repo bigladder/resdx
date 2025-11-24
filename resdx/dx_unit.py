@@ -233,6 +233,8 @@ class DXUnit:
                 )
             ]
 
+    default_c_d = 0.25
+
     def __init__(
         # defaults of None are defaulted within this function based on other argument values
         self,
@@ -390,6 +392,8 @@ class DXUnit:
         # Degradation coefficients
         self.c_d_cooling: float
         self.c_d_heating: float
+        self.rated_c_d_cooling: float
+        self.rated_c_d_heating: float
         self.set_c_d_cooling(c_d_cooling)
         self.set_c_d_heating(c_d_heating)
 
@@ -461,10 +465,12 @@ class DXUnit:
         self.cooling_rating_bins = DXUnit.SeasonalRatingBins()  # Store intermediate data used in SEER calculation
 
     def set_c_d_cooling(self, input):
-        self.c_d_cooling = set_default(input, 0.25)
+        self.c_d_cooling = set_default(input, self.default_c_d)
+        self.rated_c_d_cooling = min(self.c_d_cooling, self.default_c_d)
 
     def set_c_d_heating(self, input):
-        self.c_d_heating = set_default(input, 0.25)
+        self.c_d_heating = set_default(input, self.default_c_d)
+        self.rated_c_d_heating = min(self.c_d_heating, self.default_c_d)
 
     def set_rated_net_cooling_cop(self, input):
         # No default, but need to set to list (and default lower speeds)
@@ -1041,7 +1047,7 @@ class DXUnit:
         """Based on AHRI 210/240 2023 (unless otherwise noted)"""
         self.cooling_rating_bins = DXUnit.SeasonalRatingBins()
         if self.staging_type == StagingType.SINGLE_STAGE:
-            plf = 1.0 - 0.5 * self.c_d_cooling  # eq. 11.56
+            plf = 1.0 - 0.5 * self.rated_c_d_cooling  # eq. 11.56
             q = self.net_total_cooling_capacity(self.B_full_cond)
             e = self.net_cooling_power(self.B_full_cond) / plf
             seer = q / e
@@ -1133,7 +1139,7 @@ class DXUnit:
                 if self.staging_type == StagingType.TWO_STAGE:
                     if bl <= q_low:
                         clf_low = bl / q_low  # eq. 11.68
-                        plf = 1.0 - self.c_d_cooling * (1.0 - clf_low)  # eq. 11.69
+                        plf = 1.0 - self.rated_c_d_cooling * (1.0 - clf_low)  # eq. 11.69
                         q = clf_low * q_low  # eq. 11.66
                         e = clf_low * p_low / plf  # eq. 11.67
                     elif bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
@@ -1143,7 +1149,7 @@ class DXUnit:
                         e = clf_low * p_low + clf_full * p_full  # eq. 11.73
                     elif bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
                         clf_full = bl / q_full  # eq. 11.78
-                        plf = 1.0 - self.c_d_cooling * (1.0 - clf_full)  # eq. 11.79
+                        plf = 1.0 - self.rated_c_d_cooling * (1.0 - clf_full)  # eq. 11.79
                         q = clf_full * q_full  # eq. 11.76
                         e = clf_full * p_full / plf  # eq. 11.77
                     else:  # elif bl >= q_full
@@ -1158,7 +1164,7 @@ class DXUnit:
 
                     if bl <= q_low:
                         clf_low = bl / q_low  # eq. 11.68
-                        plf = 1.0 - self.c_d_cooling * (1.0 - clf_low)  # eq. 11.69
+                        plf = 1.0 - self.rated_c_d_cooling * (1.0 - clf_low)  # eq. 11.69
                         q = clf_low * q_low  # eq. 11.66
                         e = clf_low * p_low / plf  # eq. 11.67
                     elif bl < q_int:
@@ -1439,7 +1445,7 @@ class DXUnit:
                 hlf_full = 1.0  # eq. 11.116
 
             if self.staging_type == StagingType.SINGLE_STAGE:
-                plf = 1.0 - self.c_d_heating * (1.0 - hlf_full)  # eq. 11.125
+                plf = 1.0 - self.rated_c_d_heating * (1.0 - hlf_full)  # eq. 11.125
                 e = p_full * hlf_full * delta_full / plf  # eq. 11.156 (not shown for single stage)
                 rh = bl - q_full * hlf_full * delta_full  # eq. 11.126
                 q_low = q_full
@@ -1498,7 +1504,7 @@ class DXUnit:
                         delta_low = 0.5  # eq. 11.161
 
                     hlf_low = bl / q_low  # eq. 11.155
-                    plf = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.156
+                    plf = 1.0 - self.rated_c_d_heating * (1.0 - hlf_low)  # eq. 11.156
                     e = p_low * hlf_low * delta_low / plf  # eq. 11.153
                     rh = bl * (1.0 - delta_low)  # eq. 11.154
                 elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_LOW_FULL:
@@ -1508,7 +1514,7 @@ class DXUnit:
                     rh = bl * (1.0 - delta_low)  # eq. 11.154
                 elif bl > q_low and bl < q_full and self.cycling_method == CyclingMethod.BETWEEN_OFF_FULL:
                     hlf_low = (q_full - bl) / (q_full - q_low)  # eq. 11.163
-                    plf = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.166
+                    plf = 1.0 - self.rated_c_d_heating * (1.0 - hlf_low)  # eq. 11.166
                     e = p_full * hlf_full * delta_full / plf  # eq. 11.165
                     rh = bl * (1.0 - delta_low)  # eq. 11.142
                 else:  # elif bl >= q_full
@@ -1545,7 +1551,7 @@ class DXUnit:
                         delta_low = 0.5  # eq. 11.161
 
                     hlf_low = bl / q_low  # eq. 11.155
-                    plf = 1.0 - self.c_d_heating * (1.0 - hlf_low)  # eq. 11.156
+                    plf = 1.0 - self.rated_c_d_heating * (1.0 - hlf_low)  # eq. 11.156
                     e = p_low * hlf_low * delta_low / plf  # eq. 11.153
                     rh = bl * (1.0 - delta_low)  # eq. 11.154
                 elif bl < q_full:
@@ -2152,7 +2158,7 @@ class DXUnit:
                 "T_on": to_u(self.heating_on_temperature, "degF"),
                 "isDemandDefrost": self.defrost.control == DefrostControl.DEMAND,
                 "demandDefrostCredit": self.defrost.demand_credit(),
-                "degCoeffHeat": self.c_d_heating,
+                "degCoeffHeat": self.rated_c_d_heating,
                 "coolCapacity95Full": to_u(self.net_total_cooling_capacity(self.A_full_cond), "Btu/h"),
                 "heatCapacity62min": to_u(
                     self.net_steady_state_heating_capacity(self.H0_low_cond),

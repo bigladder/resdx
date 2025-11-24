@@ -412,7 +412,7 @@ def write_cse(
                 CSEMember("rsCtrlAuxH", "CYCLE"),
                 CSEMember("rsCapAuxH", AutoSize.AUTOSIZE, "Btu/h"),
                 CSEMember("rsFxCapAuxH", 1.0, precision=1),
-                CSEMember("rsDefrostModel", "REVCYCLEAUX"),
+                CSEMember("rsDefrostModel", "REVCYCLEAUX" if unit.is_ducted else "REVCYCLE"),
                 CSEMember("rsASHPLockOutT", unit.heating_off_temperature, "°F", precision=1),
                 CSEMember("rsCdH", unit.c_d_heating, precision=3)
                 if not modelkit_template
@@ -431,7 +431,7 @@ def write_cse(
             'parameter "system_name", :domain=>String\n'
             'parameter "cooling_capacity", :default => Autosize\n'
             'parameter "heating_capacity", :default => Autosize\n'
-            'parameter "cycling_degradation_coefficient", :default => 0.40, :domain => Numeric'
+            f'parameter "cycling_degradation_coefficient", :default => {unit.c_d_heating}, :domain => Numeric\n'
             "%>\n"
             "\n"
             "<%\n"

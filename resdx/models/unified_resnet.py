@@ -199,7 +199,7 @@ class RESNETDXModel(DXUnit):
                             heating_capacity_17=self.rated_net_heating_capacity_17,
                             hspf2=self.input_hspf,
                             heating_cop_47=self.input_rated_net_heating_cop,
-                            cycling_degradation_coefficient=self.c_d_cooling,
+                            cycling_degradation_coefficient=self.rated_c_d_cooling,
                         )
 
                     self.cooling_full_load_speed = 0
@@ -326,16 +326,12 @@ class RESNETDXModel(DXUnit):
                 self.set_lower_speed_net_capacities()
 
     def set_c_d_cooling(self, c_d_cooling):
-        if self.staging_type == StagingType.VARIABLE_SPEED:
-            self.c_d_cooling = set_default(c_d_cooling, 0.25)
-        else:
-            self.c_d_cooling = set_default(c_d_cooling, 0.08)
+        default_c_d = 0.40 if self.staging_type == StagingType.VARIABLE_SPEED else 0.08
+        super().set_c_d_cooling(set_default(c_d_cooling, default_c_d))
 
     def set_c_d_heating(self, c_d_heating):
-        if self.staging_type == StagingType.VARIABLE_SPEED:
-            self.c_d_heating = set_default(c_d_heating, 0.25)
-        else:
-            self.c_d_heating = set_default(c_d_heating, 0.08)
+        default_c_d = 0.40 if self.staging_type == StagingType.VARIABLE_SPEED else 0.08
+        super().set_c_d_heating(set_default(c_d_heating, default_c_d))
 
     def set_rated_net_cooling_cop(self, input):
         if self.net_tabular_data is not None:
