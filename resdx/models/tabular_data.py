@@ -249,6 +249,12 @@ class TemperatureSpeedPerformance:
         capacity = self.cooling_capacities.get(speed, temperature)
         self.cooling_powers.set(speed, temperature, capacity / cop)
 
+    def set_cooling_capacity_ratio(
+        self, speed: int, temperature: float, ratio: float, reference_speed: int = 2
+    ) -> None:
+        reference_capacity = self.cooling_capacities.get(reference_speed, fr_u(95, "degF"))
+        self.cooling_capacities.set(speed, temperature, reference_capacity * ratio)
+
     def heating_capacity(self, speed: float = 2, temperature: float = fr_u(47, "degF")) -> float:
         return self.heating_capacities.calculate(speed, temperature)
 
@@ -261,6 +267,12 @@ class TemperatureSpeedPerformance:
     def set_heating_cop(self, speed: int, temperature: float, cop: float) -> None:
         capacity = self.heating_capacities.get(speed, temperature)
         self.heating_powers.set(speed, temperature, capacity / cop)
+
+    def set_heating_capacity_ratio(
+        self, speed: int, temperature: float, ratio: float, reference_speed: int = 2
+    ) -> None:
+        reference_capacity = self.heating_capacities.get(reference_speed, fr_u(47, "degF"))
+        self.heating_capacities.set(speed, temperature, reference_capacity * ratio)
 
     def make_gross(self, cooling_fan_powers: list[float], heating_fan_powers: list[float]) -> None:
         self.cooling_capacities.apply_fan_power_correction([-p for p in cooling_fan_powers])  # increases
