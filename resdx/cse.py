@@ -350,6 +350,26 @@ def write_cse(
             CSEMember("rsCap47", "<%= heating_capacity %>", "Btu/h"),
             CSELine("<% end %>"),
         ]
+        backup_heating_capacity_lines = [
+            CSEMember("rsTypeAuxH", "<%= backup_heating_type %>"),
+            CSELine('<% if backup_heating_type == "NONE" %>'),
+            CSEMember("rsDefrostModel", "REVCYCLE"),
+            CSELine("<% else %>"),
+            CSELine("    <% if backup_heating_capacity == Autosize %>"),
+            CSEMember("rsCapAuxH", AutoSize.AUTOSIZE),
+            CSELine("    <% else %>"),
+            CSEMember("rsCapAuxH", "<%= backup_heating_capacity %>", "Btu/h"),
+            CSELine("    <% end %>"),
+            CSELine('    <% if backup_heating_type == "RESISTANCE" %>'),
+            CSEMember("rsCtrlAuxH", "CYCLE"),
+            CSEMember("rsDefrostModel", "REVCYCLEAUX"),
+            CSELine('    <% elsif backup_heating_type == "FURNACE" %>'),
+            CSEMember("rsCtrlAuxH", "ALTERNATE"),
+            CSEMember("rsDefrostModel", "REVCYCLEAUX"),
+            CSELine("    <% end %>"),
+            CSEMember("rsFxCapAuxH", 1.0, precision=1),
+            CSELine("<% end %>"),
+        ]
         if autosize:
             cooling_capacity_lines += [
                 CSELine("<% if heating_capacity == Autosize or cooling_capacity == Autosize %>"),
@@ -363,6 +383,20 @@ def write_cse(
         heating_capacity_lines = [
             CSEMember("rsCap47", AutoSize.AUTOSIZE if autosize else unit.net_steady_state_heating_capacity(), "Btu/h"),
         ]
+        if unit.is_ducted:
+            backup_heating_capacity_lines = [
+                CSEMember("rsTypeAuxH", "RESISTANCE"),
+                CSEMember("rsCapAuxH", AutoSize.AUTOSIZE),
+                CSEMember("rsCtrlAuxH", "CYCLE"),
+                CSEMember("rsDefrostModel", "REVCYCLEAUX"),
+                CSEMember("rsFxCapAuxH", 1.0, precision=1),
+            ]
+        else:
+            backup_heating_capacity_lines = [
+                CSEMember("rsTypeAuxH", "NONE"),
+                CSEMember("rsDefrostModel", "REVCYCLE"),
+            ]
+
         if autosize:
             cooling_capacity_lines.append(CSEMember("rsCapRat9547", cooling_heating_capacity_ratio, precision=3))
 
@@ -376,8 +410,9 @@ def write_cse(
             + cooling_capacity_lines
             + [CSEMember("rsFxCapC", 1.0, precision=1)]
             + heating_capacity_lines
+            + [CSEMember("rsFxCapH", 1.0, precision=1)]
+            + backup_heating_capacity_lines
             + [
-                CSEMember("rsFxCapH", 1.0, precision=1),
                 CSEMember("rsHSPF", unit.hspf(), precision=1),
                 CSEMember("rsSEER", unit.seer(), precision=1),
                 CSEMember(
@@ -408,11 +443,6 @@ def write_cse(
                     ),
                     "W",
                 ),
-                CSEMember("rsTypeAuxH", "RESISTANCE"),
-                CSEMember("rsCtrlAuxH", "CYCLE"),
-                CSEMember("rsCapAuxH", AutoSize.AUTOSIZE, "Btu/h"),
-                CSEMember("rsFxCapAuxH", 1.0, precision=1),
-                CSEMember("rsDefrostModel", "REVCYCLEAUX" if unit.is_ducted else "REVCYCLE"),
                 CSEMember("rsASHPLockOutT", unit.heating_off_temperature, "°F", precision=1),
                 CSEMember("rsCdH", unit.c_d_heating, precision=3)
                 if not modelkit_template
@@ -431,6 +461,8 @@ def write_cse(
             'parameter "system_name", :domain=>String\n'
             'parameter "cooling_capacity", :default => Autosize\n'
             'parameter "heating_capacity", :default => Autosize\n'
+            f'parameter "backup_heating_type", :default => "{"RESISTANCE" if unit.is_ducted else "NONE"}", :domain => String\n'
+            'parameter "backup_heating_capacity", :default => Autosize\n'
             f'parameter "cycling_degradation_coefficient", :default => {unit.c_d_heating}, :domain => Numeric\n'
             "%>\n"
             "\n"
