@@ -21,9 +21,11 @@ def cop_47_h1_full(staging_type: StagingType, hspf: float, capacity_maintenance_
         ratio_range = [0.5, 0.54, 0.6200000000000001, 0.7800000000000001, 1.1]
         input_data = [[2.760718548841149, 4.146355277784352, 5.928979607154959, 8.381517667001214, 11.924177957238038], [2.694965765340449, 3.93929183603124, 5.486149845725787, 7.454909712835692, 10.044323612863073], [2.5780968936218307, 3.6260223536608955, 4.817930594558186, 6.185503972226008, 7.770381330415029], [2.46617992496216, 3.3040504994793194, 4.165403947959796, 5.0511942134459975, 5.962423761719], [2.3449445936335978, 3.0906119897723747, 3.832366256627013, 4.570213627303247, 5.304160463229697]]
 
-    return float(RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")(
-        (capacity_maintenance_17, hspf)
-    ))
+    return float(
+        RegularGridInterpolator((ratio_range, rating_range), input_data, "linear", fill_value=None, bounds_error=False)(
+            (capacity_maintenance_17, hspf)
+        )
+    )
 
 
 def cop_82_b_low(staging_type: StagingType, seer: float, seer_eer_ratio: float) -> float:
@@ -39,4 +41,6 @@ def cop_82_b_low(staging_type: StagingType, seer: float, seer_eer_ratio: float) 
         ratio_range = [1.0, 1.7466666666666666, 2.12, 2.3066666666666666, 2.4]
         input_data = [[4.045640315932408, 7.057685976462701, 10.051208403865054], [6.140030024422425, 10.219423603479317, 13.945517994363524], [14.143537008942078, 23.038035103346594, 30.088907924979374], [19.364001940334614, 31.518421657546682, 41.83485797210029], [22.84910425831599, 37.11432737378569, 49.19026958161229]]
 
-    return float(RegularGridInterpolator((ratio_range, rating_range), input_data, "linear")((seer_eer_ratio, seer)))
+    return float(
+        RegularGridInterpolator((ratio_range, rating_range), input_data, "linear", fill_value=None, bounds_error=False)((seer_eer_ratio, seer))
+    )
