@@ -211,31 +211,7 @@ class CSEPerformanceMap(CSEObject):
         )
 
 
-def write_cse_objects(cse_objects, output_path=None, preface: str = "") -> None:
-    if output_path is not None:
-        file_handle = open(output_path, "w")
-    else:
-        file_handle = sys.stdout
-    print(preface + "\n\n".join([str(cse_object) for cse_object in cse_objects]) + "\n", file=file_handle)
-    if output_path is not None:
-        file_handle.close()
-
-
-def write_cse(
-    unit: DXUnit,
-    output_path: str | None = None,
-    modelkit_template: bool = False,
-    system_name: str | None = None,
-    autosize: bool = True,
-) -> None:
-    if system_name is None:
-        system_name = "RSYS"
-
-    if modelkit_template:
-        system_name = "<%= system_name %>"
-
-    objects: list[CSEObject] = []
-
+def get_heating_performance_map_object(unit: DXUnit, system_name: str) -> CSEPerformanceMap:
     # Heating performance map
     heating_outdoor_dry_bulbs = [
         to_u(unit.heating_off_temperature, "°F"),
@@ -276,18 +252,18 @@ def write_cse(
 
             cops.append(unit.net_steady_state_heating_cop(condition))
 
-    objects.append(
-        CSEPerformanceMap(
-            f"{system_name} Heating Performance Map",
-            temperatures=heating_outdoor_dry_bulbs,
-            reference_temperature=reference_temperature,
-            speeds=[i + 1 for i in range(len(heating_speeds))],
-            reference_speed=reference_speed,
-            capacity_ratios=capacity_ratios,
-            cops=cops,
-        )
+    return CSEPerformanceMap(
+        f"{system_name} Heating Performance Map",
+        temperatures=heating_outdoor_dry_bulbs,
+        reference_temperature=reference_temperature,
+        speeds=[i + 1 for i in range(len(heating_speeds))],
+        reference_speed=reference_speed,
+        capacity_ratios=capacity_ratios,
+        cops=cops,
     )
 
+
+def get_cooling_performance_map_object(unit: DXUnit, system_name: str) -> CSEPerformanceMap:
     # Cooling performance map
     cooling_outdoor_dry_bulbs = [
         82.0,
@@ -322,17 +298,50 @@ def write_cse(
             capacity_ratios.append(capacity_ratio)
             cops.append(unit.net_total_cooling_cop(condition))
 
-    objects.append(
-        CSEPerformanceMap(
-            f"{system_name} Cooling Performance Map",
-            temperatures=cooling_outdoor_dry_bulbs,
-            reference_temperature=reference_temperature,
-            speeds=[i + 1 for i in range(len(cooling_speeds))],
-            reference_speed=reference_speed,
-            capacity_ratios=capacity_ratios,
-            cops=cops,
-        )
+    return CSEPerformanceMap(
+        f"{system_name} Cooling Performance Map",
+        temperatures=cooling_outdoor_dry_bulbs,
+        reference_temperature=reference_temperature,
+        speeds=[i + 1 for i in range(len(cooling_speeds))],
+        reference_speed=reference_speed,
+        capacity_ratios=capacity_ratios,
+        cops=cops,
     )
+
+
+def write_cse_objects(cse_objects, output_path=None, preface: str = "") -> None:
+    if output_path is not None:
+        file_handle = open(output_path, "w")
+    else:
+        file_handle = sys.stdout
+    print(preface + "\n\n".join([str(cse_object) for cse_object in cse_objects]) + "\n", file=file_handle)
+    if output_path is not None:
+        file_handle.close()
+
+
+def write_cse(
+    unit: DXUnit,
+    output_path: str | None = None,
+    modelkit_template: bool = False,
+    system_name: str | None = None,
+    autosize: bool = True,
+) -> None | list[CSEPerformanceMap]:
+    if system_name is None:
+        system_name = "RSYS"
+
+    if modelkit_template:
+        system_name = "<%= system_name %>"
+
+    objects: list[CSEObject] = []
+
+    heating_performance_map_object = get_heating_performance_map_object(unit=unit, system_name=system_name)
+
+    objects.append(heating_performance_map_object)
+
+    cooling_performance_map_object = get_cooling_performance_map_object(unit=unit, system_name=system_name)
+
+    objects.append(cooling_performance_map_object)
+
     cooling_heating_capacity_ratio = unit.net_total_cooling_capacity() / unit.net_steady_state_heating_capacity()
 
     if modelkit_template:
