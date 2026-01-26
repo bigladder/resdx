@@ -393,7 +393,7 @@ class RESNETDXModel(DXUnit):
 
             fan_design_airflow = self.rated_cooling_airflow[cfs]
 
-            if self.motor_type is None:
+            if self.motor_type is None or self.motor_type == FanMotorType.UNKNOWN:
                 if self.staging_type == StagingType.SINGLE_STAGE:
                     self.motor_type = FanMotorType.PSC
                 else:
