@@ -1,5 +1,4 @@
 from copy import deepcopy
-from enum import Enum
 from typing import Callable
 
 from koozie import fr_u, to_u
@@ -7,7 +6,7 @@ from koozie import fr_u, to_u
 from ..conditions import CoolingConditions, HeatingConditions
 from ..defrost import Defrost
 from ..dx_unit import AHRIVersion, DXUnit
-from ..enums import StagingType
+from ..enums import FanMotorType, StagingType
 from ..fan import RESNETBPMFan, RESNETPSCFan
 from ..psychrometrics import cooling_psych_state, heating_psych_state
 from ..util import make_list, set_default
@@ -20,11 +19,6 @@ from .tabular_data import (
     make_two_speed_model_data,
 )
 from .title24 import Title24DXModel
-
-
-class FanMotorType(Enum):
-    PSC = 1
-    BPM = 2
 
 
 class RESNETDXModel(DXUnit):
@@ -399,7 +393,7 @@ class RESNETDXModel(DXUnit):
 
             fan_design_airflow = self.rated_cooling_airflow[cfs]
 
-            if self.motor_type is None:
+            if self.motor_type is None or self.motor_type == FanMotorType.UNKNOWN:
                 if self.staging_type == StagingType.SINGLE_STAGE:
                     self.motor_type = FanMotorType.PSC
                 else:

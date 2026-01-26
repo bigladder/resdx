@@ -1,6 +1,5 @@
 import datetime
 import uuid
-from enum import Enum
 from math import exp, inf, log
 from random import Random
 
@@ -8,6 +7,7 @@ from koozie import convert, fr_u, to_u
 from numpy import array, linspace
 from scipy import optimize  # Used for finding system/fan curve intersection
 
+from .enums import FanMotorType
 from .util import calc_quad
 
 
@@ -25,12 +25,6 @@ class FanMetadata:
         self.notes = notes
         self.uuid_seed = uuid_seed
         self.data_version = data_version
-
-
-class FanMotorType(Enum):
-    UNKNOWN = 0
-    PSC = 1
-    BPM = 2
 
 
 class Fan:
