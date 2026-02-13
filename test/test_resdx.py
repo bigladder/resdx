@@ -8,7 +8,7 @@ from resdx.rating_solver import make_rating_unit
 
 # Single speed gross COP values used for regression testing
 COP_C = 3.312
-COP_H = 3.020
+COP_H = 3.051
 
 
 # Tests
@@ -152,8 +152,8 @@ def test_2_speed_regression():
     assert dx_unit_2_speed.rated_net_cooling_cop[0] == approx(3.980, 0.001)
     assert dx_unit_2_speed.rated_net_cooling_cop[1] == approx(4.166, 0.001)
     assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
-    assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(3.347, 0.001)
-    assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(3.937, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(3.395, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(3.995, 0.001)
 
 
 def test_2_speed_tabular_regression():
@@ -183,8 +183,8 @@ def test_2_speed_tabular_regression():
     assert dx_unit_2_speed.rated_net_cooling_cop[0] == approx(4.152, 0.001)
     assert dx_unit_2_speed.rated_net_cooling_cop[1] == approx(4.156, 0.001)
     assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
-    assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(4.480, 0.001)
-    assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(5.271, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(4.577, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(5.385, 0.001)
 
 
 def test_neep_statistical_vchp_regression():
@@ -285,14 +285,16 @@ def test_plot():
     hspf_1 = 8.0
     eer_1 = seer_1 / 1.2
     cop_1_h, _ = optimize.newton(
-        lambda x: RESNETDXModel(
-            rated_net_heating_cop=x,
-            input_seer=seer_1,
-            input_eer=eer_1,
-            input_hspf=hspf_1,
-            rating_standard=AHRIVersion.AHRI_210_240_2017,
-        ).hspf()
-        - hspf_1,
+        lambda x: (
+            RESNETDXModel(
+                rated_net_heating_cop=x,
+                input_seer=seer_1,
+                input_eer=eer_1,
+                input_hspf=hspf_1,
+                rating_standard=AHRIVersion.AHRI_210_240_2017,
+            ).hspf()
+            - hspf_1
+        ),
         hspf_1 / 2.0,
         full_output=True,
     )

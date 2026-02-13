@@ -370,9 +370,9 @@ class DXUnit:
 
         if heating_off_temperature is None:
             if self.staging_type == StagingType.VARIABLE_SPEED:
-                self.heating_off_temperature = fr_u(-20.0, "degF")
+                self.heating_off_temperature = fr_u(-10.0, "degF")
             else:
-                self.heating_off_temperature = fr_u(0.0, "degF")
+                self.heating_off_temperature = fr_u(5.0, "degF")
         else:
             self.heating_off_temperature = heating_off_temperature
         if heating_on_temperature is None:
