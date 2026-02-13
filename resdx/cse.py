@@ -238,11 +238,14 @@ def write_cse(
 
     # Heating performance map
     heating_outdoor_dry_bulbs = [
-        to_u(unit.heating_off_temperature, "°F"),
         5.0,
         17.0,
         47.0,
     ]
+
+    min_temperature = to_u(unit.heating_off_temperature, "°F")
+    if min_temperature < heating_outdoor_dry_bulbs[0]:
+        heating_outdoor_dry_bulbs = [min_temperature] + heating_outdoor_dry_bulbs
 
     heating_speeds: list[int]
     if unit.staging_type == StagingType.VARIABLE_SPEED:
@@ -443,7 +446,9 @@ def write_cse(
                     ),
                     "W",
                 ),
-                CSEMember("rsASHPLockOutT", unit.heating_off_temperature, "°F", precision=1),
+                CSEMember("rsASHPLockOutT", unit.heating_off_temperature, "°F", precision=1)
+                if not modelkit_template
+                else CSEMember("rsASHPLockOutT", "<%= minimum_operating_temperature %>", "°F"),
                 CSEMember("rsCdH", unit.c_d_heating, precision=3)
                 if not modelkit_template
                 else CSEMember("rsCdH", "<%= cycling_degradation_coefficient %>"),
@@ -464,6 +469,7 @@ def write_cse(
             f'parameter "backup_heating_type", :default => "{"RESISTANCE" if unit.is_ducted else "NONE"}", :domain => String\n'
             'parameter "backup_heating_capacity", :default => Autosize\n'
             f'parameter "cycling_degradation_coefficient", :default => {unit.c_d_heating}, :domain => Numeric\n'
+            f'parameter "minimum_operating_temperature", :default => {to_u(unit.heating_off_temperature, "°F")}, :domain => Numeric\n'
             "%>\n"
             "\n"
             "<%\n"
