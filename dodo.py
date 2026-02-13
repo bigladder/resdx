@@ -5,15 +5,6 @@ OUTPUT_PATH = "output"
 create_folder(OUTPUT_PATH)
 
 
-def task_test():
-    """Performs tests"""
-    return {
-        "actions": ["pytest -v test"],
-        "clean": True,
-        "verbosity": 2,
-    }
-
-
 def task_examples():
     """Run examples"""
     for file_path in Path("examples").glob("*.py"):
@@ -23,3 +14,12 @@ def task_examples():
             "clean": True,
             "verbosity": 2,
         }
+
+
+def task_test():
+    """Performs tests"""
+    return {
+        "actions": ["pytest -v test"],
+        "clean": True,
+        "verbosity": 2,
+    }
