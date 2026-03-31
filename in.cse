@@ -1,0 +1,83 @@
+PERFORMANCEMAP "RSYS Heating Performance Map"
+
+  PMGRIDAXIS "RSYS Heating Performance Map Outdoor Drybulb Temperatures"
+    pmGXType = "Outdoor Drybulb Temperature"
+    pmGXValues = -20.0, 5.0, 17.0, 47.0
+    pmGXRefValue = 47.0
+
+  PMGRIDAXIS "RSYS Heating Performance Map Speeds"
+    pmGXType = "Speed"
+    pmGXValues = 1, 2, 3
+    pmGXRefValue = 2
+
+  PMLOOKUPDATA "RSYS Heating Performance Map Capacity Ratio"
+    pmLUType = "Capacity Ratio"
+    pmLUValues =
+      // 1      2      3     Speed 
+      0.147, 0.444, 0.449, // -20F
+      0.234, 0.722, 0.730, // 5F
+      0.288, 0.689, 0.843, // 17F
+      0.300, 1.000, 1.101  // 47F
+
+  PMLOOKUPDATA "RSYS Heating Performance Map COP"
+    pmLUType = "COP"
+    pmLUValues =
+      // 1      2      3     Speed 
+      1.779, 1.541, 1.541, // -20F
+      2.541, 2.201, 2.201, // 5F
+      3.210, 2.840, 2.562, // 17F
+      4.935, 3.837, 3.603  // 47F
+
+PERFORMANCEMAP "RSYS Cooling Performance Map"
+
+  PMGRIDAXIS "RSYS Cooling Performance Map Outdoor Drybulb Temperatures"
+    pmGXType = "Outdoor Drybulb Temperature"
+    pmGXValues = 82.0, 95.0
+    pmGXRefValue = 95.0
+
+  PMGRIDAXIS "RSYS Cooling Performance Map Speeds"
+    pmGXType = "Speed"
+    pmGXValues = 1, 2, 3
+    pmGXRefValue = 2
+
+  PMLOOKUPDATA "RSYS Cooling Performance Map Capacity Ratio"
+    pmLUType = "Capacity Ratio"
+    pmLUValues =
+      // 1      2      3     Speed 
+      0.440, 1.063, 1.139, // 82F
+      0.417, 1.000, 1.071  // 95F
+
+  PMLOOKUPDATA "RSYS Cooling Performance Map COP"
+    pmLUType = "COP"
+    pmLUValues =
+      // 1      2      3     Speed 
+      3.224, 3.395, 3.152, // 82F
+      2.452, 2.561, 2.377  // 95F
+
+RSYS "RSYS"
+  rsType = "ASHPPM"
+  AUTOSIZE rsCapC //  [Btu/h]
+  rsCapRat9547 = 1.000
+  rsFxCapC = 1.0
+  AUTOSIZE rsCap47 //  [Btu/h]
+  rsFxCapH = 1.0
+  rsTypeAuxH = "RESISTANCE"
+  AUTOSIZE rsCapAuxH
+  rsCtrlAuxH = "CYCLE"
+  rsDefrostModel = "REVCYCLEAUX"
+  rsFxCapAuxH = 1.0
+  rsHSPF = 10.0
+  rsSEER = 10.8
+  rsVfPerTon = 400.0 //  [cfm/ton_ref]
+  rsFanMotTy = "BPM"
+  rsFanPwrH = 0.281 //  [W/cfm]
+  rsFanPwrC = 0.281 //  [W/cfm]
+  rsPerfMapHtg = "RSYS Heating Performance Map"
+  rsPerfMapClg = "RSYS Cooling Performance Map"
+  rsParElec = ($tdboHrAv < 50.0) * (1.-@RSYSRes["RSYS"].prior.H.hrsOn) * @RSYS["RSYS"].capNomC * 0.0008333333333333334 //  [W]
+  rsASHPLockOutT = -20.0 //  [°F]
+  rsCdH = 0.400
+  rsCdC = 0.400
+  rsElecMtr = "Electric Meter"
+  rsFuelMtr = "Gas Meter"
+

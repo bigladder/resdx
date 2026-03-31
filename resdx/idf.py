@@ -23,7 +23,7 @@ class IDFField:
         self.name = name
 
 
-def write_idf_objects(objects, output_path=None):
+def write_idf_objects(objects: list[tuple[str, IDFField]], output_path=None) -> None:
     if output_path is not None:
         file_handle = open(output_path, "w")
     else:
@@ -39,6 +39,19 @@ def write_idf_objects(objects, output_path=None):
         )
     if output_path is not None:
         file_handle.close()
+
+
+def create_idf_string(objects: list[tuple[str, IDFField]]) -> str:
+    return_object = ""
+
+    for obj in objects:
+        return_object += f"{obj[0]},"
+        spacing = max(max([len(field.value) for field in obj[1]]) + 3, 28)
+        for field in obj[1][:-1]:
+            return_object += f"  {field.value + ',': <{spacing}}!- {field.name}"
+        return_object += f"  {obj[1][-1].value + ';': <{spacing}}!- {obj[1][-1].name}\n"
+
+    return return_object
 
 
 def make_independent_variable(
@@ -106,7 +119,8 @@ def write_idf(
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
     autosize: bool = True,
     normalize: bool = True,
-) -> None:
+    return_idf_objects: bool = False,
+) -> str | None:
     if system_name is not None:
         system_name += " "
     else:
@@ -854,3 +868,7 @@ def write_idf(
     objects.insert(heating_start_index, ("Coil:Heating:DX:VariableSpeed", heating_coil))
 
     write_idf_objects(objects, output_path)
+
+    if return_idf_objects:
+        return_object = create_idf_string(objects)
+        return return_object
