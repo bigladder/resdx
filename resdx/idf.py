@@ -3,6 +3,7 @@ Functionality to generate EnergyPlus IDF snippets from a DXUnit object
 """
 
 import sys
+from typing import Optional
 from enum import Enum
 
 import koozie
@@ -127,30 +128,70 @@ def make_lookup_table(
     return ("Table:Lookup", fields)
 
 
-class EnergyPlusSystemType(Enum):
-    UNITARY_SYSTEM = 1
-    ZONEHVAC_PTHP = 2
+def _get_objects_list(objects: Optional[list[tuple[str, IDFField]]] = None) -> list[tuple[str, IDFField]]:
+
+    if not objects:
+        objects = []
+
+    return objects
 
 
-def write_idf(
+def get_select_idf_objects(
     unit: DXUnit,
     output_path: str | None = None,
     system_name: str | None = None,
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
     autosize: bool = True,
     normalize: bool = True,
-    return_idf_objects: bool = False,
-) -> str | None:
-    if system_name is not None:
-        system_name += " "
-    else:
-        system_name = ""
+    get_system_and_fan: bool = False,
+    get_independent_variable_lists: bool = False,
+    get_cooling_performance_map: bool = False,
+    get_heating_performance_map: bool = False,
+) -> list[tuple[str, IDFField]]:
+    """Return select IDF objects."""
 
     objects = []
 
-    # ------------------------------------------------------------------
-    # System and Fan
-    # ------------------------------------------------------------------
+    if get_system_and_fan:
+        objects.extend(
+            get_system_and_fan_object(unit=unit, system_name=system_name, system_type=system_type, autosize=autosize)
+        )
+
+    if get_independent_variable_lists:
+        objects.extend(
+            get_independent_variable_lists_object(
+                unit=unit,
+                system_name=system_name,
+            )
+        )
+
+    if get_cooling_performance_map:
+        objects.extend(
+            get_cooling_performance_map_object(
+                unit=unit, system_name=system_name, autosize=autosize, normalize=normalize
+            )
+        )
+
+    if get_heating_performance_map:
+        objects.extend(
+            get_heating_performance_map_object(
+                unit=unit, system_name=system_name, autosize=autosize, normalize=normalize
+            )
+        )
+
+    if output_path:
+        write_idf_objects(objects, output_path)
+
+    return objects
+
+
+def get_system_and_fan_object(
+    unit: DXUnit,
+    system_name: str,
+    system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
+    autosize: bool = True,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
 
     if system_type == EnergyPlusSystemType.ZONEHVAC_PTHP:
         objects.append(
@@ -399,6 +440,17 @@ def write_idf(
 
     objects.append(("Fan:SystemModel", fan_fields))
 
+    return objects
+
+
+def get_independent_variable_lists_object(
+    unit: DXUnit,
+    system_name: str,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+
+    objects = _get_objects_list(objects)
+
     HEATING_OUTDOOR_DRY_BULBS.insert(0, koozie.to_u(unit.heating_off_temperature, "°F"))
 
     objects.append(
@@ -483,9 +535,18 @@ def write_idf(
         )
     )
 
-    # ------------------------------------------------------------------
-    # Cooling
-    # ------------------------------------------------------------------
+    return objects
+
+
+def get_cooling_performance_map_object(
+    unit: DXUnit,
+    system_name: str,
+    autosize: bool = True,
+    normalize: bool = True,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+
+    objects = _get_objects_list(objects)
 
     cooling_start_index = len(objects)
 
@@ -657,9 +718,18 @@ def write_idf(
 
     objects.insert(cooling_start_index, ("Coil:Cooling:DX:VariableSpeed", cooling_coil))
 
-    # ------------------------------------------------------------------
-    # Heating
-    # ------------------------------------------------------------------
+    return objects
+
+
+def get_heating_performance_map_object(
+    unit: DXUnit,
+    system_name: str,
+    autosize: bool = True,
+    normalize: bool = True,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+
+    objects = _get_objects_list(objects)
 
     heating_start_index = len(objects)
 
@@ -872,6 +942,71 @@ def write_idf(
         )
 
     objects.insert(heating_start_index, ("Coil:Heating:DX:VariableSpeed", heating_coil))
+
+    return objects
+
+
+def write_idf(
+    unit: DXUnit,
+    output_path: str | None = None,
+    system_name: str | None = None,
+    system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
+    autosize: bool = True,
+    normalize: bool = True,
+    return_idf_objects: bool = False,
+) -> str | None:
+    if system_name is not None:
+        system_name += " "
+    else:
+        system_name = ""
+
+    objects = []
+
+    # ------------------------------------------------------------------
+    # System and Fan
+    # ------------------------------------------------------------------
+
+    system_and_fan_unitary_system_object = get_system_and_fan_object(
+        unit=unit, system_name=system_name, system_type=system_type, autosize=autosize, objects=objects
+    )
+
+    objects.extend(system_and_fan_unitary_system_object)
+
+    # ------------------------------------------------------------------
+    # Independent Variable Lists
+    # ------------------------------------------------------------------
+
+    independent_variable_lists_object = get_independent_variable_lists_object(
+        unit=unit,
+        system_name=system_name,
+        objects=objects,
+    )
+
+    objects.extend(independent_variable_lists_object)
+
+    # ------------------------------------------------------------------
+    # Cooling
+    # ------------------------------------------------------------------
+
+    cooling_performance_map_objects = get_cooling_performance_map_object(
+        unit=unit, system_name=system_name, autosize=autosize, normalize=normalize, objects=objects
+    )
+
+    objects.extend(cooling_performance_map_objects)
+
+    # ------------------------------------------------------------------
+    # Heating
+    # ------------------------------------------------------------------
+
+    heating_performance_map_objects = get_heating_performance_map_object(
+        unit=unit, system_name=system_name, autosize=autosize, normalize=normalize, objects=objects
+    )
+
+    objects.extend(heating_performance_map_objects)
+
+    # ------------------------------------------------------------------
+    # Return Objects
+    # ------------------------------------------------------------------
 
     write_idf_objects(objects, output_path)
 
