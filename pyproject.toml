@@ -1,10 +1,10 @@
 [project]
-name = "resdx"
-version = "0.1.0"
-description = ""
-authors = [{ name = "Big Ladder Software" }]
-requires-python = "~=3.10"
+authors = [{name = "Big Ladder Software"}]
 dependencies = ["koozie>=1.2.2", "PsychroLib>=2.5.0", "scipy>=1.6.3", "dimes"]
+description = ""
+name = "resdx"
+requires-python = "~=3.10"
+version = "0.1.1-dev"
 
 [dependency-groups]
 dev = ["pytest>=7.1.3", "doit", "jinja2"]
@@ -14,27 +14,26 @@ extras = ["ipykernel>=6.29.4"]
 default-groups = ["dev", "extras"]
 
 [tool.uv.sources]
-dimes = { git = "https://github.com/bigladder/dimes.git", branch = "main" } #  { git = "https://github.com/bigladder/dimes.git", branch = "main" } { path = "../dimes", editable = true }
+dimes = {git = "https://github.com/bigladder/dimes.git", branch = "main"}#  { git = "https://github.com/bigladder/dimes.git", branch = "main" } { path = "../dimes", editable = true }
 
 [tool.ruff]
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "PL", "I001"]
 ignore = [
-    "F405", # undefined-local-with-import-star-usage
+  "F405", # undefined-local-with-import-star-usage
 ]
+select = ["E", "F", "PL", "I001"]
 
 [tool.mypy]
+check_untyped_defs = true
 disallow_incomplete_defs = true
 no_implicit_optional = true
-check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = "resdx.*"
 disable_error_code = ["annotation-unchecked", "import"]
-
+module = "resdx.*"
 
 [build-system]
-requires = ["hatchling"]
 build-backend = "hatchling.build"
+requires = ["hatchling"]
