@@ -547,6 +547,8 @@ def write_idf(
                 4,
             ),
             IDFField("", f"Speed {ep_speed} Reference Unit Rated Condenser Air Flow Rate"),
+            IDFField("", f"Speed {ep_speed} 2017 Rated Evaporator Fan Power Per Volume Flow Rate"),
+            IDFField("", f"Speed {ep_speed} 2023 Rated Evaporator Fan Power Per Volume Flow Rate"),
             IDFField(
                 "",
                 f"Speed {ep_speed} Reference Unit Rated Pad Effectiveness of Evap Precooling",
