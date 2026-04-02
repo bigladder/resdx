@@ -59,14 +59,31 @@ def write_idf_objects(objects: list[tuple[str, IDFField]], output_path=None) -> 
         file_handle.close()
 
 
-def create_idf_string(objects: list[tuple[str, IDFField]]) -> str:
+# def create_idf_string(objects: list[tuple[str, IDFField]]) -> str:
+#     # TODO: This function and write_idf_objects has a lot of repetition.
+#     """Convert IDF objects into a single string for purposes of inserting into an IDF file."""
+#     return_object = ""
+
+#     for obj in objects:
+#         return_object += f"{obj[0]},"
+#         spacing = max(max([len(field.value) for field in obj[1]]) + 3, 28)
+#         for field in obj[1][:-1]:
+#             return_object += f"  {field.value + ',': <{spacing}}!- {field.name}"
+#         return_object += f"  {obj[1][-1].value + ';': <{spacing}}!- {obj[1][-1].name}\n"
+
+#     return return_object
+
+
+def create_idf_string(objects: list[tuple[str, list[IDFField]]]) -> str:
+    """Convert IDF objects into a single string for purposes of inserting into an IDF file."""
     return_object = ""
 
     for obj in objects:
-        return_object += f"{obj[0]},"
-        spacing = max(max([len(field.value) for field in obj[1]]) + 3, 28)
+        return_object += f"{obj[0]},\n"
+        spacing = max(max(len(field.value) for field in obj[1]) + 3, 28)
+
         for field in obj[1][:-1]:
-            return_object += f"  {field.value + ',': <{spacing}}!- {field.name}"
+            return_object += f"  {field.value + ',': <{spacing}}!- {field.name}\n"
         return_object += f"  {obj[1][-1].value + ';': <{spacing}}!- {obj[1][-1].name}\n"
 
     return return_object
