@@ -26,6 +26,12 @@ HEATING_INDOOR_DRY_BULBS = [60.0, 70.0, 80.0]
 
 FLOW_FRACTIONS = [0.75, 1.0, 1.25]
 
+
+class EnergyPlusSystemType(Enum):
+    UNITARY_SYSTEM = 1
+    ZONEHVAC_PTHP = 2
+
+
 class IDFField:
     def __init__(self, value, name, precision=2):
         if precision is None or not isinstance(value, float):
