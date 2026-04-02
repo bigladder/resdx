@@ -14,6 +14,18 @@ from .models.nrel import NRELDXModel
 from .psychrometrics import PsychState, cooling_psych_state, heating_psych_state
 
 
+COOLING_OUTDOOR_DRY_BULBS = [55.0, 82.0, 95.0, 125.0]
+COOLING_INDOOR_WET_BULBS = [50.0, 67.0, 80.0]
+HEATING_OUTDOOR_DRY_BULBS = [
+    5.0,
+    17.0,
+    47.0,
+    60.0,
+]
+HEATING_INDOOR_DRY_BULBS = [60.0, 70.0, 80.0]
+
+FLOW_FRACTIONS = [0.75, 1.0, 1.25]
+
 class IDFField:
     def __init__(self, value, name, precision=2):
         if precision is None or not isinstance(value, float):
@@ -379,28 +391,14 @@ def write_idf(
 
     objects.append(("Fan:SystemModel", fan_fields))
 
-    # ------------------------------------------------------------------
-    # Independent Variable Lists
-    # ------------------------------------------------------------------
-
-    cooling_outdoor_dry_bulbs = [55.0, 82.0, 95.0, 125.0]
-    cooling_indoor_wet_bulbs = [50.0, 67.0, 80.0]
-    heating_outdoor_dry_bulbs = [
-        koozie.to_u(unit.heating_off_temperature, "°F"),
-        5.0,
-        17.0,
-        47.0,
-        60.0,
-    ]
-    heating_indoor_dry_bulbs = [60.0, 70.0, 80.0]
-    flow_fractions = [0.75, 1.0, 1.25]
+    HEATING_OUTDOOR_DRY_BULBS.insert(0, koozie.to_u(unit.heating_off_temperature, "°F"))
 
     objects.append(
         make_independent_variable(
             f"{system_name}Cooling Outdoor Drybulb",
             "Temperature",
             koozie.convert(95.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in cooling_outdoor_dry_bulbs],
+            [koozie.convert(t, "°F", "°C") for t in COOLING_OUTDOOR_DRY_BULBS],
         )
     )
 
@@ -409,7 +407,7 @@ def write_idf(
             f"{system_name}Cooling Indoor Wetbulb",
             "Temperature",
             koozie.convert(67.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in cooling_indoor_wet_bulbs],
+            [koozie.convert(t, "°F", "°C") for t in COOLING_INDOOR_WET_BULBS],
         )
     )
 
@@ -430,7 +428,7 @@ def write_idf(
         )
     )
 
-    objects.append(make_independent_variable(f"{system_name}Coil Flow Fraction", "Dimensionless", 1.0, flow_fractions))
+    objects.append(make_independent_variable(f"{system_name}Coil Flow Fraction", "Dimensionless", 1.0, FLOW_FRACTIONS))
 
     objects.append(
         (
@@ -447,7 +445,7 @@ def write_idf(
             f"{system_name}Heating Outdoor Drybulb",
             "Temperature",
             koozie.convert(47.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in heating_outdoor_dry_bulbs],
+            [koozie.convert(t, "°F", "°C") for t in HEATING_OUTDOOR_DRY_BULBS],
         )
     )
 
@@ -456,7 +454,7 @@ def write_idf(
             f"{system_name}Heating Indoor Drybulb",
             "Temperature",
             koozie.convert(70.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in heating_indoor_dry_bulbs],
+            [koozie.convert(t, "°F", "°C") for t in HEATING_INDOOR_DRY_BULBS],
         )
     )
 
@@ -586,7 +584,7 @@ def write_idf(
 
         capacities = []
         eirs = []
-        for ff in flow_fractions:
+        for ff in FLOW_FRACTIONS:
             condition.set_mass_airflow_ratio(ff)
             capacities.append(unit.gross_total_cooling_capacity(condition))
             eirs.append(1.0 / unit.gross_total_cooling_cop(condition))
@@ -614,8 +612,8 @@ def write_idf(
 
         capacities = []
         eirs = []
-        for t_ewb in cooling_indoor_wet_bulbs:
-            for t_odb in cooling_outdoor_dry_bulbs:
+        for t_ewb in COOLING_INDOOR_WET_BULBS:
+            for t_odb in COOLING_OUTDOOR_DRY_BULBS:
                 condition = unit.make_condition(
                     CoolingConditions,
                     compressor_speed=speed,
@@ -804,7 +802,7 @@ def write_idf(
 
         capacities = []
         eirs = []
-        for ff in flow_fractions:
+        for ff in FLOW_FRACTIONS:
             condition.set_mass_airflow_ratio(ff)
             capacities.append(unit.gross_steady_state_heating_capacity(condition))
             eirs.append(1.0 / unit.gross_steady_state_heating_cop(condition))
@@ -833,8 +831,8 @@ def write_idf(
         capacities = []
         eirs = []
         heating_indoor_rh = unit.H1_full_cond.indoor.rh
-        for t_edb in heating_indoor_dry_bulbs:
-            for t_odb in heating_outdoor_dry_bulbs:
+        for t_edb in HEATING_INDOOR_DRY_BULBS:
+            for t_odb in HEATING_OUTDOOR_DRY_BULBS:
                 condition = unit.make_condition(
                     HeatingConditions,
                     compressor_speed=speed,
