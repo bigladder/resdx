@@ -552,6 +552,7 @@ def get_cooling_performance_map_object(
 
     cooling_coil = [
         IDFField(f"{system_name}Cooling Coil", "Name"),
+        IDFField(f"{system_name}Always On Schedule", "Availability Schedule Name"),
         IDFField(f"{system_name}Unitary Inlet Node", "Air Inlet Node Name"),
         IDFField(f"{system_name}Cooling Coil Outlet Node", "Air Outlet Node Name"),
         IDFField(unit.number_of_cooling_speeds, "Number of Speeds"),
@@ -570,15 +571,16 @@ def get_cooling_performance_map_object(
             2,
         ),
         IDFField("", "Nominal Time for Condensate Removal to Begin"),
-        IDFField(
-            "",
-            "Ratio of Initial Moisture Evaporation Rate and Steady State Latent Capacity",
-        ),
+        IDFField("", "Ratio of Initial Moisture Evaporation Rate and Steady State Latent Capacity"),
+        IDFField("", "Maximum Cycling Rate"),
+        IDFField("", "Latent Capacity Time Constant"),
+        IDFField("", "Fan Delay Time"),
         IDFField(f"{system_name}Cooling fPLR", "Part Load Fraction Correlation Curve Name"),
         IDFField("", "Condenser Air Inlet Node Name"),
         IDFField("", "Condenser Type"),
         IDFField("", "Evaporative Condenser Pump Rated Power Consumption"),
         IDFField(unit.crankcase_heater_capacity, "Crankcase Heater Capacity", 2),
+        IDFField("", "Crankcase Heater Capacity Function of Temperature Curve Name"),
         IDFField(
             koozie.to_u(unit.crankcase_heater_setpoint_temperature, "°C"),
             "Maximum Outdoor Dry-Bulb Temperature for Crankcase Heater Operation",
