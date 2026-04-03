@@ -629,9 +629,9 @@ def get_cooling_performance_map_object(
                 f"Speed {ep_speed} Reference Unit Rated Air Flow Rate",
                 4,
             ),
-            IDFField("", f"Speed {ep_speed} Reference Unit Rated Condenser Air Flow Rate"),
             IDFField("", f"Speed {ep_speed} 2017 Rated Evaporator Fan Power Per Volume Flow Rate"),
             IDFField("", f"Speed {ep_speed} 2023 Rated Evaporator Fan Power Per Volume Flow Rate"),
+            IDFField("", f"Speed {ep_speed} Reference Unit Rated Condenser Air Flow Rate"),
             IDFField(
                 "",
                 f"Speed {ep_speed} Reference Unit Rated Pad Effectiveness of Evap Precooling",
