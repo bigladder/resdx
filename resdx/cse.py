@@ -10,6 +10,7 @@ from koozie import fr_u, to_u
 
 from .conditions import CoolingConditions, HeatingConditions
 from .dx_unit import DXUnit, StagingType
+from .models.unified_resnet import RESNETDXModel
 from .psychrometrics import cooling_psych_state, heating_psych_state
 
 INDENT = "  "
@@ -294,10 +295,10 @@ def write_cse(
         )
 
     # Cooling performance map
-    cooling_outdoor_dry_bulbs = [
-        82.0,
-        95.0,
-    ]
+    cooling_outdoor_dry_bulbs = [40.0, 82.0, 95.0, 125.0]
+    if isinstance(unit, RESNETDXModel):
+        if unit.net_tabular_data is not None:
+            cooling_outdoor_dry_bulbs = to_u(unit.net_tabular_data.cooling_capacities.temperatures, "°F") + [125.0]
     cooling_speeds: list[int]
     if unit.staging_type == StagingType.VARIABLE_SPEED:
         cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed, unit.cooling_boost_speed]
@@ -385,7 +386,7 @@ def write_cse(
                 CSEMember("rsFxCapAuxH", 1.0, precision=1),
                 CSELine("<% end %>"),
             ]
-        if autosize:
+        if autosize and not cooling_only:
             cooling_capacity_lines += [
                 CSELine("<% if heating_capacity == Autosize or cooling_capacity == Autosize %>"),
                 CSEMember("rsCapRat9547", cooling_heating_capacity_ratio, precision=3),
