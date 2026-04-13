@@ -568,7 +568,7 @@ def make_neep_model_data(
     P_c.set_by_interpolation(2, t_82)
 
     # Tmin
-    # Find temperature where power is half of 82F value to avoide division by zero
+    # Find temperature where power is half of 82F value to avoid division by zero
 
     t_c_min = P_c.get_temperature_at_value(P_c.get(1, t_82) * 0.5, t_82, t_95, 1)
 
@@ -641,7 +641,7 @@ def make_single_speed_model_data(
     P_c.set(Qrated, t_82, Q_c.get(Qrated, t_82) / fr_u(eer2_b, "Btu/Wh"))
 
     # Tmin
-    # Find temperature where power is half of 82F value to avoide division by zero
+    # Find temperature where power is half of 82F value to avoid division by zero
 
     t_c_min = P_c.get_temperature_at_value(P_c.get(1, t_82) * 0.5, t_82, t_95, 1)
 
@@ -756,7 +756,7 @@ def make_two_speed_model_data(
     P_c.set_by_maintenance(Qmin, t_95, t_82, Pm95rated)
 
     # Tmin
-    # Find temperature where power is half of 82F value to avoide division by zero
+    # Find temperature where power is half of 82F value to avoid division by zero
 
     t_c_min = P_c.get_temperature_at_value(P_c.get(1, t_82) * 0.5, t_82, t_95, 1)
     Q_c.add_temperature(t_c_min)
@@ -866,7 +866,7 @@ def make_packaged_terminal_model_data(
     P_c.set_by_maintenance(Qrated, t_82, t_95, Pm95rated)
 
     # Tmin
-    # Find temperature where power is half of 82F value to avoide division by zero
+    # Find temperature where power is half of 82F value to avoid division by zero
 
     t_c_min = P_c.get_temperature_at_value(P_c.get(1, t_82) * 0.5, t_82, t_95, 1)
 
