@@ -7,5 +7,6 @@ from .models import (
     StatisticalSet,
     TemperatureSpeedPerformance,
     make_neep_model_data,
+    make_performance_map,
     make_neep_statistical_model_data,
 )

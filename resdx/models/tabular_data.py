@@ -1,5 +1,6 @@
 from bisect import insort
 from copy import deepcopy
+from typing import Literal
 
 from koozie import fr_u, to_u
 from scipy.interpolate import RegularGridInterpolator
@@ -589,6 +590,67 @@ def make_neep_model_data(
     if lct is not None:
         Q_h.set_by_interpolation(2, t_lct)
         P_h.set_by_interpolation(2, t_lct)
+
+    Q_c.set_interpolator()
+    P_c.set_interpolator()
+    Q_h.set_interpolator()
+    P_h.set_interpolator()
+
+    return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
+
+
+def _calculate_power(capacity: float, cop: float) -> float:
+    """Calculate power from capacity and COP."""
+    return capacity / cop
+
+
+def make_performance_map(
+    cooling_capacities: list[list[float | None]],
+    cooling_cops: list[list[float | None]],
+    cooling_temperatures: list[list[float | None]],
+    heating_capacities: list[list[float | None]],
+    heating_cops: list[list[float | None]],
+    heating_temperatures: list[list[float | None]],
+    capacity_unit: Literal["W", "kW", "Btu/h"],
+    temperature_unit: Literal["degF", "degC", "K"],
+) -> TemperatureSpeedPerformance:
+    NUMBER_OF_SPEEDS = 2
+
+    for s_i, value_list in enumerate(cooling_capacities):
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                cooling_capacities[s_i][t_i] = fr_u(value, capacity_unit)
+
+    cooling_powers: list[list[float]] = []
+    for s_i, value_list in enumerate(cooling_cops):
+        cooling_powers.append([])
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                cooling_powers[s_i].append(_calculate_power(cooling_capacities[s_i][t_i], value))
+
+    for s_i, value_list in enumerate(heating_capacities):
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                heating_capacities[s_i][t_i] = fr_u(value, capacity_unit)
+
+    heating_powers: list[list[float]] = []
+    for s_i, value_list in enumerate(heating_cops):
+        heating_powers.append([])
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                heating_powers[s_i].append(_calculate_power(heating_capacities[s_i][t_i], value))
+
+    # Set up temperatures
+    for t_i, temperature in enumerate(cooling_temperatures):
+        cooling_temperatures[t_i] = fr_u(temperature, temperature_unit)
+
+    for t_i, temperature in enumerate(heating_temperatures):
+        heating_temperatures[t_i] = fr_u(temperature, temperature_unit)
+
+    Q_c = TemperatureSpeedCoolingPerformanceTable(cooling_temperatures, NUMBER_OF_SPEEDS, cooling_capacities)
+    P_c = TemperatureSpeedCoolingPerformanceTable(cooling_temperatures, NUMBER_OF_SPEEDS, cooling_powers)
+    Q_h = TemperatureSpeedHeatingPerformanceTable(heating_temperatures, NUMBER_OF_SPEEDS, heating_capacities)
+    P_h = TemperatureSpeedHeatingPerformanceTable(heating_temperatures, NUMBER_OF_SPEEDS, heating_powers)
 
     Q_c.set_interpolator()
     P_c.set_interpolator()
