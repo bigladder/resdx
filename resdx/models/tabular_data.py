@@ -1,5 +1,6 @@
 from bisect import insort
 from copy import deepcopy
+from typing import Literal
 
 from koozie import fr_u, to_u
 from scipy.interpolate import RegularGridInterpolator
@@ -568,7 +569,7 @@ def make_neep_model_data(
     P_c.set_by_interpolation(2, t_82)
 
     # Tmin
-    # Find temperature where power is half of 82F value to avoide division by zero
+    # Find temperature where power is half of 82F value to avoid division by zero
 
     t_c_min = P_c.get_temperature_at_value(P_c.get(1, t_82) * 0.5, t_82, t_95, 1)
 
@@ -589,6 +590,67 @@ def make_neep_model_data(
     if lct is not None:
         Q_h.set_by_interpolation(2, t_lct)
         P_h.set_by_interpolation(2, t_lct)
+
+    Q_c.set_interpolator()
+    P_c.set_interpolator()
+    Q_h.set_interpolator()
+    P_h.set_interpolator()
+
+    return TemperatureSpeedPerformance(Q_c, P_c, Q_h, P_h)
+
+
+def _calculate_power(capacity: float, cop: float) -> float:
+    """Calculate power from capacity and COP."""
+    return capacity / cop
+
+
+def make_performance_map(
+    cooling_capacities: list[list[float | None]],
+    cooling_cops: list[list[float | None]],
+    cooling_temperatures: list[list[float | None]],
+    heating_capacities: list[list[float | None]],
+    heating_cops: list[list[float | None]],
+    heating_temperatures: list[list[float | None]],
+    capacity_unit: Literal["W", "kW", "Btu/h"],
+    temperature_unit: Literal["degF", "degC", "K"],
+) -> TemperatureSpeedPerformance:
+    NUMBER_OF_SPEEDS = 2
+
+    for s_i, value_list in enumerate(cooling_capacities):
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                cooling_capacities[s_i][t_i] = fr_u(value, capacity_unit)
+
+    cooling_powers: list[list[float]] = []
+    for s_i, value_list in enumerate(cooling_cops):
+        cooling_powers.append([])
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                cooling_powers[s_i].append(_calculate_power(cooling_capacities[s_i][t_i], value))
+
+    for s_i, value_list in enumerate(heating_capacities):
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                heating_capacities[s_i][t_i] = fr_u(value, capacity_unit)
+
+    heating_powers: list[list[float]] = []
+    for s_i, value_list in enumerate(heating_cops):
+        heating_powers.append([])
+        for t_i, value in enumerate(value_list):
+            if value is not None:
+                heating_powers[s_i].append(_calculate_power(heating_capacities[s_i][t_i], value))
+
+    # Set up temperatures
+    for t_i, temperature in enumerate(cooling_temperatures):
+        cooling_temperatures[t_i] = fr_u(temperature, temperature_unit)
+
+    for t_i, temperature in enumerate(heating_temperatures):
+        heating_temperatures[t_i] = fr_u(temperature, temperature_unit)
+
+    Q_c = TemperatureSpeedCoolingPerformanceTable(cooling_temperatures, NUMBER_OF_SPEEDS, cooling_capacities)
+    P_c = TemperatureSpeedCoolingPerformanceTable(cooling_temperatures, NUMBER_OF_SPEEDS, cooling_powers)
+    Q_h = TemperatureSpeedHeatingPerformanceTable(heating_temperatures, NUMBER_OF_SPEEDS, heating_capacities)
+    P_h = TemperatureSpeedHeatingPerformanceTable(heating_temperatures, NUMBER_OF_SPEEDS, heating_powers)
 
     Q_c.set_interpolator()
     P_c.set_interpolator()
@@ -641,7 +703,7 @@ def make_single_speed_model_data(
     P_c.set(Qrated, t_82, Q_c.get(Qrated, t_82) / fr_u(eer2_b, "Btu/Wh"))
 
     # Tmin
-    # Find temperature where power is half of 82F value to avoide division by zero
+    # Find temperature where power is half of 82F value to avoid division by zero
 
     t_c_min = P_c.get_temperature_at_value(P_c.get(1, t_82) * 0.5, t_82, t_95, 1)
 
@@ -756,7 +818,7 @@ def make_two_speed_model_data(
     P_c.set_by_maintenance(Qmin, t_95, t_82, Pm95rated)
 
     # Tmin
-    # Find temperature where power is half of 82F value to avoide division by zero
+    # Find temperature where power is half of 82F value to avoid division by zero
 
     t_c_min = P_c.get_temperature_at_value(P_c.get(1, t_82) * 0.5, t_82, t_95, 1)
     Q_c.add_temperature(t_c_min)
@@ -866,7 +928,7 @@ def make_packaged_terminal_model_data(
     P_c.set_by_maintenance(Qrated, t_82, t_95, Pm95rated)
 
     # Tmin
-    # Find temperature where power is half of 82F value to avoide division by zero
+    # Find temperature where power is half of 82F value to avoid division by zero
 
     t_c_min = P_c.get_temperature_at_value(P_c.get(1, t_82) * 0.5, t_82, t_95, 1)
 
