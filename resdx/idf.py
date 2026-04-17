@@ -471,6 +471,7 @@ def write_idf(
 
     cooling_coil = [
         IDFField(f"{system_name}Cooling Coil", "Name"),
+        IDFField(f"{system_name}Always On Schedule", "Availability Schedule Name"),
         IDFField(f"{system_name}Unitary Inlet Node", "Air Inlet Node Name"),
         IDFField(f"{system_name}Cooling Coil Outlet Node", "Air Outlet Node Name"),
         IDFField(unit.number_of_cooling_speeds, "Number of Speeds"),
@@ -489,15 +490,16 @@ def write_idf(
             2,
         ),
         IDFField("", "Nominal Time for Condensate Removal to Begin"),
-        IDFField(
-            "",
-            "Ratio of Initial Moisture Evaporation Rate and Steady State Latent Capacity",
-        ),
+        IDFField("", "Ratio of Initial Moisture Evaporation Rate and Steady State Latent Capacity"),
+        IDFField("", "Maximum Cycling Rate"),
+        IDFField("", "Latent Capacity Time Constant"),
+        IDFField("", "Fan Delay Time"),
         IDFField(f"{system_name}Cooling fPLR", "Part Load Fraction Correlation Curve Name"),
         IDFField("", "Condenser Air Inlet Node Name"),
         IDFField("", "Condenser Type"),
         IDFField("", "Evaporative Condenser Pump Rated Power Consumption"),
         IDFField(unit.crankcase_heater_capacity, "Crankcase Heater Capacity", 2),
+        IDFField("", "Crankcase Heater Capacity Function of Temperature Curve Name"),
         IDFField(
             koozie.to_u(unit.crankcase_heater_setpoint_temperature, "°C"),
             "Maximum Outdoor Dry-Bulb Temperature for Crankcase Heater Operation",
@@ -546,6 +548,8 @@ def write_idf(
                 f"Speed {ep_speed} Reference Unit Rated Air Flow Rate",
                 4,
             ),
+            IDFField("", f"Speed {ep_speed} 2017 Rated Evaporator Fan Power Per Volume Flow Rate"),
+            IDFField("", f"Speed {ep_speed} 2023 Rated Evaporator Fan Power Per Volume Flow Rate"),
             IDFField("", f"Speed {ep_speed} Reference Unit Rated Condenser Air Flow Rate"),
             IDFField(
                 "",
@@ -645,6 +649,7 @@ def write_idf(
 
     heating_coil = [
         IDFField(f"{system_name}Heating Coil", "Name"),
+        IDFField(f"{system_name}Always On Schedule", "Availability Schedule Name"),
         IDFField(f"{system_name}Cooling Coil Outlet Node", "Air Inlet Node Name"),
         IDFField(f"{system_name}Heating Coil Outlet Node", "Air Outlet Node Name"),
         IDFField(unit.number_of_heating_speeds, "Number of Speeds"),
@@ -659,7 +664,7 @@ def write_idf(
         ),
         IDFField(
             "Autosize" if autosize else unit.H1_full_cond.rated_volumetric_airflow,
-            "Rated Air Flow Rate at Selected Nominal Speed Level",
+            "Rated Volumetric Air Flow Rate",
             2,
         ),
         IDFField(f"{system_name}Heating fPLR", "Part Load Fraction Correlation Curve Name"),
@@ -687,6 +692,7 @@ def write_idf(
             2,
         ),
         IDFField(unit.crankcase_heater_capacity, "Crankcase Heater Capacity", 2),
+        IDFField("", "Crankcase Heater Capacity Function of Temperature Curve Name"),
         IDFField(
             koozie.to_u(unit.crankcase_heater_setpoint_temperature, "°C"),
             "Maximum Outdoor Dry-Bulb Temperature for Crankcase Heater Operation",
@@ -769,6 +775,8 @@ def write_idf(
                 condition.rated_volumetric_airflow,
                 f"Speed {ep_speed} Reference Unit Rated Air Flow Rate",
             ),
+            IDFField("", f"Speed {ep_speed} 2017 Rated Evaporator Fan Power Per Volume Flow Rate"),
+            IDFField("", f"Speed {ep_speed} 2023 Rated Evaporator Fan Power Per Volume Flow Rate"),
             IDFField(
                 f"{system_name}Heating CapfT {ep_speed}",
                 f"Speed {ep_speed} Heating Capacity Function of Temperature Curve Name",
