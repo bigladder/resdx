@@ -298,7 +298,10 @@ def write_cse(
     cooling_outdoor_dry_bulbs = [40.0, 82.0, 95.0, 125.0]
     if isinstance(unit, RESNETDXModel):
         if unit.net_tabular_data is not None:
-            cooling_outdoor_dry_bulbs = to_u(unit.net_tabular_data.cooling_capacities.temperatures, "°F") + [125.0]
+            if max(unit.net_tabular_data.cooling_capacities.temperatures) >= fr_u(125, "°F"):
+                cooling_outdoor_dry_bulbs = to_u(unit.net_tabular_data.cooling_capacities.temperatures, "°F")
+            else:
+                cooling_outdoor_dry_bulbs = to_u(unit.net_tabular_data.cooling_capacities.temperatures, "°F") + [125.0]
     cooling_speeds: list[int]
     if unit.staging_type == StagingType.VARIABLE_SPEED:
         cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed, unit.cooling_boost_speed]
