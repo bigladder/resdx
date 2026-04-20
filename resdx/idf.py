@@ -3,7 +3,7 @@ Functionality to generate EnergyPlus IDF snippets from a DXUnit object
 """
 
 import sys
-from typing import Optional
+from typing import Literal, Optional
 from enum import Enum
 
 import koozie
@@ -138,12 +138,14 @@ def _get_objects_list(objects: Optional[list[tuple[str, IDFField]]] = None) -> l
 
 def get_select_idf_objects(
     unit: DXUnit,
+    heating_type: Literal["GAS", "ASHP", "ELECTRIC"],
     output_path: str | None = None,
     system_name: str | None = None,
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
     autosize: bool = True,
     normalize: bool = True,
-    get_system_and_fan: bool = False,
+    get_system: bool = False,
+    get_fan: bool = False,
     get_independent_variable_lists: bool = False,
     get_cooling_performance_map: bool = False,
     get_heating_performance_map: bool = False,
@@ -152,9 +154,17 @@ def get_select_idf_objects(
 
     objects = []
 
-    if get_system_and_fan:
+    if get_system:
+        objects.extend(get_system_object(unit=unit, system_name=system_name, system_type=system_type))
+
+    if get_fan:
         objects.extend(
-            get_system_and_fan_object(unit=unit, system_name=system_name, system_type=system_type, autosize=autosize)
+            get_fan_object(
+                unit=unit,
+                system_name=system_name,
+                heating_type=heating_type,
+                autosize=autosize,
+            )
         )
 
     if get_independent_variable_lists:
@@ -185,13 +195,14 @@ def get_select_idf_objects(
     return objects
 
 
-def get_system_and_fan_object(
+def get_system_object(
     unit: DXUnit,
     system_name: str,
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
-    autosize: bool = True,
     objects: Optional[list[tuple[str, IDFField]]] = None,
 ):
+
+    objects = _get_objects_list(objects)
 
     if system_type == EnergyPlusSystemType.ZONEHVAC_PTHP:
         objects.append(
@@ -349,12 +360,25 @@ def get_system_and_fan_object(
     else:
         raise Exception(f"Invalid EnergyPlusSystemType: {system_type}")
 
+    return objects
+
+
+def get_fan_object(
+    unit: DXUnit,
+    system_name: str,
+    heating_type: Literal["GAS", "ASHP", "ELECTRIC"],
+    autosize: bool = True,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+
+    objects = _get_objects_list(objects)
+
     objects.append(
         (
             "Schedule:Compact",
             [
                 IDFField(f"{system_name}Schedule", "Name"),
-                IDFField("Binary Control", "Schedule Type Limits Name"),
+                IDFField("Any Number", "Schedule Type Limits Name"),
                 IDFField("Through: 12/31", ""),
                 IDFField("For: AllDays", ""),
                 IDFField("Until: 24:00", ""),
@@ -368,14 +392,29 @@ def get_system_and_fan_object(
             "Schedule:Compact",
             [
                 IDFField(f"{system_name}Fan Mode Schedule", "Name"),
+                IDFField("Any Number", "Schedule Type Limits Name"),
                 IDFField("Through: 12/31", ""),
-                IDFField("Fan Mode Control", "Schedule Type Limits Name"),
                 IDFField("For: AllDays", ""),
                 IDFField("Until: 24:00", ""),
                 IDFField(0, "Value"),
             ],
         )
     )
+
+    if heating_type == "ASHP":
+        objects.append(
+            (
+                "Coil:Heating:Electric",
+                [
+                    IDFField(f"{system_name}Supp Heating Coil", "Name"),
+                    IDFField(f"{system_name}Schedule", "Availability Schedule Name"),
+                    IDFField(1.0, "Efficiency"),
+                    IDFField(0.0, "Nominal Capacity"),
+                    IDFField(f"{system_name}Supply Fan Outlet Node", "Air Inlet Node Name"),
+                    IDFField(f"{system_name}Unitary Outlet Node", "Air Outlet Node Name"),
+                ],
+            )
+        )
 
     fan_speed_order_map = unit.fan.get_speed_order_map()
     max_fan_speed = fan_speed_order_map[-1]
@@ -388,11 +427,7 @@ def get_system_and_fan_object(
         IDFField(f"{system_name}Schedule", "Availability Schedule Name"),
         IDFField(f"{system_name}Heating Coil Outlet Node", "Air Inlet Node Name"),
         IDFField(
-            (
-                f"{system_name}Unitary Outlet Node"
-                if system_type == EnergyPlusSystemType.UNITARY_SYSTEM
-                else f"{system_name}Supply Fan Outlet Node"
-            ),
+            (f"{system_name}Supply Fan Outlet Node" if heating_type == "ASHP" else f"{system_name}Unitary Outlet Node"),
             "Air Outlet Node Name",
         ),
         IDFField(
@@ -956,6 +991,7 @@ def get_heating_performance_map_object(
 
 def write_idf(
     unit: DXUnit,
+    heating_type: Literal["GAS", "ASHP", "ELECTRIC"],
     output_path: str | None = None,
     system_name: str | None = None,
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
@@ -971,14 +1007,22 @@ def write_idf(
     objects = []
 
     # ------------------------------------------------------------------
-    # System and Fan
+    # System
     # ------------------------------------------------------------------
 
-    system_and_fan_unitary_system_object = get_system_and_fan_object(
-        unit=unit, system_name=system_name, system_type=system_type, autosize=autosize, objects=objects
+    system_object = get_system_object(unit=unit, system_name=system_name, system_type=system_type, objects=objects)
+
+    objects.extend(system_object)
+
+    # ------------------------------------------------------------------
+    # Fan
+    # ------------------------------------------------------------------
+
+    fan_object = get_fan_object(
+        unit=unit, system_name=system_name, heating_type=heating_type, autosize=autosize, objects=objects
     )
 
-    objects.extend(system_and_fan_unitary_system_object)
+    objects.extend(fan_object)
 
     # ------------------------------------------------------------------
     # Independent Variable Lists
