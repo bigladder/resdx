@@ -76,6 +76,14 @@ class TemperatureSpeedPerformanceTable:
         else:
             raise RuntimeError(f"Temperature, {temperature:.2f}, not found.")
 
+    def add_speed(self, interpolation_factor: float = 0.50):
+        self.speeds = [1, 2, 3]
+
+        for index, temperature_profile_data in enumerate(self.data):
+            range = temperature_profile_data[1] - temperature_profile_data[0]
+            value = temperature_profile_data[0] + range * interpolation_factor
+            self.data[index].insert(1, value)
+
     def add_temperature(
         self,
         temperature: float,
@@ -651,6 +659,11 @@ def make_performance_map(
     P_c = TemperatureSpeedCoolingPerformanceTable(cooling_temperatures, NUMBER_OF_SPEEDS, cooling_powers)
     Q_h = TemperatureSpeedHeatingPerformanceTable(heating_temperatures, NUMBER_OF_SPEEDS, heating_capacities)
     P_h = TemperatureSpeedHeatingPerformanceTable(heating_temperatures, NUMBER_OF_SPEEDS, heating_powers)
+
+    Q_c.add_speed()
+    P_c.add_speed()
+    Q_h.add_speed()
+    P_h.add_speed()
 
     Q_c.set_interpolator()
     P_c.set_interpolator()
