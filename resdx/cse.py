@@ -222,6 +222,10 @@ def write_cse_objects(cse_objects, output_path=None, preface: str = "") -> None:
         file_handle.close()
 
 
+def floating_point_less_than(a: float, b: float, rel_tol=1e-9, abs_tol=1e-6) -> bool:
+    return a < b and not isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol)
+
+
 def write_cse(
     unit: DXUnit,
     output_path: str | None = None,
@@ -298,7 +302,9 @@ def write_cse(
     cooling_outdoor_dry_bulbs = [40.0, 82.0, 95.0, 125.0]
     if isinstance(unit, RESNETDXModel):
         if unit.net_tabular_data is not None:
-            cooling_outdoor_dry_bulbs = to_u(unit.net_tabular_data.cooling_capacities.temperatures, "°F") + [125.0]
+            cooling_outdoor_dry_bulbs = to_u(unit.net_tabular_data.cooling_capacities.temperatures, "°F")
+            if floating_point_less_than(max(cooling_outdoor_dry_bulbs), 125.0):
+                cooling_outdoor_dry_bulbs.append(125.0)
     cooling_speeds: list[int]
     if unit.staging_type == StagingType.VARIABLE_SPEED:
         cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed, unit.cooling_boost_speed]
