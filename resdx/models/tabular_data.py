@@ -76,8 +76,8 @@ class TemperatureSpeedPerformanceTable:
         else:
             raise RuntimeError(f"Temperature, {temperature:.2f}, not found.")
 
-    def add_speed(self, interpolation_factor: float = 0.50):
-        self.speeds = [1, 2, 3]
+    def add_speed(self, speed: int, interpolation_factor: float = 0.50):
+        self.speeds.insert(speed, speed + 0.5)
 
         for index, temperature_profile_data in enumerate(self.data):
             range = temperature_profile_data[1] - temperature_profile_data[0]
@@ -300,6 +300,14 @@ class TemperatureSpeedPerformance:
         self.heating_powers.apply_fan_power_correction(heating_fan_powers)  # decreases
 
     # TODO: Add sanity checks and ability to set low temperature cooling performance (never less than 50% of Power at 82F low speed)
+
+    def add_speeds(self, speed: int, interpolation_factor: float = 0.50):
+        self.cooling_capacities.add_speed(speed, interpolation_factor)
+        self.cooling_powers.add_speed(speed, interpolation_factor)
+        self.heating_capacities.add_speed(speed, interpolation_factor)
+        self.heating_powers.add_speed(speed, interpolation_factor)
+        self.number_of_cooling_speeds += 1
+        self.number_of_heating_speeds += 1
 
     def set_interpolators(self):
         self.cooling_capacities.set_interpolator()
@@ -659,11 +667,6 @@ def make_performance_map(
     P_c = TemperatureSpeedCoolingPerformanceTable(cooling_temperatures, NUMBER_OF_SPEEDS, cooling_powers)
     Q_h = TemperatureSpeedHeatingPerformanceTable(heating_temperatures, NUMBER_OF_SPEEDS, heating_capacities)
     P_h = TemperatureSpeedHeatingPerformanceTable(heating_temperatures, NUMBER_OF_SPEEDS, heating_powers)
-
-    Q_c.add_speed()
-    P_c.add_speed()
-    Q_h.add_speed()
-    P_h.add_speed()
 
     Q_c.set_interpolator()
     P_c.set_interpolator()
