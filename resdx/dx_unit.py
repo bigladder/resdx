@@ -1430,7 +1430,10 @@ class DXUnit:
                     self.H2_full_cond,
                     t,
                 )  # eq. 11.117
-            cop_full = q_full / p_full
+            if p_full > 0:
+                cop_full = q_full / p_full
+            else:
+                cop_full = 0
 
             if t <= self.heating_off_temperature or cop_full < 1.0:
                 delta_full = 0.0  # eq. 11.125
