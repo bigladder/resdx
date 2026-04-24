@@ -1,5 +1,4 @@
 [project]
->>>>>>>origin/main
 dependencies = ["koozie>=1.2.2", "PsychroLib>=2.5.0", "scipy>=1.6.3", "dimes"]
 description = ""
 name = "resdx"
