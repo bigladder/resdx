@@ -249,10 +249,12 @@ def write_cse(
             17.0,
             47.0,
         ]
+        if isinstance(unit, RESNETDXModel):
+            if unit.net_tabular_data is not None:
+                heating_outdoor_dry_bulbs = to_u(unit.net_tabular_data.heating_capacities.temperatures, "°F")
 
         min_temperature = to_u(unit.heating_off_temperature, "°F")
-        if min_temperature < heating_outdoor_dry_bulbs[0]:
-            heating_outdoor_dry_bulbs = [min_temperature] + heating_outdoor_dry_bulbs
+        heating_outdoor_dry_bulbs = [min_temperature] + [t for t in heating_outdoor_dry_bulbs if t > min_temperature]
 
         heating_speeds: list[int]
         if unit.staging_type == StagingType.VARIABLE_SPEED:
