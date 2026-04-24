@@ -2,7 +2,7 @@ from koozie import fr_u
 from pytest import approx
 from scipy import optimize
 
-from resdx import AHRIVersion, RESNETDXModel, StagingType, make_neep_model_data
+from resdx import AHRIVersion, RESNETDXModel, StagingType, make_neep_model_data, make_performance_map
 from resdx.models.tabular_data import make_two_speed_model_data, make_single_speed_model_data
 from resdx.rating_solver import make_rating_unit
 
@@ -277,6 +277,45 @@ def test_neep_vchp_regression():
     assert vchp_unit.eer() == approx(12.963, 0.01)
     assert vchp_unit.hspf() == approx(10.617, 0.01)
     assert vchp_unit.hspf(region=2) == approx(17.66, 0.01)
+
+
+def test_make_performance_map():
+
+    cooling_temperatures = [82.0, 95.0]
+    cooling_capacities = [
+        [1.0, 2.0, 3.0],  # 82
+        [0.8, 1.6, 2.4],  # 95
+    ]
+
+    cooling_cops = [
+        [4.0, 3.0, 2.0],  # 82
+        [3.0, 2.0, 1.0],  # 95
+    ]
+
+    heating_temperatures = [17.0, 47.0]
+
+    heating_capacities = [
+        [0.8, 1.6, 2.4],  # 17
+        [1.0, 2.0, 3.0],  # 47
+    ]
+
+    heating_cops = [
+        [3.0, 2.0, 1.0],  # 17
+        [4.0, 3.0, 2.0],  # 47
+    ]
+
+    tabular_data = make_performance_map(
+        cooling_capacities, cooling_cops, cooling_temperatures, heating_capacities, heating_cops, heating_temperatures
+    )
+
+    speed_to_add = 2
+    tabular_data.add_speed(speed_to_add)
+
+    assert tabular_data.cooling_capacities.data[0][speed_to_add - 1] == approx(fr_u(1.5, "ton_ref"), 0.01)
+
+    speed_to_add = 4
+    tabular_data.add_speed(speed_to_add)
+    assert tabular_data.cooling_capacities.data[0][speed_to_add - 1] == approx(fr_u(2.5, "ton_ref"), 0.01)
 
 
 def test_plot():
