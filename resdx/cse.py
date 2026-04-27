@@ -249,14 +249,19 @@ def write_cse(
             17.0,
             47.0,
         ]
+        if isinstance(unit, RESNETDXModel):
+            if unit.net_tabular_data is not None:
+                heating_outdoor_dry_bulbs = to_u(unit.net_tabular_data.heating_capacities.temperatures, "°F")
 
         min_temperature = to_u(unit.heating_off_temperature, "°F")
-        if min_temperature < heating_outdoor_dry_bulbs[0]:
-            heating_outdoor_dry_bulbs = [min_temperature] + heating_outdoor_dry_bulbs
+        heating_outdoor_dry_bulbs = [min_temperature] + [t for t in heating_outdoor_dry_bulbs if t > min_temperature]
 
         heating_speeds: list[int]
         if unit.staging_type == StagingType.VARIABLE_SPEED:
-            heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed, unit.heating_boost_speed]
+            if unit.number_of_heating_speeds == 4:
+                heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed, unit.heating_boost_speed]
+            elif unit.number_of_heating_speeds == 3:
+                heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed]
         elif unit.staging_type == StagingType.TWO_STAGE:
             heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed]
         elif unit.staging_type == StagingType.SINGLE_STAGE:
@@ -268,7 +273,7 @@ def write_cse(
         cops = []
         reference_capacity = unit.net_steady_state_heating_capacity()
         reference_temperature = to_u(unit.H1_full_cond.outdoor.db, "°F")
-        reference_speed = heating_speeds.index(unit.H1_full_cond.compressor_speed) + 1
+        reference_speed = unit.H1_full_cond.compressor_speed
         for t_odb in heating_outdoor_dry_bulbs:
             for speed in heating_speeds:
                 condition = unit.make_condition(
@@ -280,7 +285,7 @@ def write_cse(
                 capacity_ratio = capacity / reference_capacity
                 if isclose(t_odb, reference_temperature, abs_tol=0.1) and speed == reference_speed:
                     assert capacity_ratio == 1.0, (
-                        f"{t_odb:.0f}°F/{speed}: cap={capacity:.0f}, ref={reference_capacity:.0f}, full load speed= {unit.H1_full_cond.compressor_speed}, speed={heating_speeds}"
+                        f"{t_odb:.0f}°F/{speed}: cap={capacity:.0f}, ref={reference_capacity:.0f}, full load speed= {unit.H1_full_cond.compressor_speed}, speed={heating_speeds}, reference_speed={reference_speed}"
                     )
                 capacity_ratios.append(capacity_ratio)
 
@@ -292,7 +297,7 @@ def write_cse(
                 temperatures=heating_outdoor_dry_bulbs,
                 reference_temperature=reference_temperature,
                 speeds=[i + 1 for i in range(len(heating_speeds))],
-                reference_speed=reference_speed,
+                reference_speed=heating_speeds.index(reference_speed) + 1,
                 capacity_ratios=capacity_ratios,
                 cops=cops,
             )
@@ -307,7 +312,10 @@ def write_cse(
                 cooling_outdoor_dry_bulbs.append(125.0)
     cooling_speeds: list[int]
     if unit.staging_type == StagingType.VARIABLE_SPEED:
-        cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed, unit.cooling_boost_speed]
+        if unit.number_of_cooling_speeds == 4:
+            cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed, unit.cooling_boost_speed]
+        elif unit.number_of_cooling_speeds == 3:
+            cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed]
     elif unit.staging_type == StagingType.TWO_STAGE:
         cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed]
     elif unit.staging_type == StagingType.SINGLE_STAGE:
@@ -319,7 +327,7 @@ def write_cse(
     cops = []
     reference_capacity = unit.net_total_cooling_capacity()
     reference_temperature = to_u(unit.A_full_cond.outdoor.db, "°F")
-    reference_speed = cooling_speeds.index(unit.A_full_cond.compressor_speed) + 1
+    reference_speed = unit.A_full_cond.compressor_speed
     for t_odb in cooling_outdoor_dry_bulbs:
         for speed in cooling_speeds:
             condition = unit.make_condition(
@@ -340,7 +348,7 @@ def write_cse(
             temperatures=cooling_outdoor_dry_bulbs,
             reference_temperature=reference_temperature,
             speeds=[i + 1 for i in range(len(cooling_speeds))],
-            reference_speed=reference_speed,
+            reference_speed=cooling_speeds.index(reference_speed) + 1,
             capacity_ratios=capacity_ratios,
             cops=cops,
         )
