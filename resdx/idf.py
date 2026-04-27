@@ -189,6 +189,9 @@ def get_select_idf_objects(
             )
         )
 
+    if heating_type == "ASHP":
+        objects.extend(get_defrost_object())
+
     if output_path:
         write_idf_objects(objects, output_path)
 
