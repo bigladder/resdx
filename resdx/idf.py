@@ -573,121 +573,6 @@ def get_independent_variable_lists_object(
     return objects
 
 
-def get_defrost_object(
-    objects: Optional[list[tuple[str, IDFField]]] = None,
-):
-    # TODO: create defrost object, similar to OS-ERI / Addendum 82
-
-    objects = _get_objects_list(objects)
-
-    objects = []
-    objects.append(
-        (
-            "OtherEquipment",
-            [
-                IDFField("air source heat pump htg coil defrost heat load", "Name"),
-                IDFField("None", "Fuel Type"),
-                IDFField("conditioned space 1", "Zone or ZoneList or Space or SpaceList Name"),
-                IDFField("Always On Discrete", "Schedule Name"),
-                IDFField("EquipmentLevel", "Design Level Calculation Method"),
-                IDFField(0, "Design Level {W}"),
-                IDFField("", "Power per Floor Area {W/m2}"),
-                IDFField("", "Power per Person {W/person}"),
-                IDFField(0, "Fraction Latent"),
-                IDFField(0, "Fraction Radiant"),
-                IDFField(0, "Fraction Lost"),
-                IDFField("", "Carbon Dioxide Generation Rate {m3/s-W}"),
-                IDFField("General", "End-Use Subcategory"),
-            ],
-        )
-    )
-
-    objects.append(
-        (
-            "OtherEquipment",
-            [
-                IDFField("air source heat pump htg coil defrost supp heat energy", "Name"),
-                IDFField("Electricity", "Fuel Type"),
-                IDFField("conditioned space 1", "Zone or ZoneList or Space or SpaceList Name"),
-                IDFField("Always On Discrete", "Schedule Name"),
-                IDFField("EquipmentLevel", "Design Level Calculation Method"),
-                IDFField(0, "Design Level {W}"),
-                IDFField("", "Power per Floor Area {W/m2}"),
-                IDFField("", "Power per Person {W/person}"),
-                IDFField(0, "Fraction Latent"),
-                IDFField(0, "Fraction Radiant"),
-                IDFField(1, "Fraction Lost"),
-                IDFField("", "Carbon Dioxide Generation Rate {m3/s-W}"),
-                IDFField("heat pump defrost suppl heat1", "End-Use Subcategory"),
-            ],
-        )
-    )
-
-    objects.append(
-        (
-            "EnergyManagementSystem:Program",
-            [
-                IDFField("air_source_heat_pump_htg_coil_defrost_program", "Name"),
-                IDFField("Set T_out = air_source_heat_pump_htg_coil_tout_s", "Program Line 1"),
-                IDFField("Set F_defrost = 0.134 - (0.003 * ((T_out * 1.8) + 32))", "Program Line 2"),
-                IDFField("Set F_defrost = @Min F_defrost 0.08", "Program Line 3"),
-                IDFField("Set F_defrost = @Max F_defrost 0", "Program Line 4"),
-                IDFField(
-                    "Set air_source_heat_pump_htg_coil_frost_cap_multiplier_act = 1.0 - (1.8 * F_defrost)",
-                    "Program Line 5",
-                ),
-                IDFField(
-                    "Set air_source_heat_pump_htg_coil_frost_pow_multiplier_act = 1.0 - (0.3 * F_defrost)",
-                    "Program Line 6",
-                ),
-                IDFField("If T_out <= 4.44444444444444", "Program Line 7"),
-                IDFField("Set F_compressor = 1.0 - F_defrost", "Program Line 8"),
-                IDFField("Set fraction_heating = air_source_heat_pump_htg_coil_rtf_s", "Program Line 9"),
-                IDFField("Set fraction_defrost = F_defrost * fraction_heating", "Program Line 10"),
-                IDFField("If fraction_heating > 0", "Program Line 11"),
-                IDFField(
-                    "Set q_dot_defrost = ((F_compressor * (air_source_heat_pump_htg_coil_deliverd_htg / air_source_heat_pump_htg_coil_frost_cap_multiplier_act) - air_source_heat_pump_htg_coil_deliverd_htg) / fraction_defrost) / 1",
-                    "Program Line 12",
-                ),
-                IDFField(
-                    "Set reduced_cap = (((air_source_heat_pump_htg_coil_deliverd_htg / air_source_heat_pump_htg_coil_frost_cap_multiplier_act) - air_source_heat_pump_htg_coil_deliverd_htg) / fraction_defrost) / 1",
-                    "Program Line 13",
-                ),
-                IDFField("Else", "Program Line 14"),
-                IDFField("Set q_dot_defrost = 0.0", "Program Line 15"),
-                IDFField("Set reduced_cap = 0.0", "Program Line 16"),
-                IDFField("EndIf", "Program Line 17"),
-                IDFField("Set supp_capacity = 9999.877985346395", "Program Line 18"),
-                IDFField("Set supp_efficiency = 1.0", "Program Line 19"),
-                IDFField("Set supp_delivered_htg = @Min reduced_cap supp_capacity", "Program Line 20"),
-                IDFField("If supp_efficiency > 0.0", "Program Line 21"),
-                IDFField("Set supp_design_level = (supp_delivered_htg / supp_efficiency)", "Program Line 22"),
-                IDFField("Else", "Program Line 23"),
-                IDFField("Set supp_design_level = 0.0", "Program Line 24"),
-                IDFField("EndIf", "Program Line 25"),
-                IDFField(
-                    "Set air_source_heat_pump_htg_coil_defrost_heat_load_act = (supp_delivered_htg - q_dot_defrost) * fraction_defrost",
-                    "Program Line 26",
-                ),
-                IDFField(
-                    "Set air_source_heat_pump_htg_coil_defrost_supp_heat_energy_act = fraction_defrost * supp_design_level",
-                    "Program Line 27",
-                ),
-                IDFField("Else", "Program Line 28"),
-                IDFField("Set air_source_heat_pump_htg_coil_defrost_heat_load_act = 0", "Program Line 29"),
-                IDFField("Set air_source_heat_pump_htg_coil_defrost_supp_heat_energy_act = 0", "Program Line 30"),
-                IDFField("EndIf", "Program Line 31"),
-                IDFField("If (T_out <= 0.0) && (T_out >= -17.78)", "Program Line 32"),
-                IDFField("Set air_source_heat_pump_htg_coil_pan_heater_energy_act = 150.0", "Program Line 33"),
-                IDFField("Else", "Program Line 34"),
-                IDFField("Set air_source_heat_pump_htg_coil_pan_heater_energy_act = 0.0", "Program Line 35"),
-                IDFField("EndIf", "Program Line 36"),
-            ],
-        )
-    )
-
-    return objects
-
 def get_cooling_performance_map_object(
     unit: DXUnit,
     system_name: str,
@@ -1102,6 +987,123 @@ def get_heating_performance_map_object(
     objects.insert(heating_start_index, ("Coil:Heating:DX:VariableSpeed", heating_coil))
 
     return objects
+
+
+def get_defrost_object(
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+    # TODO: create defrost object, similar to OS-ERI / Addendum 82
+
+    objects = _get_objects_list(objects)
+
+    objects = []
+    objects.append(
+        (
+            "OtherEquipment",
+            [
+                IDFField("air source heat pump htg coil defrost heat load", "Name"),
+                IDFField("None", "Fuel Type"),
+                IDFField("conditioned space 1", "Zone or ZoneList or Space or SpaceList Name"),
+                IDFField("Always On Discrete", "Schedule Name"),
+                IDFField("EquipmentLevel", "Design Level Calculation Method"),
+                IDFField(0, "Design Level {W}"),
+                IDFField("", "Power per Floor Area {W/m2}"),
+                IDFField("", "Power per Person {W/person}"),
+                IDFField(0, "Fraction Latent"),
+                IDFField(0, "Fraction Radiant"),
+                IDFField(0, "Fraction Lost"),
+                IDFField("", "Carbon Dioxide Generation Rate {m3/s-W}"),
+                IDFField("General", "End-Use Subcategory"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "OtherEquipment",
+            [
+                IDFField("air source heat pump htg coil defrost supp heat energy", "Name"),
+                IDFField("Electricity", "Fuel Type"),
+                IDFField("conditioned space 1", "Zone or ZoneList or Space or SpaceList Name"),
+                IDFField("Always On Discrete", "Schedule Name"),
+                IDFField("EquipmentLevel", "Design Level Calculation Method"),
+                IDFField(0, "Design Level {W}"),
+                IDFField("", "Power per Floor Area {W/m2}"),
+                IDFField("", "Power per Person {W/person}"),
+                IDFField(0, "Fraction Latent"),
+                IDFField(0, "Fraction Radiant"),
+                IDFField(1, "Fraction Lost"),
+                IDFField("", "Carbon Dioxide Generation Rate {m3/s-W}"),
+                IDFField("heat pump defrost suppl heat1", "End-Use Subcategory"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Program",
+            [
+                IDFField("air_source_heat_pump_htg_coil_defrost_program", "Name"),
+                IDFField("Set T_out = air_source_heat_pump_htg_coil_tout_s", "Program Line 1"),
+                IDFField("Set F_defrost = 0.134 - (0.003 * ((T_out * 1.8) + 32))", "Program Line 2"),
+                IDFField("Set F_defrost = @Min F_defrost 0.08", "Program Line 3"),
+                IDFField("Set F_defrost = @Max F_defrost 0", "Program Line 4"),
+                IDFField(
+                    "Set air_source_heat_pump_htg_coil_frost_cap_multiplier_act = 1.0 - (1.8 * F_defrost)",
+                    "Program Line 5",
+                ),
+                IDFField(
+                    "Set air_source_heat_pump_htg_coil_frost_pow_multiplier_act = 1.0 - (0.3 * F_defrost)",
+                    "Program Line 6",
+                ),
+                IDFField("If T_out <= 4.44444444444444", "Program Line 7"),
+                IDFField("Set F_compressor = 1.0 - F_defrost", "Program Line 8"),
+                IDFField("Set fraction_heating = air_source_heat_pump_htg_coil_rtf_s", "Program Line 9"),
+                IDFField("Set fraction_defrost = F_defrost * fraction_heating", "Program Line 10"),
+                IDFField("If fraction_heating > 0", "Program Line 11"),
+                IDFField(
+                    "Set q_dot_defrost = ((F_compressor * (air_source_heat_pump_htg_coil_deliverd_htg / air_source_heat_pump_htg_coil_frost_cap_multiplier_act) - air_source_heat_pump_htg_coil_deliverd_htg) / fraction_defrost) / 1",
+                    "Program Line 12",
+                ),
+                IDFField(
+                    "Set reduced_cap = (((air_source_heat_pump_htg_coil_deliverd_htg / air_source_heat_pump_htg_coil_frost_cap_multiplier_act) - air_source_heat_pump_htg_coil_deliverd_htg) / fraction_defrost) / 1",
+                    "Program Line 13",
+                ),
+                IDFField("Else", "Program Line 14"),
+                IDFField("Set q_dot_defrost = 0.0", "Program Line 15"),
+                IDFField("Set reduced_cap = 0.0", "Program Line 16"),
+                IDFField("EndIf", "Program Line 17"),
+                IDFField("Set supp_capacity = 9999.877985346395", "Program Line 18"),
+                IDFField("Set supp_efficiency = 1.0", "Program Line 19"),
+                IDFField("Set supp_delivered_htg = @Min reduced_cap supp_capacity", "Program Line 20"),
+                IDFField("If supp_efficiency > 0.0", "Program Line 21"),
+                IDFField("Set supp_design_level = (supp_delivered_htg / supp_efficiency)", "Program Line 22"),
+                IDFField("Else", "Program Line 23"),
+                IDFField("Set supp_design_level = 0.0", "Program Line 24"),
+                IDFField("EndIf", "Program Line 25"),
+                IDFField(
+                    "Set air_source_heat_pump_htg_coil_defrost_heat_load_act = (supp_delivered_htg - q_dot_defrost) * fraction_defrost",
+                    "Program Line 26",
+                ),
+                IDFField(
+                    "Set air_source_heat_pump_htg_coil_defrost_supp_heat_energy_act = fraction_defrost * supp_design_level",
+                    "Program Line 27",
+                ),
+                IDFField("Else", "Program Line 28"),
+                IDFField("Set air_source_heat_pump_htg_coil_defrost_heat_load_act = 0", "Program Line 29"),
+                IDFField("Set air_source_heat_pump_htg_coil_defrost_supp_heat_energy_act = 0", "Program Line 30"),
+                IDFField("EndIf", "Program Line 31"),
+                IDFField("If (T_out <= 0.0) && (T_out >= -17.78)", "Program Line 32"),
+                IDFField("Set air_source_heat_pump_htg_coil_pan_heater_energy_act = 150.0", "Program Line 33"),
+                IDFField("Else", "Program Line 34"),
+                IDFField("Set air_source_heat_pump_htg_coil_pan_heater_energy_act = 0.0", "Program Line 35"),
+                IDFField("EndIf", "Program Line 36"),
+            ],
+        )
+    )
+
+    return objects
+
 
 
 def write_idf(
