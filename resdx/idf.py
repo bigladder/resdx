@@ -42,6 +42,10 @@ class IDFField:
         self.name = name
 
 
+def make_snake_case(string: str) -> str:
+    return ("_").join([word.lower() for word in string.split(" ")])
+
+
 def write_idf_objects(objects: list[tuple[str, IDFField]], output_path=None) -> None:
     if output_path is not None:
         file_handle = open(output_path, "w")
@@ -188,9 +192,7 @@ def get_select_idf_objects(
                 unit=unit, system_name=system_name, autosize=autosize, normalize=normalize
             )
         )
-
-    if heating_type == "ASHP":
-        objects.extend(get_defrost_object())
+        objects.extend(get_defrost_object(system_name=system_name))
 
     if output_path:
         write_idf_objects(objects, output_path)
@@ -993,6 +995,7 @@ def get_heating_performance_map_object(
 
 
 def get_defrost_object(
+    system_name: str,
     objects: Optional[list[tuple[str, IDFField]]] = None,
 ):
     # TODO: create defrost object, similar to OS-ERI / Addendum 82
@@ -1004,10 +1007,10 @@ def get_defrost_object(
         (
             "OtherEquipment",
             [
-                IDFField("air source heat pump htg coil defrost heat load", "Name"),
+                IDFField(f"{system_name}htg coil defrost heat load", "Name"),
                 IDFField("None", "Fuel Type"),
-                IDFField("conditioned space 1", "Zone or ZoneList or Space or SpaceList Name"),
-                IDFField("Always On Discrete", "Schedule Name"),
+                IDFField("Main Zone", "Zone or ZoneList or Space or SpaceList Name"),
+                IDFField(f"{system_name}Always On Schedule", "Schedule Name"),
                 IDFField("EquipmentLevel", "Design Level Calculation Method"),
                 IDFField(0, "Design Level {W}"),
                 IDFField("", "Power per Floor Area {W/m2}"),
@@ -1025,10 +1028,10 @@ def get_defrost_object(
         (
             "OtherEquipment",
             [
-                IDFField("air source heat pump htg coil defrost supp heat energy", "Name"),
+                IDFField(f"{system_name}htg coil defrost supp heat energy", "Name"),
                 IDFField("Electricity", "Fuel Type"),
-                IDFField("conditioned space 1", "Zone or ZoneList or Space or SpaceList Name"),
-                IDFField("Always On Discrete", "Schedule Name"),
+                IDFField("Main Zone", "Zone or ZoneList or Space or SpaceList Name"),
+                IDFField(f"{system_name}Always On Schedule", "Schedule Name"),
                 IDFField("EquipmentLevel", "Design Level Calculation Method"),
                 IDFField(0, "Design Level {W}"),
                 IDFField("", "Power per Floor Area {W/m2}"),
@@ -1046,30 +1049,30 @@ def get_defrost_object(
         (
             "EnergyManagementSystem:Program",
             [
-                IDFField("air_source_heat_pump_htg_coil_defrost_program", "Name"),
-                IDFField("Set T_out = air_source_heat_pump_htg_coil_tout_s", "Program Line 1"),
+                IDFField(f"{make_snake_case(system_name)}htg_coil_defrost_program", "Name"),
+                IDFField(f"Set T_out = {make_snake_case(system_name)}htg_coil_tout_s", "Program Line 1"),
                 IDFField("Set F_defrost = 0.134 - (0.003 * ((T_out * 1.8) + 32))", "Program Line 2"),
                 IDFField("Set F_defrost = @Min F_defrost 0.08", "Program Line 3"),
                 IDFField("Set F_defrost = @Max F_defrost 0", "Program Line 4"),
                 IDFField(
-                    "Set air_source_heat_pump_htg_coil_frost_cap_multiplier_act = 1.0 - (1.8 * F_defrost)",
+                    f"Set {make_snake_case(system_name)}htg_coil_frost_cap_multiplier_act = 1.0 - (1.8 * F_defrost)",
                     "Program Line 5",
                 ),
                 IDFField(
-                    "Set air_source_heat_pump_htg_coil_frost_pow_multiplier_act = 1.0 - (0.3 * F_defrost)",
+                    f"Set {make_snake_case(system_name)}htg_coil_frost_pow_multiplier_act = 1.0 - (0.3 * F_defrost)",
                     "Program Line 6",
                 ),
                 IDFField("If T_out <= 4.44444444444444", "Program Line 7"),
                 IDFField("Set F_compressor = 1.0 - F_defrost", "Program Line 8"),
-                IDFField("Set fraction_heating = air_source_heat_pump_htg_coil_rtf_s", "Program Line 9"),
+                IDFField(f"Set fraction_heating = {make_snake_case(system_name)}htg_coil_rtf_s", "Program Line 9"),
                 IDFField("Set fraction_defrost = F_defrost * fraction_heating", "Program Line 10"),
                 IDFField("If fraction_heating > 0", "Program Line 11"),
                 IDFField(
-                    "Set q_dot_defrost = ((F_compressor * (air_source_heat_pump_htg_coil_deliverd_htg / air_source_heat_pump_htg_coil_frost_cap_multiplier_act) - air_source_heat_pump_htg_coil_deliverd_htg) / fraction_defrost) / 1",
+                    f"Set q_dot_defrost = ((F_compressor * ({make_snake_case(system_name)}htg_coil_deliverd_htg / {make_snake_case(system_name)}htg_coil_frost_cap_multiplier_act) - {make_snake_case(system_name)}htg_coil_deliverd_htg) / fraction_defrost) / 1",
                     "Program Line 12",
                 ),
                 IDFField(
-                    "Set reduced_cap = (((air_source_heat_pump_htg_coil_deliverd_htg / air_source_heat_pump_htg_coil_frost_cap_multiplier_act) - air_source_heat_pump_htg_coil_deliverd_htg) / fraction_defrost) / 1",
+                    f"Set reduced_cap = ((({make_snake_case(system_name)}htg_coil_deliverd_htg / {make_snake_case(system_name)}htg_coil_frost_cap_multiplier_act) - {make_snake_case(system_name)}htg_coil_deliverd_htg) / fraction_defrost) / 1",
                     "Program Line 13",
                 ),
                 IDFField("Else", "Program Line 14"),
@@ -1085,21 +1088,25 @@ def get_defrost_object(
                 IDFField("Set supp_design_level = 0.0", "Program Line 24"),
                 IDFField("EndIf", "Program Line 25"),
                 IDFField(
-                    "Set air_source_heat_pump_htg_coil_defrost_heat_load_act = (supp_delivered_htg - q_dot_defrost) * fraction_defrost",
+                    f"Set {make_snake_case(system_name)}htg_coil_defrost_heat_load_act = (supp_delivered_htg - q_dot_defrost) * fraction_defrost",
                     "Program Line 26",
                 ),
                 IDFField(
-                    "Set air_source_heat_pump_htg_coil_defrost_supp_heat_energy_act = fraction_defrost * supp_design_level",
+                    f"Set {make_snake_case(system_name)}htg_coil_defrost_supp_heat_energy_act = fraction_defrost * supp_design_level",
                     "Program Line 27",
                 ),
                 IDFField("Else", "Program Line 28"),
-                IDFField("Set air_source_heat_pump_htg_coil_defrost_heat_load_act = 0", "Program Line 29"),
-                IDFField("Set air_source_heat_pump_htg_coil_defrost_supp_heat_energy_act = 0", "Program Line 30"),
+                IDFField(f"Set {make_snake_case(system_name)}htg_coil_defrost_heat_load_act = 0", "Program Line 29"),
+                IDFField(
+                    f"Set {make_snake_case(system_name)}htg_coil_defrost_supp_heat_energy_act = 0", "Program Line 30"
+                ),
                 IDFField("EndIf", "Program Line 31"),
                 IDFField("If (T_out <= 0.0) && (T_out >= -17.78)", "Program Line 32"),
-                IDFField("Set air_source_heat_pump_htg_coil_pan_heater_energy_act = 150.0", "Program Line 33"),
+                IDFField(
+                    f"Set {make_snake_case(system_name)}htg_coil_pan_heater_energy_act = 150.0", "Program Line 33"
+                ),
                 IDFField("Else", "Program Line 34"),
-                IDFField("Set air_source_heat_pump_htg_coil_pan_heater_energy_act = 0.0", "Program Line 35"),
+                IDFField(f"Set {make_snake_case(system_name)}htg_coil_pan_heater_energy_act = 0.0", "Program Line 35"),
                 IDFField("EndIf", "Program Line 36"),
             ],
         )
@@ -1181,7 +1188,7 @@ def write_idf(
     # ------------------------------------------------------------------
 
     if heating_type == "ASHP":
-        defrost_object = get_defrost_object(objects=objects)
+        defrost_object = get_defrost_object(system_name=system_name, objects=objects)
 
         objects.extend(defrost_object)
 
