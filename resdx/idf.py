@@ -478,6 +478,29 @@ def get_fan_object(
 
         fan_fields += fan_speed
 
+    for i, speed in enumerate(fan_speed_order_map):
+        zone_name_ems = "MainZone"
+        ep_speed = i + 1
+        objects.append(
+            (
+                "EnergyManagementSystem:Sensor",
+                [
+                    IDFField(
+                        f"Fan_RTF_{zone_name_ems}_Speed_{ep_speed}",
+                        "Name",
+                    ),
+                    IDFField(
+                        f"{system_name}Supply Fan",
+                        "Output:Variable or Output:Meter Index Key Name",
+                    ),
+                    IDFField(
+                        f"Fan Runtime Fraction Speed {ep_speed}",
+                        "Output:Variable or Output:Meter Index Key Name",
+                    ),
+                ],
+            )
+        )
+
     objects.append(("Fan:SystemModel", fan_fields))
 
     return objects
