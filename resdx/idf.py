@@ -842,7 +842,7 @@ def get_heating_performance_map_object(
             4,
         ),
         IDFField(
-            (unit.defrost.resistive_power if unit.defrost.strategy == DefrostStrategy.RESISTIVE else ""),
+            (unit.defrost.resistive_power if unit.defrost.strategy == DefrostStrategy.RESISTIVE else 0),
             "Resistive Defrost Heater Capacity",
         ),
     ]
@@ -856,35 +856,6 @@ def get_heating_performance_map_object(
                 IDFField(unit.c_d_heating, "Coefficient2 x"),
                 IDFField(0.0, "Minimum Value of x"),
                 IDFField(1.0, "Maximum Value of x"),
-            ],
-        )
-    )
-
-    objects.append(
-        (
-            "Curve:Biquadratic",
-            [
-                IDFField(f"{system_name}Defrost EIR", "Name"),
-                IDFField(
-                    1.0 / NRELDXModel.get_cooling_cop60(unit),
-                    "Coefficient1 Constant",
-                    4,
-                ),
-                IDFField(0.0, "Coefficient2 x"),
-                IDFField(0.0, "Coefficient3 x**2"),
-                IDFField(0.0, "Coefficient4 y"),
-                IDFField(0.0, "Coefficient5 y**2"),
-                IDFField(0.0, "Coefficient6 x*y"),
-                IDFField(koozie.convert(50.0, "°F", "°C"), "Minimum Value of x"),
-                IDFField(koozie.convert(80.0, "°F", "°C"), "Maximum Value of x"),
-                IDFField(
-                    koozie.to_u(unit.heating_off_temperature, "°C"),
-                    "Minimum Value of y",
-                ),
-                IDFField(
-                    koozie.to_u(unit.defrost.high_temperature, "°C"),
-                    "Maximum Value of y",
-                ),
             ],
         )
     )
@@ -1007,7 +978,7 @@ def get_defrost_object(
         (
             "OtherEquipment",
             [
-                IDFField(f"{system_name}htg coil defrost heat load", "Name"),
+                IDFField(f"{system_name}Heating Coil defrost heat load", "Name"),
                 IDFField("None", "Fuel Type"),
                 IDFField("Main Zone", "Zone or ZoneList or Space or SpaceList Name"),
                 IDFField(f"{system_name}Always On Schedule", "Schedule Name"),
@@ -1028,7 +999,7 @@ def get_defrost_object(
         (
             "OtherEquipment",
             [
-                IDFField(f"{system_name}htg coil defrost supp heat energy", "Name"),
+                IDFField(f"{system_name}Heating Coil defrost supp heat energy", "Name"),
                 IDFField("Electricity", "Fuel Type"),
                 IDFField("Main Zone", "Zone or ZoneList or Space or SpaceList Name"),
                 IDFField(f"{system_name}Always On Schedule", "Schedule Name"),
@@ -1041,6 +1012,27 @@ def get_defrost_object(
                 IDFField(1, "Fraction Lost"),
                 IDFField("", "Carbon Dioxide Generation Rate {m3/s-W}"),
                 IDFField("heat pump defrost suppl heat1", "End-Use Subcategory"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "OtherEquipment",
+            [
+                IDFField(f"{system_name}Heating Coil pan heater energy", "Name"),
+                IDFField("Electricity", "Fuel Type"),
+                IDFField("Main Zone", "Zone or ZoneList or Space or SpaceList Name"),
+                IDFField(f"{system_name}Always On Schedule", "Schedule Name"),
+                IDFField("EquipmentLevel", "Design Level Calculation Method"),
+                IDFField(0, "Design Level {W}"),
+                IDFField("", "Power per Floor Area {W/m2}"),
+                IDFField("", "Power per Person {W/person}"),
+                IDFField(0, "Fraction Latent"),
+                IDFField(0, "Fraction Radiant"),
+                IDFField(1, "Fraction Lost"),
+                IDFField("", "Carbon Dioxide Generation Rate {m3/s-W}"),
+                IDFField("pan heater1", "End-Use Subcategory"),
             ],
         )
     )
@@ -1112,8 +1104,99 @@ def get_defrost_object(
         )
     )
 
-    return objects
+    objects.append(
+        (
+            "EnergyManagementSystem:ProgramCallingManager",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_defrost_program_calling_manager", "Name"),
+                IDFField("InsideHVACSystemIterationLoop", "EnergyPlus Model Calling Point"),
+                IDFField(f"{make_snake_case(system_name)}htg_coil_defrost_program", "Program Name 1"),
+            ],
+        )
+    )
 
+    objects.append(
+        (
+            "EnergyManagementSystem:Sensor",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_tout_s", "Name"),
+                IDFField("Environment", "Output:Variable or Output:Meter Index Key Name"),
+                IDFField("Site Outdoor Air Drybulb Temperature", "Output:Variable or Output:Meter Name"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Actuator",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_frost_cap_multiplier_act", "Name"),
+                IDFField(f"{system_name}Heating Coil", "Actuated Component Unique Name"),
+                IDFField("Coil:Heating:DX:VariableSpeed", "Actuated Component Type"),
+                IDFField("Frost Heating Capacity Multiplier", "Actuated Component Control Type"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Actuator",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_frost_pow_multiplier_act", "Name"),
+                IDFField(f"{system_name}Heating Coil", "Actuated Component Unique Name"),
+                IDFField("Coil:Heating:DX:VariableSpeed", "Actuated Component Type"),
+                IDFField("Frost Heating Input Power Multiplier", "Actuated Component Control Type"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Sensor",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_rtf_s", "Name"),
+                IDFField(f"{system_name}Heating Coil", "Output:Variable or Output:Meter Index Key Name"),
+                IDFField("Heating Coil Runtime Fraction", "Output:Variable or Output:Meter Name"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Sensor",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_deliverd_htg", "Name"),
+                IDFField(f"{system_name}Heating Coil", "Output:Variable or Output:Meter Index Key Name"),
+                IDFField("Heating Coil Heating Rate", "Output:Variable or Output:Meter Name"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Actuator",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_defrost_supp_heat_energy_act", "Name"),
+                IDFField(f"{system_name}Heating Coil defrost supp heat energy", "Actuated Component Unique Name"),
+                IDFField("OtherEquipment", "Actuated Component Type"),
+                IDFField("Power Level", "Actuated Component Control Type"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Actuator",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_pan_heater_energy_act", "Name"),
+                IDFField(f"{system_name}Heating Coil pan heater energy", "Actuated Component Unique Name"),
+                IDFField("OtherEquipment", "Actuated Component Type"),
+                IDFField("Power Level", "Actuated Component Control Type"),
+            ],
+        )
+    )
+
+    return objects
 
 
 def write_idf(
