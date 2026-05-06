@@ -439,7 +439,7 @@ def get_fan_object(
             "Autosize" if autosize else unit.fan.airflow(max_fan_speed),
             "Design Maximum Air Flow Rate",
         ),
-        IDFField(f"Discrete", "Speed Control Method"),
+        IDFField("Discrete", "Speed Control Method"),
         IDFField(
             unit.fan.airflow_ratio(min_fan_speed, max_fan_speed),
             "Electric Power Minimum Flow Rate Fraction",
@@ -451,7 +451,7 @@ def get_fan_object(
             "Autosize" if autosize else unit.fan.power(max_fan_speed),
             "Design Electric Power Consumption",
         ),
-        IDFField(f"TotalEfficiencyAndPressure", "Design Power Sizing Method"),
+        IDFField("TotalEfficiencyAndPressure", "Design Power Sizing Method"),
         IDFField("", "Electric Power Per Unit Flow Rate"),
         IDFField("", "Electric Power Per Unit Flow Rate Per Unit Pressure"),
         IDFField(unit.fan.efficiency(max_fan_speed), "Fan Total Efficiency"),
@@ -460,7 +460,7 @@ def get_fan_object(
         IDFField("", "Night Ventilation Mode Flow Fraction"),
         IDFField("", "Motor Loss Zone Name"),
         IDFField("", "Motor Loss Radiative Fraction"),
-        IDFField(f"ZN-MSHP Fans", "End-Use Subcategory"),
+        IDFField("ZN-MSHP Fans", "End-Use Subcategory"),
         IDFField(unit.fan.number_of_speeds, "Number of Speeds"),
     ]
     for i, speed in enumerate(fan_speed_order_map):
