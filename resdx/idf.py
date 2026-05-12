@@ -514,7 +514,15 @@ def get_independent_variable_lists_object(
 
     objects = _get_objects_list(objects)
 
-    HEATING_OUTDOOR_DRY_BULBS.insert(0, koozie.to_u(unit.heating_off_temperature, "°F"))
+    heating_off_temperature = koozie.to_u(unit.heating_off_temperature, "°F")
+    check_temperature = True
+
+    while check_temperature:
+        if heating_off_temperature > HEATING_OUTDOOR_DRY_BULBS[0]:
+            HEATING_OUTDOOR_DRY_BULBS.pop(0)
+        else:
+            HEATING_OUTDOOR_DRY_BULBS.insert(0, koozie.to_u(unit.heating_off_temperature, "°F"))
+            check_temperature = False
 
     objects.append(
         make_independent_variable(
