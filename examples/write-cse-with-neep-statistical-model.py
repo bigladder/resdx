@@ -2,7 +2,6 @@ from koozie import fr_u
 from resdx import RESNETDXModel, StagingType, make_neep_statistical_model_data, write_cse
 
 size = fr_u(38.3, "kBtu/h")
-# size = fr_u(3.0, "ton_ref")
 seer2 = 10.0
 
 
@@ -30,9 +29,4 @@ unit = RESNETDXModel(
     tabular_data=tabular_data,
 )
 
-cse_objects = write_cse(unit=unit, output_path="in.cse", return_text=True)
-
-cooling_performance = "\n".join(str(cse_objects[0]))
-heating_performance = "\n".join(str(cse_objects[1]))
-# If no cooling or heating system, look at 301 / addendum 82 table at end of doc
-print()
+write_cse(unit=unit, output_path="in.cse")
