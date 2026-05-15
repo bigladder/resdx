@@ -5,6 +5,7 @@ Functionality to generate EnergyPlus IDF snippets from a DXUnit object
 import sys
 from typing import Literal, Optional
 from enum import Enum
+from math import isclose
 
 import koozie
 
@@ -44,6 +45,10 @@ class IDFField:
 
 def make_snake_case(string: str) -> str:
     return ("_").join([word.lower() for word in string.split(" ")])
+
+
+def floating_point_less_than(a: float, b: float, rel_tol=1e-9, abs_tol=1e-6) -> bool:
+    return a < b and not isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol)
 
 
 def write_idf_objects(objects: list[tuple[str, IDFField]], output_path=None) -> None:
@@ -515,14 +520,10 @@ def _get_independent_variable_lists_object(
     objects = _get_objects_list(objects)
 
     heating_off_temperature = koozie.to_u(unit.heating_off_temperature, "°F")
-    check_temperature = True
 
-    while check_temperature:
-        if heating_off_temperature > HEATING_OUTDOOR_DRY_BULBS[0]:
-            HEATING_OUTDOOR_DRY_BULBS.pop(0)
-        else:
-            HEATING_OUTDOOR_DRY_BULBS.insert(0, koozie.to_u(unit.heating_off_temperature, "°F"))
-            check_temperature = False
+    HEATING_OUTDOOR_DRY_BULBS = [heating_off_temperature] + [
+        t for t in HEATING_OUTDOOR_DRY_BULBS if floating_point_less_than(heating_off_temperature, t)
+    ]
 
     objects.append(
         make_independent_variable(
