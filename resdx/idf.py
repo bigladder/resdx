@@ -3,16 +3,15 @@ Functionality to generate EnergyPlus IDF snippets from a DXUnit object
 """
 
 import sys
-from typing import Literal, Optional
 from enum import Enum
 from math import isclose
+from typing import Literal, Optional
 
 import koozie
 
 from .conditions import CoolingConditions, HeatingConditions
 from .defrost import DefrostControl, DefrostStrategy
 from .dx_unit import DXUnit
-from .models.nrel import NRELDXModel
 from .psychrometrics import PsychState, cooling_psych_state, heating_psych_state
 
 
