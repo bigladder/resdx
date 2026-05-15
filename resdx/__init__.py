@@ -3,7 +3,7 @@ from .dx_unit import *
 from .fan import *
 from .idf import (
     EnergyPlusSystemType,
-    get_select_idf_objects,
+    get_idf_objects,
     write_idf,
 )
 from .models import (

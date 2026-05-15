@@ -140,7 +140,7 @@ def _get_objects_list(objects: Optional[list[tuple[str, IDFField]]] = None) -> l
     return objects
 
 
-def get_select_idf_objects(
+def get_idf_objects(
     unit: DXUnit,
     heating_type: Literal["GAS", "ASHP", "ELECTRIC"],
     output_path: str | None = None,
@@ -159,11 +159,11 @@ def get_select_idf_objects(
     objects = []
 
     if get_system:
-        objects.extend(get_system_object(unit=unit, system_name=system_name, system_type=system_type))
+        objects.extend(_get_system_object(unit=unit, system_name=system_name, system_type=system_type))
 
     if get_fan:
         objects.extend(
-            get_fan_object(
+            _get_fan_object(
                 unit=unit,
                 system_name=system_name,
                 heating_type=heating_type,
@@ -173,7 +173,7 @@ def get_select_idf_objects(
 
     if get_independent_variable_lists:
         objects.extend(
-            get_independent_variable_lists_object(
+            _get_independent_variable_lists_object(
                 unit=unit,
                 system_name=system_name,
             )
@@ -181,18 +181,18 @@ def get_select_idf_objects(
 
     if get_cooling_performance_map:
         objects.extend(
-            get_cooling_performance_map_object(
+            _get_cooling_performance_map_object(
                 unit=unit, system_name=system_name, autosize=autosize, normalize=normalize
             )
         )
 
     if get_heating_performance_map:
         objects.extend(
-            get_heating_performance_map_object(
+            _get_heating_performance_map_object(
                 unit=unit, system_name=system_name, autosize=autosize, normalize=normalize
             )
         )
-        objects.extend(get_defrost_object(system_name=system_name))
+        objects.extend(_get_defrost_object(system_name=system_name))
 
     if output_path:
         write_idf_objects(objects, output_path)
@@ -200,7 +200,7 @@ def get_select_idf_objects(
     return objects
 
 
-def get_system_object(
+def _get_system_object(
     unit: DXUnit,
     system_name: str,
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
@@ -368,7 +368,7 @@ def get_system_object(
     return objects
 
 
-def get_fan_object(
+def _get_fan_object(
     unit: DXUnit,
     system_name: str,
     heating_type: Literal["GAS", "ASHP", "ELECTRIC"],
@@ -506,7 +506,7 @@ def get_fan_object(
     return objects
 
 
-def get_independent_variable_lists_object(
+def _get_independent_variable_lists_object(
     unit: DXUnit,
     system_name: str,
     objects: Optional[list[tuple[str, IDFField]]] = None,
@@ -609,7 +609,7 @@ def get_independent_variable_lists_object(
     return objects
 
 
-def get_cooling_performance_map_object(
+def _get_cooling_performance_map_object(
     unit: DXUnit,
     system_name: str,
     autosize: bool = True,
@@ -796,7 +796,7 @@ def get_cooling_performance_map_object(
     return objects
 
 
-def get_heating_performance_map_object(
+def _get_heating_performance_map_object(
     unit: DXUnit,
     system_name: str,
     autosize: bool = True,
@@ -996,7 +996,7 @@ def get_heating_performance_map_object(
     return objects
 
 
-def get_defrost_object(
+def _get_defrost_object(
     system_name: str,
     objects: Optional[list[tuple[str, IDFField]]] = None,
 ):
@@ -1251,7 +1251,7 @@ def write_idf(
     # System
     # ------------------------------------------------------------------
 
-    system_object = get_system_object(unit=unit, system_name=system_name, system_type=system_type, objects=objects)
+    system_object = _get_system_object(unit=unit, system_name=system_name, system_type=system_type, objects=objects)
 
     objects.extend(system_object)
 
@@ -1259,7 +1259,7 @@ def write_idf(
     # Fan
     # ------------------------------------------------------------------
 
-    fan_object = get_fan_object(
+    fan_object = _get_fan_object(
         unit=unit, system_name=system_name, heating_type=heating_type, autosize=autosize, objects=objects
     )
 
@@ -1269,7 +1269,7 @@ def write_idf(
     # Independent Variable Lists
     # ------------------------------------------------------------------
 
-    independent_variable_lists_object = get_independent_variable_lists_object(
+    independent_variable_lists_object = _get_independent_variable_lists_object(
         unit=unit,
         system_name=system_name,
         objects=objects,
@@ -1281,7 +1281,7 @@ def write_idf(
     # Cooling
     # ------------------------------------------------------------------
 
-    cooling_performance_map_objects = get_cooling_performance_map_object(
+    cooling_performance_map_objects = _get_cooling_performance_map_object(
         unit=unit, system_name=system_name, autosize=autosize, normalize=normalize, objects=objects
     )
 
@@ -1291,7 +1291,7 @@ def write_idf(
     # Heating
     # ------------------------------------------------------------------
 
-    heating_performance_map_objects = get_heating_performance_map_object(
+    heating_performance_map_objects = _get_heating_performance_map_object(
         unit=unit, system_name=system_name, autosize=autosize, normalize=normalize, objects=objects
     )
 
@@ -1302,7 +1302,7 @@ def write_idf(
     # ------------------------------------------------------------------
 
     if heating_type == "ASHP":
-        defrost_object = get_defrost_object(system_name=system_name, objects=objects)
+        defrost_object = _get_defrost_object(system_name=system_name, objects=objects)
 
         objects.extend(defrost_object)
 

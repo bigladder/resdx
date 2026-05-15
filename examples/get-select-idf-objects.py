@@ -5,7 +5,7 @@ from resdx import (
     FanMotorType,
     RESNETDXModel,
     StagingType,
-    get_select_idf_objects,
+    get_idf_objects,
 )
 
 
@@ -60,7 +60,7 @@ unit = RESNETDXModel(
     is_ducted=is_ducted,
 )
 
-objects = get_select_idf_objects(
+objects = get_idf_objects(
     unit=unit,
     heating_type=heating_type,
     system_name="HVAC ",
