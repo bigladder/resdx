@@ -520,7 +520,7 @@ def _get_independent_variable_lists_object(
 
     heating_off_temperature = koozie.to_u(unit.heating_off_temperature, "°F")
 
-    HEATING_OUTDOOR_DRY_BULBS = [heating_off_temperature] + [
+    heating_outdoor_dry_bulbs = [heating_off_temperature] + [
         t for t in HEATING_OUTDOOR_DRY_BULBS if floating_point_less_than(heating_off_temperature, t)
     ]
 
@@ -576,7 +576,7 @@ def _get_independent_variable_lists_object(
             f"{system_name}Heating Outdoor Drybulb",
             "Temperature",
             koozie.convert(47.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in HEATING_OUTDOOR_DRY_BULBS],
+            [koozie.convert(t, "°F", "°C") for t in heating_outdoor_dry_bulbs],
         )
     )
 
