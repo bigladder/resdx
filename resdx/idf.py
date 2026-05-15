@@ -50,37 +50,42 @@ def floating_point_less_than(a: float, b: float, rel_tol=1e-9, abs_tol=1e-6) -> 
     return a < b and not isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol)
 
 
-def write_idf_objects(objects: list[tuple[str, IDFField]], output_path=None) -> None:
+def idf_to_string(objects: list[tuple[str, list[IDFField]]]) -> str:
+    """Convert IDF objects into string."""
+    result = ""
+
+    for obj_name, fields in objects:
+        result += f"{obj_name},\n"
+        spacing = max(max(len(field.value) for field in fields) + 3, 28)
+
+        for field in fields[:-1]:
+            result += f"  {field.value + ',': <{spacing}}!- {field.name}\n"
+
+        result += f"  {fields[-1].value + ';': <{spacing}}!- {fields[-1].name}\n\n"
+
+    return result
+
+
+def write_idf_objects(
+    objects: list[tuple[str, list[IDFField]]],
+    output_path: str | None = None,
+    print_idf_objects: bool = False,
+    return_idf_objects: bool = False,
+) -> str | None:
+    """
+    Write IDF objects to a file, print in the terminal, or return as string.
+    """
+    output = idf_to_string(objects)
+
     if output_path is not None:
-        file_handle = open(output_path, "w")
-    else:
-        file_handle = sys.stdout
-    for obj in objects:
-        print(f"{obj[0]},", file=file_handle)
-        spacing = max(max([len(field.value) for field in obj[1]]) + 3, 28)
-        for field in obj[1][:-1]:
-            print(f"  {field.value + ',': <{spacing}}!- {field.name}", file=file_handle)
-        print(
-            f"  {obj[1][-1].value + ';': <{spacing}}!- {obj[1][-1].name}\n",
-            file=file_handle,
-        )
-    if output_path is not None:
-        file_handle.close()
+        with open(output_path, "w") as f:
+            f.write(output)
 
+    if print_idf_objects:
+        sys.stdout.write(output)
 
-def create_idf_string(objects: list[tuple[str, list[IDFField]]]) -> str:
-    """Convert IDF objects into a single string for purposes of inserting into an IDF file."""
-    return_object = ""
-
-    for obj in objects:
-        return_object += f"{obj[0]},\n"
-        spacing = max(max(len(field.value) for field in obj[1]) + 3, 28)
-
-        for field in obj[1][:-1]:
-            return_object += f"  {field.value + ',': <{spacing}}!- {field.name}\n"
-        return_object += f"  {obj[1][-1].value + ';': <{spacing}}!- {obj[1][-1].name}\n"
-
-    return return_object
+    if return_idf_objects:
+        return output
 
 
 def make_independent_variable(
@@ -157,7 +162,8 @@ def get_idf_objects(
     get_independent_variable_lists: bool = False,
     get_cooling_performance_map: bool = False,
     get_heating_performance_map: bool = False,
-) -> list[tuple[str, IDFField]]:
+    print_idf_objects: bool = False,
+) -> str:
     """Return select IDF objects."""
 
     objects = []
@@ -198,8 +204,7 @@ def get_idf_objects(
         )
         objects.extend(_get_defrost_object(system_name=system_name))
 
-    if output_path:
-        write_idf_objects(objects, output_path)
+    objects = write_idf_objects(objects, output_path, print_idf_objects, return_idf_objects=True)
 
     return objects
 
@@ -1238,6 +1243,7 @@ def write_idf(
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
     autosize: bool = True,
     normalize: bool = True,
+    print_idf_objects: bool = False,
     return_idf_objects: bool = False,
 ) -> str | None:
     if system_name is not None:
@@ -1310,8 +1316,7 @@ def write_idf(
     # Return Objects
     # ------------------------------------------------------------------
 
-    write_idf_objects(objects, output_path)
+    objects = write_idf_objects(objects, output_path, print_idf_objects, return_idf_objects)
 
     if return_idf_objects:
-        return_object = create_idf_string(objects)
-        return return_object
+        return objects
