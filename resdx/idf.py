@@ -4,14 +4,33 @@ Functionality to generate EnergyPlus IDF snippets from a DXUnit object
 
 import sys
 from enum import Enum
+from math import isclose
+from typing import Literal, Optional
 
 import koozie
 
 from .conditions import CoolingConditions, HeatingConditions
 from .defrost import DefrostControl, DefrostStrategy
 from .dx_unit import DXUnit
-from .models.nrel import NRELDXModel
 from .psychrometrics import PsychState, cooling_psych_state, heating_psych_state
+
+
+COOLING_OUTDOOR_DRY_BULBS = [55.0, 82.0, 95.0, 125.0]
+COOLING_INDOOR_WET_BULBS = [50.0, 67.0, 80.0]
+HEATING_OUTDOOR_DRY_BULBS = [
+    5.0,
+    17.0,
+    47.0,
+    60.0,
+]
+HEATING_INDOOR_DRY_BULBS = [60.0, 70.0, 80.0]
+
+FLOW_FRACTIONS = [0.75, 1.0, 1.25]
+
+
+class EnergyPlusSystemType(Enum):
+    UNITARY_SYSTEM = 1
+    ZONEHVAC_PTHP = 2
 
 
 class IDFField:
@@ -23,22 +42,50 @@ class IDFField:
         self.name = name
 
 
-def write_idf_objects(objects, output_path=None):
+def make_snake_case(string: str) -> str:
+    return ("_").join([word.lower() for word in string.split(" ")])
+
+
+def floating_point_less_than(a: float, b: float, rel_tol=1e-9, abs_tol=1e-6) -> bool:
+    return a < b and not isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol)
+
+
+def idf_to_string(objects: list[tuple[str, list[IDFField]]]) -> str:
+    """Convert IDF objects into string."""
+    result = ""
+
+    for obj_name, fields in objects:
+        result += f"{obj_name},\n"
+        spacing = max(max(len(field.value) for field in fields) + 3, 28)
+
+        for field in fields[:-1]:
+            result += f"  {field.value + ',': <{spacing}}!- {field.name}\n"
+
+        result += f"  {fields[-1].value + ';': <{spacing}}!- {fields[-1].name}\n\n"
+
+    return result
+
+
+def write_idf_objects(
+    objects: list[tuple[str, list[IDFField]]],
+    output_path: str | None = None,
+    print_idf_objects: bool = False,
+    return_idf_objects: bool = False,
+) -> str | None:
+    """
+    Write IDF objects to a file, print in the terminal, or return as string.
+    """
+    output = idf_to_string(objects)
+
     if output_path is not None:
-        file_handle = open(output_path, "w")
-    else:
-        file_handle = sys.stdout
-    for obj in objects:
-        print(f"{obj[0]},", file=file_handle)
-        spacing = max(max([len(field.value) for field in obj[1]]) + 3, 28)
-        for field in obj[1][:-1]:
-            print(f"  {field.value + ',': <{spacing}}!- {field.name}", file=file_handle)
-        print(
-            f"  {obj[1][-1].value + ';': <{spacing}}!- {obj[1][-1].name}\n",
-            file=file_handle,
-        )
-    if output_path is not None:
-        file_handle.close()
+        with open(output_path, "w") as f:
+            f.write(output)
+
+    if print_idf_objects:
+        sys.stdout.write(output)
+
+    if return_idf_objects:
+        return output
 
 
 def make_independent_variable(
@@ -94,29 +141,82 @@ def make_lookup_table(
     return ("Table:Lookup", fields)
 
 
-class EnergyPlusSystemType(Enum):
-    UNITARY_SYSTEM = 1
-    ZONEHVAC_PTHP = 2
+def _get_objects_list(objects: Optional[list[tuple[str, IDFField]]] = None) -> list[tuple[str, IDFField]]:
+
+    if not objects:
+        objects = []
+
+    return objects
 
 
-def write_idf(
+def get_idf_objects(
     unit: DXUnit,
+    heating_type: Literal["GAS", "ASHP", "ELECTRIC"],
     output_path: str | None = None,
     system_name: str | None = None,
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
     autosize: bool = True,
     normalize: bool = True,
-) -> None:
-    if system_name is not None:
-        system_name += " "
-    else:
-        system_name = ""
+    get_system: bool = False,
+    get_fan: bool = False,
+    get_independent_variable_lists: bool = False,
+    get_cooling_performance_map: bool = False,
+    get_heating_performance_map: bool = False,
+    print_idf_objects: bool = False,
+) -> str:
+    """Return select IDF objects."""
 
     objects = []
 
-    # ------------------------------------------------------------------
-    # System and Fan
-    # ------------------------------------------------------------------
+    if get_system:
+        objects.extend(_get_system_object(unit=unit, system_name=system_name, system_type=system_type))
+
+    if get_fan:
+        objects.extend(
+            _get_fan_object(
+                unit=unit,
+                system_name=system_name,
+                heating_type=heating_type,
+                autosize=autosize,
+            )
+        )
+
+    if get_independent_variable_lists:
+        objects.extend(
+            _get_independent_variable_lists_object(
+                unit=unit,
+                system_name=system_name,
+            )
+        )
+
+    if get_cooling_performance_map:
+        objects.extend(
+            _get_cooling_performance_map_object(
+                unit=unit, system_name=system_name, autosize=autosize, normalize=normalize
+            )
+        )
+
+    if get_heating_performance_map:
+        objects.extend(
+            _get_heating_performance_map_object(
+                unit=unit, system_name=system_name, autosize=autosize, normalize=normalize
+            )
+        )
+        objects.extend(_get_defrost_object(system_name=system_name))
+
+    objects = write_idf_objects(objects, output_path, print_idf_objects, return_idf_objects=True)
+
+    return objects
+
+
+def _get_system_object(
+    unit: DXUnit,
+    system_name: str,
+    system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+
+    objects = _get_objects_list(objects)
 
     if system_type == EnergyPlusSystemType.ZONEHVAC_PTHP:
         objects.append(
@@ -274,12 +374,25 @@ def write_idf(
     else:
         raise Exception(f"Invalid EnergyPlusSystemType: {system_type}")
 
+    return objects
+
+
+def _get_fan_object(
+    unit: DXUnit,
+    system_name: str,
+    heating_type: Literal["GAS", "ASHP", "ELECTRIC"],
+    autosize: bool = True,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+
+    objects = _get_objects_list(objects)
+
     objects.append(
         (
             "Schedule:Compact",
             [
                 IDFField(f"{system_name}Schedule", "Name"),
-                IDFField("Binary Control", "Schedule Type Limits Name"),
+                IDFField("Any Number", "Schedule Type Limits Name"),
                 IDFField("Through: 12/31", ""),
                 IDFField("For: AllDays", ""),
                 IDFField("Until: 24:00", ""),
@@ -293,14 +406,29 @@ def write_idf(
             "Schedule:Compact",
             [
                 IDFField(f"{system_name}Fan Mode Schedule", "Name"),
+                IDFField("Any Number", "Schedule Type Limits Name"),
                 IDFField("Through: 12/31", ""),
-                IDFField("Fan Mode Control", "Schedule Type Limits Name"),
                 IDFField("For: AllDays", ""),
                 IDFField("Until: 24:00", ""),
                 IDFField(0, "Value"),
             ],
         )
     )
+
+    if heating_type == "ASHP":
+        objects.append(
+            (
+                "Coil:Heating:Electric",
+                [
+                    IDFField(f"{system_name}Supp Heating Coil", "Name"),
+                    IDFField(f"{system_name}Schedule", "Availability Schedule Name"),
+                    IDFField(1.0, "Efficiency"),
+                    IDFField(0.0, "Nominal Capacity"),
+                    IDFField(f"{system_name}Supply Fan Outlet Node", "Air Inlet Node Name"),
+                    IDFField(f"{system_name}Unitary Outlet Node", "Air Outlet Node Name"),
+                ],
+            )
+        )
 
     fan_speed_order_map = unit.fan.get_speed_order_map()
     max_fan_speed = fan_speed_order_map[-1]
@@ -313,18 +441,14 @@ def write_idf(
         IDFField(f"{system_name}Schedule", "Availability Schedule Name"),
         IDFField(f"{system_name}Heating Coil Outlet Node", "Air Inlet Node Name"),
         IDFField(
-            (
-                f"{system_name}Unitary Outlet Node"
-                if system_type == EnergyPlusSystemType.UNITARY_SYSTEM
-                else f"{system_name}Supply Fan Outlet Node"
-            ),
+            (f"{system_name}Supply Fan Outlet Node" if heating_type == "ASHP" else f"{system_name}Unitary Outlet Node"),
             "Air Outlet Node Name",
         ),
         IDFField(
             "Autosize" if autosize else unit.fan.airflow(max_fan_speed),
             "Design Maximum Air Flow Rate",
         ),
-        IDFField(f"Discrete", "Speed Control Method"),
+        IDFField("Discrete", "Speed Control Method"),
         IDFField(
             unit.fan.airflow_ratio(min_fan_speed, max_fan_speed),
             "Electric Power Minimum Flow Rate Fraction",
@@ -336,7 +460,7 @@ def write_idf(
             "Autosize" if autosize else unit.fan.power(max_fan_speed),
             "Design Electric Power Consumption",
         ),
-        IDFField(f"TotalEfficiencyAndPressure", "Design Power Sizing Method"),
+        IDFField("TotalEfficiencyAndPressure", "Design Power Sizing Method"),
         IDFField("", "Electric Power Per Unit Flow Rate"),
         IDFField("", "Electric Power Per Unit Flow Rate Per Unit Pressure"),
         IDFField(unit.fan.efficiency(max_fan_speed), "Fan Total Efficiency"),
@@ -345,7 +469,7 @@ def write_idf(
         IDFField("", "Night Ventilation Mode Flow Fraction"),
         IDFField("", "Motor Loss Zone Name"),
         IDFField("", "Motor Loss Radiative Fraction"),
-        IDFField(f"ZN-MSHP Fans", "End-Use Subcategory"),
+        IDFField("ZN-MSHP Fans", "End-Use Subcategory"),
         IDFField(unit.fan.number_of_speeds, "Number of Speeds"),
     ]
     for i, speed in enumerate(fan_speed_order_map):
@@ -363,30 +487,54 @@ def write_idf(
 
         fan_fields += fan_speed
 
+    for i, speed in enumerate(fan_speed_order_map):
+        zone_name_ems = "MainZone"
+        ep_speed = i + 1
+        objects.append(
+            (
+                "EnergyManagementSystem:Sensor",
+                [
+                    IDFField(
+                        f"Fan_RTF_{zone_name_ems}_Speed_{ep_speed}",
+                        "Name",
+                    ),
+                    IDFField(
+                        f"{system_name}Supply Fan",
+                        "Output:Variable or Output:Meter Index Key Name",
+                    ),
+                    IDFField(
+                        f"Fan Runtime Fraction Speed {ep_speed}",
+                        "Output:Variable or Output:Meter Index Key Name",
+                    ),
+                ],
+            )
+        )
+
     objects.append(("Fan:SystemModel", fan_fields))
 
-    # ------------------------------------------------------------------
-    # Independent Variable Lists
-    # ------------------------------------------------------------------
+    return objects
 
-    cooling_outdoor_dry_bulbs = [55.0, 82.0, 95.0, 125.0]
-    cooling_indoor_wet_bulbs = [50.0, 67.0, 80.0]
-    heating_outdoor_dry_bulbs = [
-        koozie.to_u(unit.heating_off_temperature, "°F"),
-        5.0,
-        17.0,
-        47.0,
-        60.0,
+
+def _get_independent_variable_lists_object(
+    unit: DXUnit,
+    system_name: str,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+
+    objects = _get_objects_list(objects)
+
+    heating_off_temperature = koozie.to_u(unit.heating_off_temperature, "°F")
+
+    heating_outdoor_dry_bulbs = [heating_off_temperature] + [
+        t for t in HEATING_OUTDOOR_DRY_BULBS if floating_point_less_than(heating_off_temperature, t)
     ]
-    heating_indoor_dry_bulbs = [60.0, 70.0, 80.0]
-    flow_fractions = [0.75, 1.0, 1.25]
 
     objects.append(
         make_independent_variable(
             f"{system_name}Cooling Outdoor Drybulb",
             "Temperature",
             koozie.convert(95.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in cooling_outdoor_dry_bulbs],
+            [koozie.convert(t, "°F", "°C") for t in COOLING_OUTDOOR_DRY_BULBS],
         )
     )
 
@@ -395,7 +543,7 @@ def write_idf(
             f"{system_name}Cooling Indoor Wetbulb",
             "Temperature",
             koozie.convert(67.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in cooling_indoor_wet_bulbs],
+            [koozie.convert(t, "°F", "°C") for t in COOLING_INDOOR_WET_BULBS],
         )
     )
 
@@ -416,7 +564,7 @@ def write_idf(
         )
     )
 
-    objects.append(make_independent_variable(f"{system_name}Coil Flow Fraction", "Dimensionless", 1.0, flow_fractions))
+    objects.append(make_independent_variable(f"{system_name}Coil Flow Fraction", "Dimensionless", 1.0, FLOW_FRACTIONS))
 
     objects.append(
         (
@@ -442,7 +590,7 @@ def write_idf(
             f"{system_name}Heating Indoor Drybulb",
             "Temperature",
             koozie.convert(70.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in heating_indoor_dry_bulbs],
+            [koozie.convert(t, "°F", "°C") for t in HEATING_INDOOR_DRY_BULBS],
         )
     )
 
@@ -463,9 +611,18 @@ def write_idf(
         )
     )
 
-    # ------------------------------------------------------------------
-    # Cooling
-    # ------------------------------------------------------------------
+    return objects
+
+
+def _get_cooling_performance_map_object(
+    unit: DXUnit,
+    system_name: str,
+    autosize: bool = True,
+    normalize: bool = True,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+
+    objects = _get_objects_list(objects)
 
     cooling_start_index = len(objects)
 
@@ -576,7 +733,7 @@ def write_idf(
 
         capacities = []
         eirs = []
-        for ff in flow_fractions:
+        for ff in FLOW_FRACTIONS:
             condition.set_mass_airflow_ratio(ff)
             capacities.append(unit.gross_total_cooling_capacity(condition))
             eirs.append(1.0 / unit.gross_total_cooling_cop(condition))
@@ -604,8 +761,8 @@ def write_idf(
 
         capacities = []
         eirs = []
-        for t_ewb in cooling_indoor_wet_bulbs:
-            for t_odb in cooling_outdoor_dry_bulbs:
+        for t_ewb in COOLING_INDOOR_WET_BULBS:
+            for t_odb in COOLING_OUTDOOR_DRY_BULBS:
                 condition = unit.make_condition(
                     CoolingConditions,
                     compressor_speed=speed,
@@ -641,9 +798,18 @@ def write_idf(
 
     objects.insert(cooling_start_index, ("Coil:Cooling:DX:VariableSpeed", cooling_coil))
 
-    # ------------------------------------------------------------------
-    # Heating
-    # ------------------------------------------------------------------
+    return objects
+
+
+def _get_heating_performance_map_object(
+    unit: DXUnit,
+    system_name: str,
+    autosize: bool = True,
+    normalize: bool = True,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+
+    objects = _get_objects_list(objects)
 
     heating_start_index = len(objects)
 
@@ -669,7 +835,7 @@ def write_idf(
         ),
         IDFField(f"{system_name}Heating fPLR", "Part Load Fraction Correlation Curve Name"),
         IDFField(
-            f"{system_name}Defrost EIR",
+            "",
             "Defrost Energy Input Ratio Function of Temperature Curve Name",
         ),
         IDFField(
@@ -699,7 +865,7 @@ def write_idf(
             2,
         ),
         IDFField(
-            ("ReverseCycle" if unit.defrost.strategy == DefrostStrategy.REVERSE_CYCLE else "Resistive"),
+            "Resistive",
             "Defrost Strategy",
         ),
         IDFField(
@@ -712,7 +878,7 @@ def write_idf(
             4,
         ),
         IDFField(
-            (unit.defrost.resistive_power if unit.defrost.strategy == DefrostStrategy.RESISTIVE else ""),
+            (unit.defrost.resistive_power if unit.defrost.strategy == DefrostStrategy.RESISTIVE else 0),
             "Resistive Defrost Heater Capacity",
         ),
     ]
@@ -726,35 +892,6 @@ def write_idf(
                 IDFField(unit.c_d_heating, "Coefficient2 x"),
                 IDFField(0.0, "Minimum Value of x"),
                 IDFField(1.0, "Maximum Value of x"),
-            ],
-        )
-    )
-
-    objects.append(
-        (
-            "Curve:Biquadratic",
-            [
-                IDFField(f"{system_name}Defrost EIR", "Name"),
-                IDFField(
-                    1.0 / NRELDXModel.get_cooling_cop60(unit),
-                    "Coefficient1 Constant",
-                    4,
-                ),
-                IDFField(0.0, "Coefficient2 x"),
-                IDFField(0.0, "Coefficient3 x**2"),
-                IDFField(0.0, "Coefficient4 y"),
-                IDFField(0.0, "Coefficient5 y**2"),
-                IDFField(0.0, "Coefficient6 x*y"),
-                IDFField(koozie.convert(50.0, "°F", "°C"), "Minimum Value of x"),
-                IDFField(koozie.convert(80.0, "°F", "°C"), "Maximum Value of x"),
-                IDFField(
-                    koozie.to_u(unit.heating_off_temperature, "°C"),
-                    "Minimum Value of y",
-                ),
-                IDFField(
-                    koozie.to_u(unit.defrost.high_temperature, "°C"),
-                    "Maximum Value of y",
-                ),
             ],
         )
     )
@@ -798,7 +935,7 @@ def write_idf(
 
         capacities = []
         eirs = []
-        for ff in flow_fractions:
+        for ff in FLOW_FRACTIONS:
             condition.set_mass_airflow_ratio(ff)
             capacities.append(unit.gross_steady_state_heating_capacity(condition))
             eirs.append(1.0 / unit.gross_steady_state_heating_cop(condition))
@@ -827,8 +964,8 @@ def write_idf(
         capacities = []
         eirs = []
         heating_indoor_rh = unit.H1_full_cond.indoor.rh
-        for t_edb in heating_indoor_dry_bulbs:
-            for t_odb in heating_outdoor_dry_bulbs:
+        for t_edb in HEATING_INDOOR_DRY_BULBS:
+            for t_odb in HEATING_OUTDOOR_DRY_BULBS:
                 condition = unit.make_condition(
                     HeatingConditions,
                     compressor_speed=speed,
@@ -861,4 +998,325 @@ def write_idf(
 
     objects.insert(heating_start_index, ("Coil:Heating:DX:VariableSpeed", heating_coil))
 
-    write_idf_objects(objects, output_path)
+    return objects
+
+
+def _get_defrost_object(
+    system_name: str,
+    objects: Optional[list[tuple[str, IDFField]]] = None,
+):
+    # TODO: create defrost object, similar to OS-ERI / Addendum 82
+
+    objects = _get_objects_list(objects)
+
+    objects = []
+    objects.append(
+        (
+            "OtherEquipment",
+            [
+                IDFField(f"{system_name}Heating Coil defrost heat load", "Name"),
+                IDFField("None", "Fuel Type"),
+                IDFField("Main Zone", "Zone or ZoneList or Space or SpaceList Name"),
+                IDFField(f"{system_name}Always On Schedule", "Schedule Name"),
+                IDFField("EquipmentLevel", "Design Level Calculation Method"),
+                IDFField(0, "Design Level {W}"),
+                IDFField("", "Power per Floor Area {W/m2}"),
+                IDFField("", "Power per Person {W/person}"),
+                IDFField(0, "Fraction Latent"),
+                IDFField(0, "Fraction Radiant"),
+                IDFField(0, "Fraction Lost"),
+                IDFField("", "Carbon Dioxide Generation Rate {m3/s-W}"),
+                IDFField("General", "End-Use Subcategory"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "OtherEquipment",
+            [
+                IDFField(f"{system_name}Heating Coil defrost supp heat energy", "Name"),
+                IDFField("Electricity", "Fuel Type"),
+                IDFField("Main Zone", "Zone or ZoneList or Space or SpaceList Name"),
+                IDFField(f"{system_name}Always On Schedule", "Schedule Name"),
+                IDFField("EquipmentLevel", "Design Level Calculation Method"),
+                IDFField(0, "Design Level {W}"),
+                IDFField("", "Power per Floor Area {W/m2}"),
+                IDFField("", "Power per Person {W/person}"),
+                IDFField(0, "Fraction Latent"),
+                IDFField(0, "Fraction Radiant"),
+                IDFField(1, "Fraction Lost"),
+                IDFField("", "Carbon Dioxide Generation Rate {m3/s-W}"),
+                IDFField("heat pump defrost suppl heat1", "End-Use Subcategory"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "OtherEquipment",
+            [
+                IDFField(f"{system_name}Heating Coil pan heater energy", "Name"),
+                IDFField("Electricity", "Fuel Type"),
+                IDFField("Main Zone", "Zone or ZoneList or Space or SpaceList Name"),
+                IDFField(f"{system_name}Always On Schedule", "Schedule Name"),
+                IDFField("EquipmentLevel", "Design Level Calculation Method"),
+                IDFField(0, "Design Level {W}"),
+                IDFField("", "Power per Floor Area {W/m2}"),
+                IDFField("", "Power per Person {W/person}"),
+                IDFField(0, "Fraction Latent"),
+                IDFField(0, "Fraction Radiant"),
+                IDFField(1, "Fraction Lost"),
+                IDFField("", "Carbon Dioxide Generation Rate {m3/s-W}"),
+                IDFField("pan heater1", "End-Use Subcategory"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Program",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_defrost_program", "Name"),
+                IDFField(f"Set T_out = {make_snake_case(system_name)}htg_coil_tout_s", "Program Line 1"),
+                IDFField("Set F_defrost = 0.134 - (0.003 * ((T_out * 1.8) + 32))", "Program Line 2"),
+                IDFField("Set F_defrost = @Min F_defrost 0.08", "Program Line 3"),
+                IDFField("Set F_defrost = @Max F_defrost 0", "Program Line 4"),
+                IDFField(
+                    f"Set {make_snake_case(system_name)}htg_coil_frost_cap_multiplier_act = 1.0 - (1.8 * F_defrost)",
+                    "Program Line 5",
+                ),
+                IDFField(
+                    f"Set {make_snake_case(system_name)}htg_coil_frost_pow_multiplier_act = 1.0 - (0.3 * F_defrost)",
+                    "Program Line 6",
+                ),
+                IDFField("If T_out <= 4.44444444444444", "Program Line 7"),
+                IDFField("Set F_compressor = 1.0 - F_defrost", "Program Line 8"),
+                IDFField(f"Set fraction_heating = {make_snake_case(system_name)}htg_coil_rtf_s", "Program Line 9"),
+                IDFField("Set fraction_defrost = F_defrost * fraction_heating", "Program Line 10"),
+                IDFField("If fraction_heating > 0", "Program Line 11"),
+                IDFField(
+                    f"Set q_dot_defrost = ((F_compressor * ({make_snake_case(system_name)}htg_coil_deliverd_htg / {make_snake_case(system_name)}htg_coil_frost_cap_multiplier_act) - {make_snake_case(system_name)}htg_coil_deliverd_htg) / fraction_defrost) / 1",
+                    "Program Line 12",
+                ),
+                IDFField(
+                    f"Set reduced_cap = ((({make_snake_case(system_name)}htg_coil_deliverd_htg / {make_snake_case(system_name)}htg_coil_frost_cap_multiplier_act) - {make_snake_case(system_name)}htg_coil_deliverd_htg) / fraction_defrost) / 1",
+                    "Program Line 13",
+                ),
+                IDFField("Else", "Program Line 14"),
+                IDFField("Set q_dot_defrost = 0.0", "Program Line 15"),
+                IDFField("Set reduced_cap = 0.0", "Program Line 16"),
+                IDFField("EndIf", "Program Line 17"),
+                IDFField("Set supp_capacity = 9999.877985346395", "Program Line 18"),
+                IDFField("Set supp_efficiency = 1.0", "Program Line 19"),
+                IDFField("Set supp_delivered_htg = @Min reduced_cap supp_capacity", "Program Line 20"),
+                IDFField("If supp_efficiency > 0.0", "Program Line 21"),
+                IDFField("Set supp_design_level = (supp_delivered_htg / supp_efficiency)", "Program Line 22"),
+                IDFField("Else", "Program Line 23"),
+                IDFField("Set supp_design_level = 0.0", "Program Line 24"),
+                IDFField("EndIf", "Program Line 25"),
+                IDFField(
+                    f"Set {make_snake_case(system_name)}htg_coil_defrost_heat_load_act = (supp_delivered_htg - q_dot_defrost) * fraction_defrost",
+                    "Program Line 26",
+                ),
+                IDFField(
+                    f"Set {make_snake_case(system_name)}htg_coil_defrost_supp_heat_energy_act = fraction_defrost * supp_design_level",
+                    "Program Line 27",
+                ),
+                IDFField("Else", "Program Line 28"),
+                IDFField(f"Set {make_snake_case(system_name)}htg_coil_defrost_heat_load_act = 0", "Program Line 29"),
+                IDFField(
+                    f"Set {make_snake_case(system_name)}htg_coil_defrost_supp_heat_energy_act = 0", "Program Line 30"
+                ),
+                IDFField("EndIf", "Program Line 31"),
+                IDFField("If (T_out <= 0.0) && (T_out >= -17.78)", "Program Line 32"),
+                IDFField(
+                    f"Set {make_snake_case(system_name)}htg_coil_pan_heater_energy_act = 150.0", "Program Line 33"
+                ),
+                IDFField("Else", "Program Line 34"),
+                IDFField(f"Set {make_snake_case(system_name)}htg_coil_pan_heater_energy_act = 0.0", "Program Line 35"),
+                IDFField("EndIf", "Program Line 36"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:ProgramCallingManager",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_defrost_program_calling_manager", "Name"),
+                IDFField("InsideHVACSystemIterationLoop", "EnergyPlus Model Calling Point"),
+                IDFField(f"{make_snake_case(system_name)}htg_coil_defrost_program", "Program Name 1"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Sensor",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_tout_s", "Name"),
+                IDFField("Environment", "Output:Variable or Output:Meter Index Key Name"),
+                IDFField("Site Outdoor Air Drybulb Temperature", "Output:Variable or Output:Meter Name"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Actuator",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_frost_cap_multiplier_act", "Name"),
+                IDFField(f"{system_name}Heating Coil", "Actuated Component Unique Name"),
+                IDFField("Coil:Heating:DX:VariableSpeed", "Actuated Component Type"),
+                IDFField("Frost Heating Capacity Multiplier", "Actuated Component Control Type"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Actuator",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_frost_pow_multiplier_act", "Name"),
+                IDFField(f"{system_name}Heating Coil", "Actuated Component Unique Name"),
+                IDFField("Coil:Heating:DX:VariableSpeed", "Actuated Component Type"),
+                IDFField("Frost Heating Input Power Multiplier", "Actuated Component Control Type"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Sensor",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_rtf_s", "Name"),
+                IDFField(f"{system_name}Heating Coil", "Output:Variable or Output:Meter Index Key Name"),
+                IDFField("Heating Coil Runtime Fraction", "Output:Variable or Output:Meter Name"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Sensor",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_deliverd_htg", "Name"),
+                IDFField(f"{system_name}Heating Coil", "Output:Variable or Output:Meter Index Key Name"),
+                IDFField("Heating Coil Heating Rate", "Output:Variable or Output:Meter Name"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Actuator",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_defrost_supp_heat_energy_act", "Name"),
+                IDFField(f"{system_name}Heating Coil defrost supp heat energy", "Actuated Component Unique Name"),
+                IDFField("OtherEquipment", "Actuated Component Type"),
+                IDFField("Power Level", "Actuated Component Control Type"),
+            ],
+        )
+    )
+
+    objects.append(
+        (
+            "EnergyManagementSystem:Actuator",
+            [
+                IDFField(f"{make_snake_case(system_name)}htg_coil_pan_heater_energy_act", "Name"),
+                IDFField(f"{system_name}Heating Coil pan heater energy", "Actuated Component Unique Name"),
+                IDFField("OtherEquipment", "Actuated Component Type"),
+                IDFField("Power Level", "Actuated Component Control Type"),
+            ],
+        )
+    )
+
+    return objects
+
+
+def write_idf(
+    unit: DXUnit,
+    heating_type: Literal["GAS", "ASHP", "ELECTRIC"],
+    output_path: str | None = None,
+    system_name: str | None = None,
+    system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
+    autosize: bool = True,
+    normalize: bool = True,
+    print_idf_objects: bool = False,
+    return_idf_objects: bool = False,
+) -> str | None:
+    if system_name is not None:
+        system_name += " "
+    else:
+        system_name = ""
+
+    objects = []
+
+    # ------------------------------------------------------------------
+    # System
+    # ------------------------------------------------------------------
+
+    system_object = _get_system_object(unit=unit, system_name=system_name, system_type=system_type, objects=objects)
+
+    objects.extend(system_object)
+
+    # ------------------------------------------------------------------
+    # Fan
+    # ------------------------------------------------------------------
+
+    fan_object = _get_fan_object(
+        unit=unit, system_name=system_name, heating_type=heating_type, autosize=autosize, objects=objects
+    )
+
+    objects.extend(fan_object)
+
+    # ------------------------------------------------------------------
+    # Independent Variable Lists
+    # ------------------------------------------------------------------
+
+    independent_variable_lists_object = _get_independent_variable_lists_object(
+        unit=unit,
+        system_name=system_name,
+        objects=objects,
+    )
+
+    objects.extend(independent_variable_lists_object)
+
+    # ------------------------------------------------------------------
+    # Cooling
+    # ------------------------------------------------------------------
+
+    cooling_performance_map_objects = _get_cooling_performance_map_object(
+        unit=unit, system_name=system_name, autosize=autosize, normalize=normalize, objects=objects
+    )
+
+    objects.extend(cooling_performance_map_objects)
+
+    # ------------------------------------------------------------------
+    # Heating
+    # ------------------------------------------------------------------
+
+    heating_performance_map_objects = _get_heating_performance_map_object(
+        unit=unit, system_name=system_name, autosize=autosize, normalize=normalize, objects=objects
+    )
+
+    objects.extend(heating_performance_map_objects)
+
+    # ------------------------------------------------------------------
+    # Defrost
+    # ------------------------------------------------------------------
+
+    if heating_type == "ASHP":
+        defrost_object = _get_defrost_object(system_name=system_name, objects=objects)
+
+        objects.extend(defrost_object)
+
+    # ------------------------------------------------------------------
+    # Return Objects
+    # ------------------------------------------------------------------
+
+    objects = write_idf_objects(objects, output_path, print_idf_objects, return_idf_objects)
+
+    if return_idf_objects:
+        return objects

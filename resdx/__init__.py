@@ -1,7 +1,11 @@
 from .cse import write_cse
 from .dx_unit import *
 from .fan import *
-from .idf import EnergyPlusSystemType, write_idf
+from .idf import (
+    EnergyPlusSystemType,
+    get_idf_objects,
+    write_idf,
+)
 from .models import (
     RESNETDXModel,
     StatisticalSet,

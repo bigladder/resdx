@@ -207,6 +207,7 @@ for name, unit in dx_units.items():
     unit.print_heating_info()
     write_idf(
         unit,
+        heating_type="ASHP",
         output_path=f"{output_directory_path}/{name}.idf",
         system_name="living_unit1 ZN-MSHP",
         system_type=EnergyPlusSystemType.ZONEHVAC_PTHP,
