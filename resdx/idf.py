@@ -151,7 +151,7 @@ def _get_objects_list(objects: Optional[list[tuple[str, IDFField]]] = None) -> l
 
 def get_idf_objects(
     unit: DXUnit,
-    heating_type: Literal["GAS", "ASHP", "ELECTRIC"],
+    heating_type: Literal["GAS", "ASHP", "ELECTRIC"] = "ASHP",
     output_path: str | None = None,
     system_name: str | None = None,
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
