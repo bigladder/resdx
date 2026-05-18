@@ -69,7 +69,6 @@ def idf_to_string(objects: list[tuple[str, list[IDFField]]]) -> str:
 def write_idf_objects(
     objects: list[tuple[str, list[IDFField]]],
     output_path: str | None = None,
-    print_idf_objects: bool = False,
     return_idf_objects: bool = False,
 ) -> str | None:
     """
@@ -80,9 +79,6 @@ def write_idf_objects(
     if output_path is not None:
         with open(output_path, "w") as f:
             f.write(output)
-
-    if print_idf_objects:
-        sys.stdout.write(output)
 
     if return_idf_objects:
         return output
