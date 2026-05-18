@@ -736,6 +736,12 @@ def _get_heating_performance_map_object(
 
     heating_start_index = len(objects)
 
+    heating_off_temperature = koozie.to_u(unit.heating_off_temperature, "°F")
+
+    heating_outdoor_dry_bulbs = [heating_off_temperature] + [
+        t for t in HEATING_OUTDOOR_DRY_BULBS if floating_point_less_than(heating_off_temperature, t)
+    ]
+
     heating_coil = [
         IDFField(f"{system_name}Heating Coil", "Name"),
         IDFField(f"{system_name}Always On Schedule", "Availability Schedule Name"),
@@ -888,7 +894,7 @@ def _get_heating_performance_map_object(
         eirs = []
         heating_indoor_rh = unit.H1_full_cond.indoor.rh
         for t_edb in HEATING_INDOOR_DRY_BULBS:
-            for t_odb in HEATING_OUTDOOR_DRY_BULBS:
+            for t_odb in heating_outdoor_dry_bulbs:
                 condition = unit.make_condition(
                     HeatingConditions,
                     compressor_speed=speed,
