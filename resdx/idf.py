@@ -137,6 +137,19 @@ def make_lookup_table(
     return ("Table:Lookup", fields)
 
 
+def update_heating_outdoor_dry_bulbs(heating_off_temperature_K: float) -> list[float]:
+    """
+    Update HEATING_OUTDOOR_DRY_BULBS depending on value of heating_off_temperature_K.
+    Any temperatures in HEATING_OUTDOOR_DRY_BULBS that are above heating_off_temperature (°F), they will be removed from list.
+    heating_off_temperature is appended to index 0 of HEATING_OUTDOOR_DRY_BULBS.
+    """
+    heating_off_temperature = koozie.to_u(heating_off_temperature_K, "°F")
+
+    return [heating_off_temperature] + [
+        t for t in HEATING_OUTDOOR_DRY_BULBS if floating_point_less_than(heating_off_temperature, t)
+    ]
+
+
 def _get_system_object(
     unit: DXUnit,
     system_name: str,
@@ -448,11 +461,7 @@ def _get_independent_variable_lists_object(
 
     objects = []
 
-    heating_off_temperature = koozie.to_u(unit.heating_off_temperature, "°F")
-
-    heating_outdoor_dry_bulbs = [heating_off_temperature] + [
-        t for t in HEATING_OUTDOOR_DRY_BULBS if floating_point_less_than(heating_off_temperature, t)
-    ]
+    heating_outdoor_dry_bulbs = update_heating_outdoor_dry_bulbs(unit.heating_off_temperature)
 
     objects.append(
         make_independent_variable(
@@ -736,11 +745,7 @@ def _get_heating_performance_map_object(
 
     heating_start_index = len(objects)
 
-    heating_off_temperature = koozie.to_u(unit.heating_off_temperature, "°F")
-
-    heating_outdoor_dry_bulbs = [heating_off_temperature] + [
-        t for t in HEATING_OUTDOOR_DRY_BULBS if floating_point_less_than(heating_off_temperature, t)
-    ]
+    heating_outdoor_dry_bulbs = update_heating_outdoor_dry_bulbs(unit.heating_off_temperature)
 
     heating_coil = [
         IDFField(f"{system_name}Heating Coil", "Name"),
