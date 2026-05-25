@@ -404,7 +404,7 @@ def _get_fan_object(
                     "EnergyManagementSystem:Sensor",
                     [
                         IDFField(
-                            f"Fan_RTF_{control_zone_name}_Speed_{ep_speed}",
+                            f"Fan_RTF_{make_snake_case(control_zone_name)}_Speed_{ep_speed}",
                             "Name",
                         ),
                         IDFField(
@@ -1133,17 +1133,18 @@ def get_idf_string(
     system_type: EnergyPlusSystemType = EnergyPlusSystemType.ZONEHVAC_PTHP,
     autosize: bool = True,
     normalize: bool = True,
-    get_system: bool = False,
-    get_fan: bool = False,
-    make_fan_runtime_fraction_sensors: bool = False,  # Used for duct loss EMS programs
-    get_cooling_performance_map: bool = False,
-    get_heating_performance_map: bool = False,
+    get_system: bool = True,
+    get_fan: bool = True,
+    make_fan_runtime_fraction_sensors: bool = True,  # Used for duct loss EMS programs
+    get_cooling_performance_map: bool = True,
+    get_heating_performance_map: bool = True,
 ) -> str:
     return make_idf_string(
         make_idf_objects(
             unit=unit,
             heating_type=heating_type,
             system_name=system_name,
+            control_zone_name=control_zone_name,
             system_type=system_type,
             autosize=autosize,
             normalize=normalize,
@@ -1234,6 +1235,7 @@ def make_idf_objects(
                 control_zone_name=control_zone_name,
                 heating_type=heating_type,
                 autosize=autosize,
+                make_runtime_fraction_sensors=make_fan_runtime_fraction_sensors,
             )
         )
 
