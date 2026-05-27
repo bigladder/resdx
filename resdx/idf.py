@@ -497,9 +497,9 @@ def _get_cooling_performance_map_object(
         IDFField(f"{system_name}Always On Schedule", "Availability Schedule Name"),
         IDFField(f"{system_name}Unitary Inlet Node", "Air Inlet Node Name"),
         IDFField(f"{system_name}Cooling Coil Outlet Node", "Air Outlet Node Name"),
-        IDFField(unit.number_of_cooling_speeds, "Number of Speeds"),
+        IDFField(len(cooling_speeds), "Number of Speeds"),
         IDFField(
-            unit.number_of_cooling_speeds - unit.cooling_full_load_speed,
+            cooling_speeds.index(unit.A_full_cond.compressor_speed) + 1,
             "Nominal Speed Level",
         ),
         IDFField(
@@ -745,9 +745,9 @@ def _get_heating_performance_map_object(
         IDFField(f"{system_name}Always On Schedule", "Availability Schedule Name"),
         IDFField(f"{system_name}Cooling Coil Outlet Node", "Air Inlet Node Name"),
         IDFField(f"{system_name}Heating Coil Outlet Node", "Air Outlet Node Name"),
-        IDFField(unit.number_of_heating_speeds, "Number of Speeds"),
+        IDFField(len(heating_speeds), "Number of Speeds"),
         IDFField(
-            unit.number_of_heating_speeds - unit.heating_full_load_speed,
+            heating_speeds.index(unit.H1_full_cond.compressor_speed) + 1,
             "Nominal Speed Level",
         ),
         IDFField(
