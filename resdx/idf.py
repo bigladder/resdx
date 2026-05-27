@@ -958,7 +958,7 @@ def _get_defrost_object(
                 IDFField(0, "Fraction Radiant"),
                 IDFField(1, "Fraction Lost"),
                 IDFField("", "Carbon Dioxide Generation Rate {m3/s-W}"),
-                IDFField("pan heater1", "End-Use Subcategory"),
+                IDFField("Pan Heater", "End-Use Subcategory"),
             ],
         )
     )
