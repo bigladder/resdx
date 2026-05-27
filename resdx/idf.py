@@ -1168,6 +1168,7 @@ def write_idf(
     normalize: bool = True,
     get_system: bool = True,
     get_fan: bool = True,
+    make_fan_runtime_fraction_sensors: bool = False,  # Used for duct loss EMS programs
     get_cooling_performance_map: bool = True,
     get_heating_performance_map: bool = True,
 ) -> None:
@@ -1186,6 +1187,7 @@ def write_idf(
                 normalize=normalize,
                 get_system=get_system,
                 get_fan=get_fan,
+                make_fan_runtime_fraction_sensors=make_fan_runtime_fraction_sensors,
                 get_cooling_performance_map=get_cooling_performance_map,
                 get_heating_performance_map=get_heating_performance_map,
             )
