@@ -7,24 +7,13 @@ from math import isclose
 from pathlib import Path
 from typing import Literal
 
-import koozie
+from koozie import convert, fr_u, to_u
 
 from .conditions import CoolingConditions, HeatingConditions
 from .defrost import DefrostControl, DefrostStrategy
-from .dx_unit import DXUnit
+from .dx_unit import DXUnit, StagingType
+from .models.unified_resnet import RESNETDXModel
 from .psychrometrics import PsychState, cooling_psych_state, heating_psych_state
-
-COOLING_OUTDOOR_DRY_BULBS = [55.0, 82.0, 95.0, 125.0]
-COOLING_INDOOR_WET_BULBS = [50.0, 67.0, 80.0]
-HEATING_OUTDOOR_DRY_BULBS = [
-    5.0,
-    17.0,
-    47.0,
-    60.0,
-]
-HEATING_INDOOR_DRY_BULBS = [60.0, 70.0, 80.0]
-
-FLOW_FRACTIONS = [0.75, 1.0, 1.25]
 
 
 class EnergyPlusSystemType(Enum):
@@ -431,14 +420,37 @@ def _get_cooling_performance_map_object(
     normalize: bool = True,
 ) -> list[tuple[str, IDFField]]:
 
+    cooling_outdoor_dry_bulbs = [40.0, 82.0, 95.0, 125.0]
+    if isinstance(unit, RESNETDXModel):
+        if unit.net_tabular_data is not None:
+            cooling_outdoor_dry_bulbs = to_u(unit.net_tabular_data.cooling_capacities.temperatures, "°F")
+            if floating_point_less_than(max(cooling_outdoor_dry_bulbs), 125.0):
+                cooling_outdoor_dry_bulbs.append(125.0)
+    cooling_speeds: list[int]
+    if unit.staging_type == StagingType.VARIABLE_SPEED:
+        if unit.number_of_cooling_speeds == 4:
+            cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed, unit.cooling_boost_speed]
+        elif unit.number_of_cooling_speeds == 3:
+            cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed]
+    elif unit.staging_type == StagingType.TWO_STAGE:
+        cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed]
+    elif unit.staging_type == StagingType.SINGLE_STAGE:
+        cooling_speeds = [unit.cooling_full_load_speed]
+    else:
+        raise ValueError(f"Unsupported staging type: {unit.staging_type}")
+
+    COOLING_INDOOR_WET_BULBS = [50.0, 67.0, 80.0]
+
+    FLOW_FRACTIONS = [0.75, 1.0, 1.25]
+
     objects = []
 
     objects.append(
         make_independent_variable(
             f"{system_name}Cooling Outdoor Drybulb",
             "Temperature",
-            koozie.convert(95.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in COOLING_OUTDOOR_DRY_BULBS],
+            convert(95.0, "°F", "°C"),
+            [convert(t, "°F", "°C") for t in cooling_outdoor_dry_bulbs],
         )
     )
 
@@ -446,8 +458,8 @@ def _get_cooling_performance_map_object(
         make_independent_variable(
             f"{system_name}Cooling Indoor Wetbulb",
             "Temperature",
-            koozie.convert(67.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in COOLING_INDOOR_WET_BULBS],
+            convert(67.0, "°F", "°C"),
+            [convert(t, "°F", "°C") for t in COOLING_INDOOR_WET_BULBS],
         )
     )
 
@@ -512,7 +524,7 @@ def _get_cooling_performance_map_object(
         IDFField(unit.crankcase_heater_capacity, "Crankcase Heater Capacity", 2),
         IDFField("", "Crankcase Heater Capacity Function of Temperature Curve Name"),
         IDFField(
-            koozie.to_u(unit.crankcase_heater_setpoint_temperature, "°C"),
+            to_u(unit.crankcase_heater_setpoint_temperature, "°C"),
             "Maximum Outdoor Dry-Bulb Temperature for Crankcase Heater Operation",
             2,
         ),
@@ -537,8 +549,8 @@ def _get_cooling_performance_map_object(
         )
     )
 
-    for speed in reversed(range(unit.number_of_cooling_speeds)):
-        ep_speed = unit.number_of_cooling_speeds - speed
+    for index, speed in enumerate(cooling_speeds):
+        ep_speed = index + 1
         condition = unit.make_condition(CoolingConditions, compressor_speed=speed)
         rated_capacity = unit.gross_total_cooling_capacity(condition)
         rated_cop = unit.gross_total_cooling_cop(condition)
@@ -616,15 +628,15 @@ def _get_cooling_performance_map_object(
         capacities = []
         eirs = []
         for t_ewb in COOLING_INDOOR_WET_BULBS:
-            for t_odb in COOLING_OUTDOOR_DRY_BULBS:
+            for t_odb in cooling_outdoor_dry_bulbs:
                 condition = unit.make_condition(
                     CoolingConditions,
                     compressor_speed=speed,
                     indoor=PsychState(
-                        drybulb=koozie.fr_u(80.0, "°F"),
-                        wetbulb=koozie.fr_u(t_ewb, "°F"),
+                        drybulb=fr_u(80.0, "°F"),
+                        wetbulb=fr_u(t_ewb, "°F"),
                     ),
-                    outdoor=cooling_psych_state(drybulb=koozie.fr_u(t_odb, "°F")),
+                    outdoor=cooling_psych_state(drybulb=fr_u(t_odb, "°F")),
                 )
                 capacities.append(unit.gross_total_cooling_capacity(condition))
                 eirs.append(1.0 / unit.gross_total_cooling_cop(condition))
@@ -664,18 +676,41 @@ def _get_heating_performance_map_object(
 
     objects = []
 
-    heating_off_temperature = koozie.to_u(unit.heating_off_temperature, "°F")
+    HEATING_INDOOR_DRY_BULBS = [60.0, 70.0, 80.0]
 
-    heating_outdoor_dry_bulbs = [heating_off_temperature] + [
-        t for t in HEATING_OUTDOOR_DRY_BULBS if floating_point_less_than(heating_off_temperature, t)
+    FLOW_FRACTIONS = [0.75, 1.0, 1.25]
+
+    heating_outdoor_dry_bulbs = [
+        5.0,
+        17.0,
+        47.0,
     ]
+    if isinstance(unit, RESNETDXModel):
+        if unit.net_tabular_data is not None:
+            heating_outdoor_dry_bulbs = to_u(unit.net_tabular_data.heating_capacities.temperatures, "°F")
+
+    min_temperature = to_u(unit.heating_off_temperature, "°F")
+    heating_outdoor_dry_bulbs = [min_temperature] + [t for t in heating_outdoor_dry_bulbs if t > min_temperature]
+
+    heating_speeds: list[int]
+    if unit.staging_type == StagingType.VARIABLE_SPEED:
+        if unit.number_of_heating_speeds == 4:
+            heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed, unit.heating_boost_speed]
+        elif unit.number_of_heating_speeds == 3:
+            heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed]
+    elif unit.staging_type == StagingType.TWO_STAGE:
+        heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed]
+    elif unit.staging_type == StagingType.SINGLE_STAGE:
+        heating_speeds = [unit.heating_full_load_speed]
+    else:
+        raise ValueError(f"Unsupported staging type: {unit.staging_type}")
 
     objects.append(
         make_independent_variable(
             f"{system_name}Heating Outdoor Drybulb",
             "Temperature",
-            koozie.convert(47.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in heating_outdoor_dry_bulbs],
+            convert(47.0, "°F", "°C"),
+            [convert(t, "°F", "°C") for t in heating_outdoor_dry_bulbs],
         )
     )
 
@@ -683,8 +718,8 @@ def _get_heating_performance_map_object(
         make_independent_variable(
             f"{system_name}Heating Indoor Drybulb",
             "Temperature",
-            koozie.convert(70.0, "°F", "°C"),
-            [koozie.convert(t, "°F", "°C") for t in HEATING_INDOOR_DRY_BULBS],
+            convert(70.0, "°F", "°C"),
+            [convert(t, "°F", "°C") for t in HEATING_INDOOR_DRY_BULBS],
         )
     )
 
@@ -731,28 +766,24 @@ def _get_heating_performance_map_object(
             "Defrost Energy Input Ratio Function of Temperature Curve Name",
         ),
         IDFField(
-            koozie.to_u(unit.heating_off_temperature, "°C"),
+            to_u(unit.heating_off_temperature, "°C"),
             "Minimum Outdoor Dry-Bulb Temperature for Compressor Operation",
             2,
         ),
         IDFField(
-            koozie.to_u(unit.heating_on_temperature, "°C"),
+            to_u(unit.heating_on_temperature, "°C"),
             "Outdoor Dry-Bulb Temperature to Turn On Compressor",
             2,
         ),
         IDFField(
-            (
-                koozie.to_u(unit.defrost.high_temperature, "°C")
-                if unit.defrost.strategy != DefrostStrategy.NONE
-                else -999.0
-            ),
+            (to_u(unit.defrost.high_temperature, "°C") if unit.defrost.strategy != DefrostStrategy.NONE else -999.0),
             "Maximum Outdoor Dry-Bulb Temperature for Defrost Operation",
             2,
         ),
         IDFField(unit.crankcase_heater_capacity, "Crankcase Heater Capacity", 2),
         IDFField("", "Crankcase Heater Capacity Function of Temperature Curve Name"),
         IDFField(
-            koozie.to_u(unit.crankcase_heater_setpoint_temperature, "°C"),
+            to_u(unit.crankcase_heater_setpoint_temperature, "°C"),
             "Maximum Outdoor Dry-Bulb Temperature for Crankcase Heater Operation",
             2,
         ),
@@ -788,8 +819,8 @@ def _get_heating_performance_map_object(
         )
     )
 
-    for speed in reversed(range(unit.number_of_heating_speeds)):
-        ep_speed = unit.number_of_heating_speeds - speed
+    for index, speed in enumerate(heating_speeds):
+        ep_speed = index + 1
         condition = unit.make_condition(HeatingConditions, compressor_speed=speed)
         rated_capacity = unit.gross_steady_state_heating_capacity(condition)
         rated_cop = unit.gross_steady_state_heating_cop(condition)
@@ -861,8 +892,8 @@ def _get_heating_performance_map_object(
                 condition = unit.make_condition(
                     HeatingConditions,
                     compressor_speed=speed,
-                    indoor=PsychState(drybulb=koozie.fr_u(t_edb, "°F"), rel_hum=heating_indoor_rh),
-                    outdoor=heating_psych_state(drybulb=koozie.fr_u(t_odb, "°F")),
+                    indoor=PsychState(drybulb=fr_u(t_edb, "°F"), rel_hum=heating_indoor_rh),
+                    outdoor=heating_psych_state(drybulb=fr_u(t_odb, "°F")),
                 )
                 capacities.append(unit.gross_steady_state_heating_capacity(condition))
                 eirs.append(1.0 / unit.gross_steady_state_heating_cop(condition))

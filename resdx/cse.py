@@ -480,7 +480,7 @@ def write_cse(
         )
 
     else:
-        heating_lines = heating_capacity_lines + [
+        heating_members = [
             CSEMember("rsFxCapH", 1.0, precision=1),
             CSEMember(
                 "rsFanPwrH",
@@ -489,28 +489,64 @@ def write_cse(
                 precision=3,
             ),
         ]
+        if modelkit_template:
+            heating_lines = (
+                [CSELine('<% unless backup_heating_type == "NONE" %>')]
+                + heating_capacity_lines
+                + heating_members
+                + [CSELine("<% end %>")]
+            )
+        else:
+            heating_lines = heating_capacity_lines + heating_members
+
+    if modelkit_template and cooling_only:
+        rstype_lines = [
+            CSELine('<% if backup_heating_type == "RESISTANCE" %>'),
+            CSEMember("rsType", "ACPMRESISTANCE"),
+            CSELine('<% elsif backup_heating_type == "FURNACE" %>'),
+            CSEMember("rsType", "ACPMFURNACE"),
+            CSELine("<% else %>"),
+            CSEMember("rsType", "ACPM"),
+            CSELine("<% end %>"),
+        ]
+        fuel_meter_lines = [
+            CSELine('<% if backup_heating_type == "FURNACE" %>'),
+            CSEMember("rsFuelMtr", "Gas Meter"),
+            CSELine("<% end %>"),
+        ]
+    elif not cooling_only:
+        rstype_lines = [CSEMember("rsType", "ASHPPM")]
+        fuel_meter_lines = [CSEMember("rsFuelMtr", "Gas Meter")]
+    else:
+        rstype_lines = [CSEMember("rsType", "ACPMRESISTANCE")]
+        fuel_meter_lines = []
+
+    crankcase_setpoint = f"{to_u(unit.crankcase_heater_setpoint_temperature, '°F'):.1f}"
+    crankcase_heater_expression = (
+        f"($tdboHrAv < {crankcase_setpoint})"
+        f' * (1.-@RSYSRes["{system_name}"].prior.H.hrsOn)'
+        f' * @RSYS["{system_name}"].capNomC'
+        f" * {10 / 12000.0}"
+    )
+    pan_heater_expression = f"($tdboHrAv < 32.0 && $tdboHrAv >= {to_u(unit.heating_off_temperature, '°F'):.1f}) * 150.0"
 
     objects.append(
         CSEObject(
             "RSYS",
             system_name,
-            [
-                CSEMember("rsType", "ASHPPM") if not cooling_only else CSEMember("rsType", "ACPMRESISTANCE"),
-            ]
+            rstype_lines
             + cooling_lines
             + heating_lines
             + [
                 CSEMember("rsFanMotTy", unit.fan.fan_motor_type.name),
                 CSEMember(
                     "rsParElec",
-                    CSEExpression(
-                        f'($tdboHrAv < {to_u(unit.crankcase_heater_setpoint_temperature, "°F"):.1f}) * (1.-@RSYSRes["{system_name}"].prior.H.hrsOn) * @RSYS["{system_name}"].capNomC * {10 / 12000.0} + ($tdboHrAv < 32.0 && $tdboHrAv >= {to_u(unit.heating_off_temperature, "°F"):.1f}) * 150.0'
-                    ),
+                    CSEExpression(f"{crankcase_heater_expression} + {pan_heater_expression}"),
                     "W",
                 ),
                 CSEMember("rsElecMtr", "Electric Meter"),
-                CSEMember("rsFuelMtr", "Gas Meter"),
-            ],
+            ]
+            + fuel_meter_lines,
         )
     )
     if modelkit_template:
