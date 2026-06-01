@@ -10,6 +10,7 @@ from koozie import fr_u, to_u
 
 from .conditions import CoolingConditions, HeatingConditions
 from .dx_unit import DXUnit, StagingType
+from .models.unified_resnet import RESNETDXModel
 from .psychrometrics import cooling_psych_state, heating_psych_state
 
 INDENT = "  "
@@ -211,18 +212,40 @@ class CSEPerformanceMap(CSEObject):
         )
 
 
+def write_cse_objects(cse_objects, output_path=None, preface: str = "") -> None:
+    if output_path is not None:
+        file_handle = open(output_path, "w")
+    else:
+        file_handle = sys.stdout
+    print(preface + "\n\n".join([str(cse_object) for cse_object in cse_objects]) + "\n", file=file_handle)
+    if output_path is not None:
+        file_handle.close()
+
+
+def floating_point_less_than(a: float, b: float, rel_tol=1e-9, abs_tol=1e-6) -> bool:
+    return a < b and not isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol)
+
+
 def get_heating_performance_map_object(unit: DXUnit, system_name: str) -> CSEPerformanceMap:
     # Heating performance map
     heating_outdoor_dry_bulbs = [
-        to_u(unit.heating_off_temperature, "°F"),
         5.0,
         17.0,
         47.0,
     ]
+    if isinstance(unit, RESNETDXModel):
+        if unit.net_tabular_data is not None:
+            heating_outdoor_dry_bulbs = to_u(unit.net_tabular_data.heating_capacities.temperatures, "°F")
+
+    min_temperature = to_u(unit.heating_off_temperature, "°F")
+    heating_outdoor_dry_bulbs = [min_temperature] + [t for t in heating_outdoor_dry_bulbs if t > min_temperature]
 
     heating_speeds: list[int]
     if unit.staging_type == StagingType.VARIABLE_SPEED:
-        heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed, unit.heating_boost_speed]
+        if unit.number_of_heating_speeds == 4:
+            heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed, unit.heating_boost_speed]
+        elif unit.number_of_heating_speeds == 3:
+            heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed]
     elif unit.staging_type == StagingType.TWO_STAGE:
         heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed]
     elif unit.staging_type == StagingType.SINGLE_STAGE:
@@ -234,7 +257,7 @@ def get_heating_performance_map_object(unit: DXUnit, system_name: str) -> CSEPer
     cops = []
     reference_capacity = unit.net_steady_state_heating_capacity()
     reference_temperature = to_u(unit.H1_full_cond.outdoor.db, "°F")
-    reference_speed = heating_speeds.index(unit.H1_full_cond.compressor_speed) + 1
+    reference_speed = unit.H1_full_cond.compressor_speed
     for t_odb in heating_outdoor_dry_bulbs:
         for speed in heating_speeds:
             condition = unit.make_condition(
@@ -246,7 +269,7 @@ def get_heating_performance_map_object(unit: DXUnit, system_name: str) -> CSEPer
             capacity_ratio = capacity / reference_capacity
             if isclose(t_odb, reference_temperature, abs_tol=0.1) and speed == reference_speed:
                 assert capacity_ratio == 1.0, (
-                    f"{t_odb:.0f}°F/{speed}: cap={capacity:.0f}, ref={reference_capacity:.0f}, full load speed= {unit.H1_full_cond.compressor_speed}, speed={heating_speeds}"
+                    f"{t_odb:.0f}°F/{speed}: cap={capacity:.0f}, ref={reference_capacity:.0f}, full load speed= {unit.H1_full_cond.compressor_speed}, speed={heating_speeds}, reference_speed={reference_speed}"
                 )
             capacity_ratios.append(capacity_ratio)
 
@@ -257,7 +280,7 @@ def get_heating_performance_map_object(unit: DXUnit, system_name: str) -> CSEPer
         temperatures=heating_outdoor_dry_bulbs,
         reference_temperature=reference_temperature,
         speeds=[i + 1 for i in range(len(heating_speeds))],
-        reference_speed=reference_speed,
+        reference_speed=heating_speeds.index(reference_speed) + 1,
         capacity_ratios=capacity_ratios,
         cops=cops,
     )
@@ -265,13 +288,18 @@ def get_heating_performance_map_object(unit: DXUnit, system_name: str) -> CSEPer
 
 def get_cooling_performance_map_object(unit: DXUnit, system_name: str) -> CSEPerformanceMap:
     # Cooling performance map
-    cooling_outdoor_dry_bulbs = [
-        82.0,
-        95.0,
-    ]
+    cooling_outdoor_dry_bulbs = [40.0, 82.0, 95.0, 125.0]
+    if isinstance(unit, RESNETDXModel):
+        if unit.net_tabular_data is not None:
+            cooling_outdoor_dry_bulbs = to_u(unit.net_tabular_data.cooling_capacities.temperatures, "°F")
+            if floating_point_less_than(max(cooling_outdoor_dry_bulbs), 125.0):
+                cooling_outdoor_dry_bulbs.append(125.0)
     cooling_speeds: list[int]
     if unit.staging_type == StagingType.VARIABLE_SPEED:
-        cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed, unit.cooling_boost_speed]
+        if unit.number_of_cooling_speeds == 4:
+            cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed, unit.cooling_boost_speed]
+        elif unit.number_of_cooling_speeds == 3:
+            cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed]
     elif unit.staging_type == StagingType.TWO_STAGE:
         cooling_speeds = [unit.cooling_low_speed, unit.cooling_full_load_speed]
     elif unit.staging_type == StagingType.SINGLE_STAGE:
@@ -283,7 +311,7 @@ def get_cooling_performance_map_object(unit: DXUnit, system_name: str) -> CSEPer
     cops = []
     reference_capacity = unit.net_total_cooling_capacity()
     reference_temperature = to_u(unit.A_full_cond.outdoor.db, "°F")
-    reference_speed = cooling_speeds.index(unit.A_full_cond.compressor_speed) + 1
+    reference_speed = unit.A_full_cond.compressor_speed
     for t_odb in cooling_outdoor_dry_bulbs:
         for speed in cooling_speeds:
             condition = unit.make_condition(
@@ -303,20 +331,10 @@ def get_cooling_performance_map_object(unit: DXUnit, system_name: str) -> CSEPer
         temperatures=cooling_outdoor_dry_bulbs,
         reference_temperature=reference_temperature,
         speeds=[i + 1 for i in range(len(cooling_speeds))],
-        reference_speed=reference_speed,
+        reference_speed=cooling_speeds.index(reference_speed) + 1,
         capacity_ratios=capacity_ratios,
         cops=cops,
     )
-
-
-def write_cse_objects(cse_objects, output_path=None, preface: str = "") -> None:
-    if output_path is not None:
-        file_handle = open(output_path, "w")
-    else:
-        file_handle = sys.stdout
-    print(preface + "\n\n".join([str(cse_object) for cse_object in cse_objects]) + "\n", file=file_handle)
-    if output_path is not None:
-        file_handle.close()
 
 
 def write_cse(
@@ -325,7 +343,8 @@ def write_cse(
     modelkit_template: bool = False,
     system_name: str | None = None,
     autosize: bool = True,
-) -> None | list[CSEPerformanceMap]:
+    cooling_only: bool = False,
+) -> None:
     if system_name is None:
         system_name = "RSYS"
 
@@ -334,9 +353,10 @@ def write_cse(
 
     objects: list[CSEObject] = []
 
-    heating_performance_map_object = get_heating_performance_map_object(unit=unit, system_name=system_name)
+    if not cooling_only:
+        heating_performance_map_object = get_heating_performance_map_object(unit=unit, system_name=system_name)
 
-    objects.append(heating_performance_map_object)
+        objects.append(heating_performance_map_object)
 
     cooling_performance_map_object = get_cooling_performance_map_object(unit=unit, system_name=system_name)
 
@@ -352,34 +372,44 @@ def write_cse(
             CSEMember("rsCapC", "<%= cooling_capacity %>", "Btu/h"),
             CSELine("<% end %>"),
         ]
-        heating_capacity_lines = [
-            CSELine("<% if heating_capacity == Autosize %>"),
-            CSEMember("rsCap47", AutoSize.AUTOSIZE),
-            CSELine("<% else %>"),
-            CSEMember("rsCap47", "<%= heating_capacity %>", "Btu/h"),
-            CSELine("<% end %>"),
-        ]
-        backup_heating_capacity_lines = [
-            CSEMember("rsTypeAuxH", "<%= backup_heating_type %>"),
-            CSELine('<% if backup_heating_type == "NONE" %>'),
-            CSEMember("rsDefrostModel", "REVCYCLE"),
-            CSELine("<% else %>"),
-            CSELine("    <% if backup_heating_capacity == Autosize %>"),
-            CSEMember("rsCapAuxH", AutoSize.AUTOSIZE),
-            CSELine("    <% else %>"),
-            CSEMember("rsCapAuxH", "<%= backup_heating_capacity %>", "Btu/h"),
-            CSELine("    <% end %>"),
-            CSELine('    <% if backup_heating_type == "RESISTANCE" %>'),
-            CSEMember("rsCtrlAuxH", "CYCLE"),
-            CSEMember("rsDefrostModel", "REVCYCLEAUX"),
-            CSELine('    <% elsif backup_heating_type == "FURNACE" %>'),
-            CSEMember("rsCtrlAuxH", "ALTERNATE"),
-            CSEMember("rsDefrostModel", "REVCYCLEAUX"),
-            CSELine("    <% end %>"),
-            CSEMember("rsFxCapAuxH", 1.0, precision=1),
-            CSELine("<% end %>"),
-        ]
-        if autosize:
+        if cooling_only:
+            heating_capacity_lines = [
+                CSELine("<% if backup_heating_capacity == Autosize %>"),
+                CSEMember("rsCapH", AutoSize.AUTOSIZE),
+                CSELine("<% else %>"),
+                CSEMember("rsCapH", "<%= backup_heating_capacity %>", "Btu/h"),
+                CSELine("<% end %>"),
+            ]
+            backup_heating_capacity_lines = []
+        else:
+            heating_capacity_lines = [
+                CSELine("<% if heating_capacity == Autosize %>"),
+                CSEMember("rsCap47", AutoSize.AUTOSIZE),
+                CSELine("<% else %>"),
+                CSEMember("rsCap47", "<%= heating_capacity %>", "Btu/h"),
+                CSELine("<% end %>"),
+            ]
+            backup_heating_capacity_lines = [
+                CSEMember("rsTypeAuxH", "<%= backup_heating_type %>"),
+                CSELine('<% if backup_heating_type == "NONE" %>'),
+                CSEMember("rsDefrostModel", "REVCYCLE"),
+                CSELine("<% else %>"),
+                CSELine("    <% if backup_heating_capacity == Autosize %>"),
+                CSEMember("rsCapAuxH", AutoSize.AUTOSIZE),
+                CSELine("    <% else %>"),
+                CSEMember("rsCapAuxH", "<%= backup_heating_capacity %>", "Btu/h"),
+                CSELine("    <% end %>"),
+                CSELine('    <% if backup_heating_type == "RESISTANCE" %>'),
+                CSEMember("rsCtrlAuxH", "CYCLE"),
+                CSEMember("rsDefrostModel", "REVCYCLEAUX"),
+                CSELine('    <% elsif backup_heating_type == "FURNACE" %>'),
+                CSEMember("rsCtrlAuxH", "ALTERNATE"),
+                CSEMember("rsDefrostModel", "REVCYCLEAUX"),
+                CSELine("    <% end %>"),
+                CSEMember("rsFxCapAuxH", 1.0, precision=1),
+                CSELine("<% end %>"),
+            ]
+        if autosize and not cooling_only:
             cooling_capacity_lines += [
                 CSELine("<% if heating_capacity == Autosize or cooling_capacity == Autosize %>"),
                 CSEMember("rsCapRat9547", cooling_heating_capacity_ratio, precision=3),
@@ -389,79 +419,143 @@ def write_cse(
         cooling_capacity_lines = [
             CSEMember("rsCapC", AutoSize.AUTOSIZE if autosize else unit.net_total_cooling_capacity(), "Btu/h"),
         ]
-        heating_capacity_lines = [
-            CSEMember("rsCap47", AutoSize.AUTOSIZE if autosize else unit.net_steady_state_heating_capacity(), "Btu/h"),
-        ]
-        if unit.is_ducted:
-            backup_heating_capacity_lines = [
-                CSEMember("rsTypeAuxH", "RESISTANCE"),
-                CSEMember("rsCapAuxH", AutoSize.AUTOSIZE),
-                CSEMember("rsCtrlAuxH", "CYCLE"),
-                CSEMember("rsDefrostModel", "REVCYCLEAUX"),
-                CSEMember("rsFxCapAuxH", 1.0, precision=1),
-            ]
+        if cooling_only:
+            heating_capacity_lines = [CSEMember("rsCapH", AutoSize.AUTOSIZE)]
+            backup_heating_capacity_lines = []
         else:
-            backup_heating_capacity_lines = [
-                CSEMember("rsTypeAuxH", "NONE"),
-                CSEMember("rsDefrostModel", "REVCYCLE"),
+            heating_capacity_lines = [
+                CSEMember(
+                    "rsCap47", AutoSize.AUTOSIZE if autosize else unit.net_steady_state_heating_capacity(), "Btu/h"
+                ),
             ]
+            if unit.is_ducted:
+                backup_heating_capacity_lines = [
+                    CSEMember("rsTypeAuxH", "RESISTANCE"),
+                    CSEMember("rsCapAuxH", AutoSize.AUTOSIZE),
+                    CSEMember("rsCtrlAuxH", "CYCLE"),
+                    CSEMember("rsDefrostModel", "REVCYCLEAUX"),
+                    CSEMember("rsFxCapAuxH", 1.0, precision=1),
+                ]
+            else:
+                backup_heating_capacity_lines = [
+                    CSEMember("rsTypeAuxH", "NONE"),
+                    CSEMember("rsDefrostModel", "REVCYCLE"),
+                ]
 
         if autosize:
             cooling_capacity_lines.append(CSEMember("rsCapRat9547", cooling_heating_capacity_ratio, precision=3))
 
-    objects.append(
-        CSEObject(
-            "RSYS",
-            system_name,
-            [
-                CSEMember("rsType", "ASHPPM"),
-            ]
-            + cooling_capacity_lines
-            + [CSEMember("rsFxCapC", 1.0, precision=1)]
-            + heating_capacity_lines
-            + [CSEMember("rsFxCapH", 1.0, precision=1)]
+    cooling_lines = cooling_capacity_lines + [
+        CSEMember("rsFxCapC", 1.0, precision=1),
+        CSEMember("rsSEER", unit.seer(), precision=1),
+        CSEMember(
+            "rsVfPerTon",
+            unit.rated_cooling_airflow_per_rated_net_capacity[unit.cooling_full_load_speed],
+            "cfm/ton_ref",
+            precision=1,
+        ),
+        CSEMember("rsPerfMapClg", f"{system_name} Cooling Performance Map"),
+        CSEMember(
+            "rsFanPwrC",
+            unit.cooling_fan_power() / unit.rated_cooling_airflow[unit.cooling_full_load_speed],
+            "W/cfm",
+            precision=3,
+        ),
+        CSEMember("rsCdC", unit.c_d_cooling, precision=3)
+        if not modelkit_template
+        else CSEMember("rsCdC", "<%= cycling_degradation_coefficient %>"),
+    ]
+    if not cooling_only:
+        heating_lines = (
+            heating_capacity_lines
             + backup_heating_capacity_lines
             + [
+                CSEMember("rsFxCapH", 1.0, precision=1),
                 CSEMember("rsHSPF", unit.hspf(), precision=1),
-                CSEMember("rsSEER", unit.seer(), precision=1),
-                CSEMember(
-                    "rsVfPerTon",
-                    unit.rated_cooling_airflow_per_rated_net_capacity[unit.cooling_full_load_speed],
-                    "cfm/ton_ref",
-                    precision=1,
-                ),
-                CSEMember("rsFanMotTy", unit.fan.fan_motor_type.name),
+                CSEMember("rsPerfMapHtg", f"{system_name} Heating Performance Map"),
                 CSEMember(
                     "rsFanPwrH",
                     unit.heating_fan_power() / unit.rated_heating_airflow[unit.heating_full_load_speed],
                     "W/cfm",
                     precision=3,
                 ),
-                CSEMember(
-                    "rsFanPwrC",
-                    unit.cooling_fan_power() / unit.rated_cooling_airflow[unit.cooling_full_load_speed],
-                    "W/cfm",
-                    precision=3,
-                ),
-                CSEMember("rsPerfMapHtg", f"{system_name} Heating Performance Map"),
-                CSEMember("rsPerfMapClg", f"{system_name} Cooling Performance Map"),
-                CSEMember(
-                    "rsParElec",
-                    CSEExpression(
-                        f'($tdboHrAv < {to_u(unit.crankcase_heater_setpoint_temperature, "°F"):.1f}) * (1.-@RSYSRes["{system_name}"].prior.H.hrsOn) * @RSYS["{system_name}"].capNomC * {10 / 12000.0}'
-                    ),
-                    "W",
-                ),
-                CSEMember("rsASHPLockOutT", unit.heating_off_temperature, "°F", precision=1),
+                CSEMember("rsASHPLockOutT", unit.heating_off_temperature, "°F", precision=1)
+                if not modelkit_template
+                else CSEMember("rsASHPLockOutT", "<%= minimum_operating_temperature %>", "°F"),
                 CSEMember("rsCdH", unit.c_d_heating, precision=3)
                 if not modelkit_template
                 else CSEMember("rsCdH", "<%= cycling_degradation_coefficient %>"),
-                CSEMember("rsCdC", unit.c_d_cooling, precision=3)
-                if not modelkit_template
-                else CSEMember("rsCdC", "<%= cycling_degradation_coefficient %>"),
+            ]
+        )
+
+    else:
+        heating_members = [
+            CSEMember("rsFxCapH", 1.0, precision=1),
+            CSEMember(
+                "rsFanPwrH",
+                unit.heating_fan_power() / unit.rated_heating_airflow[unit.heating_full_load_speed],
+                "W/cfm",
+                precision=3,
+            ),
+        ]
+        if modelkit_template:
+            heating_lines = (
+                [CSELine('<% unless backup_heating_type == "NONE" %>')]
+                + heating_capacity_lines
+                + heating_members
+                + [CSELine("<% end %>")]
+            )
+        else:
+            heating_lines = heating_capacity_lines + heating_members
+
+    if modelkit_template and cooling_only:
+        rstype_lines = [
+            CSELine('<% if backup_heating_type == "RESISTANCE" %>'),
+            CSEMember("rsType", "ACPMRESISTANCE"),
+            CSELine('<% elsif backup_heating_type == "FURNACE" %>'),
+            CSEMember("rsType", "ACPMFURNACE"),
+            CSELine("<% else %>"),
+            CSEMember("rsType", "ACPM"),
+            CSELine("<% end %>"),
+        ]
+        fuel_meter_lines = [
+            CSELine('<% if backup_heating_type == "FURNACE" %>'),
+            CSEMember("rsFuelMtr", "Gas Meter"),
+            CSELine("<% end %>"),
+        ]
+    elif not cooling_only:
+        rstype_lines = [CSEMember("rsType", "ASHPPM")]
+        fuel_meter_lines = [CSEMember("rsFuelMtr", "Gas Meter")]
+    else:
+        rstype_lines = [CSEMember("rsType", "ACPMRESISTANCE")]
+        fuel_meter_lines = []
+
+    crankcase_setpoint = f"{to_u(unit.crankcase_heater_setpoint_temperature, '°F'):.1f}"
+    crankcase_heater_expression = (
+        f"($tdboHrAv < {crankcase_setpoint})"
+        f' * (1.-@RSYSRes["{system_name}"].prior.H.hrsOn)'
+        f' * @RSYS["{system_name}"].capNomC'
+        f" * {10 / 12000.0}"
+    )
+    pan_heater_expression = f"($tdboHrAv < 32.0 && $tdboHrAv >= {to_u(unit.heating_off_temperature, '°F'):.1f}) * 150.0"
+
+    objects.append(
+        CSEObject(
+            "RSYS",
+            system_name,
+            rstype_lines
+            + cooling_lines
+            + heating_lines
+            + [
+                CSEMember("rsFanMotTy", unit.fan.fan_motor_type.name),
+                CSEMember(
+                    "rsParElec",
+                    CSEExpression(f"{crankcase_heater_expression} + {pan_heater_expression}"),
+                    "W",
+                ),
                 CSEMember("rsElecMtr", "Electric Meter"),
-                CSEMember("rsFuelMtr", "Gas Meter"),
-            ],
+            ]
+            + fuel_meter_lines,
         )
     )
     if modelkit_template:
@@ -473,6 +567,7 @@ def write_cse(
             f'parameter "backup_heating_type", :default => "{"RESISTANCE" if unit.is_ducted else "NONE"}", :domain => String\n'
             'parameter "backup_heating_capacity", :default => Autosize\n'
             f'parameter "cycling_degradation_coefficient", :default => {unit.c_d_heating}, :domain => Numeric\n'
+            f'parameter "minimum_operating_temperature", :default => {to_u(unit.heating_off_temperature, "°F")}, :domain => Numeric\n'
             "%>\n"
             "\n"
             "<%\n"

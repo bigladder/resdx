@@ -2,13 +2,13 @@ from koozie import fr_u
 from pytest import approx
 from scipy import optimize
 
-from resdx import AHRIVersion, RESNETDXModel, StagingType, make_neep_model_data
+from resdx import AHRIVersion, RESNETDXModel, StagingType, make_neep_model_data, make_performance_map
 from resdx.models.tabular_data import make_two_speed_model_data, make_single_speed_model_data
 from resdx.rating_solver import make_rating_unit
 
 # Single speed gross COP values used for regression testing
 COP_C = 3.312
-COP_H = 3.020
+COP_H = 3.051
 
 
 # Tests
@@ -152,8 +152,8 @@ def test_2_speed_regression():
     assert dx_unit_2_speed.rated_net_cooling_cop[0] == approx(3.980, 0.001)
     assert dx_unit_2_speed.rated_net_cooling_cop[1] == approx(4.166, 0.001)
     assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
-    assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(3.347, 0.001)
-    assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(3.937, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(3.395, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(3.995, 0.001)
 
 
 def test_2_speed_tabular_regression():
@@ -183,8 +183,8 @@ def test_2_speed_tabular_regression():
     assert dx_unit_2_speed.rated_net_cooling_cop[0] == approx(4.152, 0.001)
     assert dx_unit_2_speed.rated_net_cooling_cop[1] == approx(4.156, 0.001)
     assert dx_unit_2_speed.hspf() == approx(hspf_2, 0.01)
-    assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(4.480, 0.001)
-    assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(5.271, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[0] == approx(4.577, 0.001)
+    assert dx_unit_2_speed.rated_net_heating_cop[1] == approx(5.385, 0.001)
 
 
 def test_neep_statistical_vchp_regression():
@@ -279,20 +279,61 @@ def test_neep_vchp_regression():
     assert vchp_unit.hspf(region=2) == approx(17.66, 0.01)
 
 
+def test_make_performance_map():
+
+    cooling_temperatures = [82.0, 95.0]
+    cooling_capacities = [
+        [1.0, 2.0, 3.0],  # 82
+        [0.8, 1.6, 2.4],  # 95
+    ]
+
+    cooling_cops = [
+        [4.0, 3.0, 2.0],  # 82
+        [3.0, 2.0, 1.0],  # 95
+    ]
+
+    heating_temperatures = [17.0, 47.0]
+
+    heating_capacities = [
+        [0.8, 1.6, 2.4],  # 17
+        [1.0, 2.0, 3.0],  # 47
+    ]
+
+    heating_cops = [
+        [3.0, 2.0, 1.0],  # 17
+        [4.0, 3.0, 2.0],  # 47
+    ]
+
+    tabular_data = make_performance_map(
+        cooling_capacities, cooling_cops, cooling_temperatures, heating_capacities, heating_cops, heating_temperatures
+    )
+
+    speed_to_add = 2
+    tabular_data.add_speed(speed_to_add)
+
+    assert tabular_data.cooling_capacities.data[0][speed_to_add - 1] == approx(fr_u(1.5, "ton_ref"), 0.01)
+
+    speed_to_add = 4
+    tabular_data.add_speed(speed_to_add)
+    assert tabular_data.cooling_capacities.data[0][speed_to_add - 1] == approx(fr_u(2.5, "ton_ref"), 0.01)
+
+
 def test_plot():
     # Single speed, SEER 13, HSPF 8
     seer_1 = 13.0
     hspf_1 = 8.0
     eer_1 = seer_1 / 1.2
     cop_1_h, _ = optimize.newton(
-        lambda x: RESNETDXModel(
-            rated_net_heating_cop=x,
-            input_seer=seer_1,
-            input_eer=eer_1,
-            input_hspf=hspf_1,
-            rating_standard=AHRIVersion.AHRI_210_240_2017,
-        ).hspf()
-        - hspf_1,
+        lambda x: (
+            RESNETDXModel(
+                rated_net_heating_cop=x,
+                input_seer=seer_1,
+                input_eer=eer_1,
+                input_hspf=hspf_1,
+                rating_standard=AHRIVersion.AHRI_210_240_2017,
+            ).hspf()
+            - hspf_1
+        ),
         hspf_1 / 2.0,
         full_output=True,
     )

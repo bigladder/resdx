@@ -370,9 +370,9 @@ class DXUnit:
 
         if heating_off_temperature is None:
             if self.staging_type == StagingType.VARIABLE_SPEED:
-                self.heating_off_temperature = fr_u(-20.0, "degF")
+                self.heating_off_temperature = fr_u(-10.0, "degF")
             else:
-                self.heating_off_temperature = fr_u(0.0, "degF")
+                self.heating_off_temperature = fr_u(5.0, "degF")
         else:
             self.heating_off_temperature = heating_off_temperature
         if heating_on_temperature is None:
@@ -1430,7 +1430,10 @@ class DXUnit:
                     self.H2_full_cond,
                     t,
                 )  # eq. 11.117
-            cop_full = q_full / p_full
+            if p_full > 0:
+                cop_full = q_full / p_full
+            else:
+                cop_full = 0
 
             if t <= self.heating_off_temperature or cop_full < 1.0:
                 delta_full = 0.0  # eq. 11.125

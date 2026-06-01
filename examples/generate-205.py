@@ -55,9 +55,10 @@ with open(f"{output_directory_path}/{file_name}-motor.RS0005.json", "w") as file
     )
 
 resdx.write_idf(
-    dx_unit,
-    f"{output_directory_path}/{file_name}-dx.RS0004.idf",
-    "Heat Pump ACDXCoil 1",
-    resdx.idf.EnergyPlusSystemType.UNITARY_SYSTEM,
+    unit=dx_unit,
+    heating_type="ASHP",
+    output_path=f"{output_directory_path}/{file_name}-dx.RS0004.idf",
+    system_name="Heat Pump ACDXCoil 1",
+    system_type=resdx.idf.EnergyPlusSystemType.UNITARY_SYSTEM,
     autosize=False,
 )

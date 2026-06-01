@@ -168,10 +168,31 @@ class RESNETDXModel(DXUnit):
 
     def set_net_capacities_and_fan(self, rated_net_total_cooling_capacity, rated_net_heating_capacity, fan):
         if self.net_tabular_data is not None:
-            self.staging_type = StagingType(min(self.net_tabular_data.number_of_cooling_speeds, 3))
-            self.number_of_cooling_speeds = self.number_of_heating_speeds = (
-                self.staging_type.value if self.staging_type != StagingType.VARIABLE_SPEED else 4
-            )
+            if self.staging_type is None:
+                self.staging_type = StagingType(min(self.net_tabular_data.number_of_cooling_speeds, 3))
+                self.number_of_cooling_speeds = self.number_of_heating_speeds = (
+                    self.staging_type.value if self.staging_type != StagingType.VARIABLE_SPEED else 4
+                )
+            else:
+                if self.staging_type == StagingType.SINGLE_STAGE:
+                    if self.net_tabular_data.number_of_cooling_speeds != 1:
+                        raise ValueError("Staging type does not match provided tabular data")
+                elif self.staging_type == StagingType.TWO_STAGE:
+                    if self.net_tabular_data.number_of_cooling_speeds != 2:
+                        raise ValueError("Staging type does not match provided tabular data")
+                elif self.staging_type == StagingType.VARIABLE_SPEED:
+                    if self.net_tabular_data.number_of_cooling_speeds < 2:
+                        raise ValueError("Staging type does not match provided tabular data")
+                self.number_of_cooling_speeds = (
+                    self.staging_type.value
+                    if self.staging_type != StagingType.VARIABLE_SPEED
+                    else self.net_tabular_data.number_of_cooling_speeds + 1
+                )
+                self.number_of_heating_speeds = (
+                    self.staging_type.value
+                    if self.staging_type != StagingType.VARIABLE_SPEED
+                    else self.net_tabular_data.number_of_heating_speeds + 1
+                )
             self.set_placeholder_arrays()
 
         if not isinstance(rated_net_heating_capacity, list):
@@ -252,22 +273,40 @@ class RESNETDXModel(DXUnit):
                         heating_cop_47=self.input_rated_net_heating_cop,
                     )
 
-                self.cooling_boost_speed = 0
-                self.cooling_full_load_speed = 1
-                self.cooling_intermediate_speed = 2
-                self.cooling_low_speed = 3
+                if self.number_of_cooling_speeds == 4:
+                    self.cooling_boost_speed = 0
+                    self.cooling_full_load_speed = 1
+                    self.cooling_intermediate_speed = 2
+                    self.cooling_low_speed = 3
 
-                self.heating_boost_speed = 0
-                self.heating_full_load_speed = 1
-                self.heating_intermediate_speed = 2
-                self.heating_low_speed = 3
+                    self.heating_boost_speed = 0
+                    self.heating_full_load_speed = 1
+                    self.heating_intermediate_speed = 2
+                    self.heating_low_speed = 3
 
-                self.tabular_cooling_speed_map = self.tabular_heating_speed_map = {
-                    0: 3.0,
-                    1: 2.0,
-                    2: 1.5,  # 1.3333,
-                    3: 1.0,
-                }
+                    self.tabular_cooling_speed_map = self.tabular_heating_speed_map = {
+                        0: 3.0,
+                        1: 2.0,
+                        2: 1.5,  # 1.3333,
+                        3: 1.0,
+                    }
+
+                if self.number_of_cooling_speeds == 3:
+                    self.cooling_boost_speed = None
+                    self.cooling_full_load_speed = 0
+                    self.cooling_intermediate_speed = 1
+                    self.cooling_low_speed = 2
+
+                    self.heating_boost_speed = None
+                    self.heating_full_load_speed = 0
+                    self.heating_intermediate_speed = 1
+                    self.heating_low_speed = 2
+
+                    self.tabular_cooling_speed_map = self.tabular_heating_speed_map = {
+                        0: 2.0,
+                        1: 1.5,  # 1.3333,
+                        2: 1.0,
+                    }
 
             self.inverse_tabular_cooling_speed_map = {
                 v: k for k, v in self.tabular_cooling_speed_map.items() if v.is_integer()
