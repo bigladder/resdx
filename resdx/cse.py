@@ -226,83 +226,67 @@ def floating_point_less_than(a: float, b: float, rel_tol=1e-9, abs_tol=1e-6) -> 
     return a < b and not isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol)
 
 
-def write_cse(
-    unit: DXUnit,
-    output_path: str | None = None,
-    modelkit_template: bool = False,
-    system_name: str | None = None,
-    autosize: bool = True,
-    cooling_only: bool = False,
-) -> None:
-    if system_name is None:
-        system_name = "RSYS"
+def get_heating_performance_map_object(unit: DXUnit, system_name: str) -> CSEPerformanceMap:
+    # Heating performance map
+    heating_outdoor_dry_bulbs = [
+        5.0,
+        17.0,
+        47.0,
+    ]
+    if isinstance(unit, RESNETDXModel):
+        if unit.net_tabular_data is not None:
+            heating_outdoor_dry_bulbs = to_u(unit.net_tabular_data.heating_capacities.temperatures, "°F")
 
-    if modelkit_template:
-        system_name = "<%= system_name %>"
+    min_temperature = to_u(unit.heating_off_temperature, "°F")
+    heating_outdoor_dry_bulbs = [min_temperature] + [t for t in heating_outdoor_dry_bulbs if t > min_temperature]
 
-    objects: list[CSEObject] = []
-
-    if not cooling_only:
-        # Heating performance map
-        heating_outdoor_dry_bulbs = [
-            5.0,
-            17.0,
-            47.0,
-        ]
-        if isinstance(unit, RESNETDXModel):
-            if unit.net_tabular_data is not None:
-                heating_outdoor_dry_bulbs = to_u(unit.net_tabular_data.heating_capacities.temperatures, "°F")
-
-        min_temperature = to_u(unit.heating_off_temperature, "°F")
-        heating_outdoor_dry_bulbs = [min_temperature] + [t for t in heating_outdoor_dry_bulbs if t > min_temperature]
-
-        heating_speeds: list[int]
-        if unit.staging_type == StagingType.VARIABLE_SPEED:
-            if unit.number_of_heating_speeds == 4:
-                heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed, unit.heating_boost_speed]
-            elif unit.number_of_heating_speeds == 3:
-                heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed]
-        elif unit.staging_type == StagingType.TWO_STAGE:
+    heating_speeds: list[int]
+    if unit.staging_type == StagingType.VARIABLE_SPEED:
+        if unit.number_of_heating_speeds == 4:
+            heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed, unit.heating_boost_speed]
+        elif unit.number_of_heating_speeds == 3:
             heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed]
-        elif unit.staging_type == StagingType.SINGLE_STAGE:
-            heating_speeds = [unit.heating_full_load_speed]
-        else:
-            raise ValueError(f"Unsupported staging type: {unit.staging_type}")
+    elif unit.staging_type == StagingType.TWO_STAGE:
+        heating_speeds = [unit.heating_low_speed, unit.heating_full_load_speed]
+    elif unit.staging_type == StagingType.SINGLE_STAGE:
+        heating_speeds = [unit.heating_full_load_speed]
+    else:
+        raise ValueError(f"Unsupported staging type: {unit.staging_type}")
 
-        capacity_ratios = []
-        cops = []
-        reference_capacity = unit.net_steady_state_heating_capacity()
-        reference_temperature = to_u(unit.H1_full_cond.outdoor.db, "°F")
-        reference_speed = unit.H1_full_cond.compressor_speed
-        for t_odb in heating_outdoor_dry_bulbs:
-            for speed in heating_speeds:
-                condition = unit.make_condition(
-                    HeatingConditions,
-                    compressor_speed=speed,
-                    outdoor=heating_psych_state(drybulb=fr_u(t_odb, "°F")),
-                )
-                capacity = unit.net_steady_state_heating_capacity(condition)
-                capacity_ratio = capacity / reference_capacity
-                if isclose(t_odb, reference_temperature, abs_tol=0.1) and speed == reference_speed:
-                    assert capacity_ratio == 1.0, (
-                        f"{t_odb:.0f}°F/{speed}: cap={capacity:.0f}, ref={reference_capacity:.0f}, full load speed= {unit.H1_full_cond.compressor_speed}, speed={heating_speeds}, reference_speed={reference_speed}"
-                    )
-                capacity_ratios.append(capacity_ratio)
-
-                cops.append(unit.net_steady_state_heating_cop(condition))
-
-        objects.append(
-            CSEPerformanceMap(
-                f"{system_name} Heating Performance Map",
-                temperatures=heating_outdoor_dry_bulbs,
-                reference_temperature=reference_temperature,
-                speeds=[i + 1 for i in range(len(heating_speeds))],
-                reference_speed=heating_speeds.index(reference_speed) + 1,
-                capacity_ratios=capacity_ratios,
-                cops=cops,
+    capacity_ratios = []
+    cops = []
+    reference_capacity = unit.net_steady_state_heating_capacity()
+    reference_temperature = to_u(unit.H1_full_cond.outdoor.db, "°F")
+    reference_speed = unit.H1_full_cond.compressor_speed
+    for t_odb in heating_outdoor_dry_bulbs:
+        for speed in heating_speeds:
+            condition = unit.make_condition(
+                HeatingConditions,
+                compressor_speed=speed,
+                outdoor=heating_psych_state(drybulb=fr_u(t_odb, "°F")),
             )
-        )
+            capacity = unit.net_steady_state_heating_capacity(condition)
+            capacity_ratio = capacity / reference_capacity
+            if isclose(t_odb, reference_temperature, abs_tol=0.1) and speed == reference_speed:
+                assert capacity_ratio == 1.0, (
+                    f"{t_odb:.0f}°F/{speed}: cap={capacity:.0f}, ref={reference_capacity:.0f}, full load speed= {unit.H1_full_cond.compressor_speed}, speed={heating_speeds}, reference_speed={reference_speed}"
+                )
+            capacity_ratios.append(capacity_ratio)
 
+            cops.append(unit.net_steady_state_heating_cop(condition))
+
+    return CSEPerformanceMap(
+        f"{system_name} Heating Performance Map",
+        temperatures=heating_outdoor_dry_bulbs,
+        reference_temperature=reference_temperature,
+        speeds=[i + 1 for i in range(len(heating_speeds))],
+        reference_speed=heating_speeds.index(reference_speed) + 1,
+        capacity_ratios=capacity_ratios,
+        cops=cops,
+    )
+
+
+def get_cooling_performance_map_object(unit: DXUnit, system_name: str) -> CSEPerformanceMap:
     # Cooling performance map
     cooling_outdoor_dry_bulbs = [40.0, 82.0, 95.0, 125.0]
     if isinstance(unit, RESNETDXModel):
@@ -342,17 +326,42 @@ def write_cse(
             capacity_ratios.append(capacity_ratio)
             cops.append(unit.net_total_cooling_cop(condition))
 
-    objects.append(
-        CSEPerformanceMap(
-            f"{system_name} Cooling Performance Map",
-            temperatures=cooling_outdoor_dry_bulbs,
-            reference_temperature=reference_temperature,
-            speeds=[i + 1 for i in range(len(cooling_speeds))],
-            reference_speed=cooling_speeds.index(reference_speed) + 1,
-            capacity_ratios=capacity_ratios,
-            cops=cops,
-        )
+    return CSEPerformanceMap(
+        f"{system_name} Cooling Performance Map",
+        temperatures=cooling_outdoor_dry_bulbs,
+        reference_temperature=reference_temperature,
+        speeds=[i + 1 for i in range(len(cooling_speeds))],
+        reference_speed=cooling_speeds.index(reference_speed) + 1,
+        capacity_ratios=capacity_ratios,
+        cops=cops,
     )
+
+
+def write_cse(
+    unit: DXUnit,
+    output_path: str | None = None,
+    modelkit_template: bool = False,
+    system_name: str | None = None,
+    autosize: bool = True,
+    cooling_only: bool = False,
+) -> None:
+    if system_name is None:
+        system_name = "RSYS"
+
+    if modelkit_template:
+        system_name = "<%= system_name %>"
+
+    objects: list[CSEObject] = []
+
+    if not cooling_only:
+        heating_performance_map_object = get_heating_performance_map_object(unit=unit, system_name=system_name)
+
+        objects.append(heating_performance_map_object)
+
+    cooling_performance_map_object = get_cooling_performance_map_object(unit=unit, system_name=system_name)
+
+    objects.append(cooling_performance_map_object)
+
     cooling_heating_capacity_ratio = unit.net_total_cooling_capacity() / unit.net_steady_state_heating_capacity()
 
     if modelkit_template:
