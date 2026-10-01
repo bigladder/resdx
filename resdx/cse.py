@@ -537,8 +537,9 @@ def write_cse(
         f' * @RSYS["{system_name}"].capNomC'
         f" * {10 / 12000.0}"
     )
-    pan_heater_expression = f"($tdboHrAv < 32.0 && $tdboHrAv >= {to_u(unit.heating_off_temperature, '°F'):.1f}) * 150.0"
-
+    pan_heater_expression = f"($tdboHrAv < 32.0 && $tdboHrAv >= {to_u(unit.heating_off_temperature, '°F'):.1f}) * " + (
+        "<%= pan_heater_power %>" if modelkit_template else "150.0"
+    )
     objects.append(
         CSEObject(
             "RSYS",
@@ -568,6 +569,7 @@ def write_cse(
             'parameter "backup_heating_capacity", :default => Autosize\n'
             f'parameter "cycling_degradation_coefficient", :default => {unit.c_d_heating}, :domain => Numeric\n'
             f'parameter "minimum_operating_temperature", :default => {to_u(unit.heating_off_temperature, "°F")}, :domain => Numeric\n'
+            'parameter "pan_heater_power", :default => 150.0, :domain => Numeric\n'
             "%>\n"
             "\n"
             "<%\n"
