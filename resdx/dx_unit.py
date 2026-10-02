@@ -48,7 +48,7 @@ class CyclingMethod(Enum):
     BETWEEN_OFF_FULL = 2
 
 
-class AHRIVersion(Enum):
+class RatingStandard(Enum):
     AHRI_210_240_2017 = 1
     AHRI_210_240_2023 = 2
 
@@ -111,14 +111,14 @@ class DXUnitMetadata:
 class DXUnit:
     # fmt: off
     regional_heating_distributions = {
-        AHRIVersion.AHRI_210_240_2017: {
+        RatingStandard.AHRI_210_240_2017: {
             1: HeatingDistribution(fr_u(37.0,"°F"), [0.291,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]), # noqa: E501
             2: HeatingDistribution(fr_u(27.0,"°F"), [0.215,0.189,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000]), # noqa: E501
             3: HeatingDistribution(fr_u(17.0,"°F"), [0.153,0.142,0.138,0.137,0.135,0.118,0.092,0.047,0.021,0.009,0.005,0.002,0.001,0.000,0.000,0.000,0.000,0.000]), # noqa: E501
             4: HeatingDistribution(fr_u(5.0,"°F"),  [0.132,0.111,0.103,0.093,0.100,0.109,0.126,0.087,0.055,0.036,0.026,0.013,0.006,0.002,0.001,0.000,0.000,0.000]), # noqa: E501
             5: HeatingDistribution(fr_u(-10.0,"°F"),[0.106,0.092,0.086,0.076,0.078,0.087,0.102,0.094,0.074,0.055,0.047,0.038,0.029,0.018,0.010,0.005,0.002,0.001]), # noqa: E501
             6: HeatingDistribution(fr_u(30.0,"°F"), [0.113,0.206,0.215,0.204,0.141,0.076,0.034,0.008,0.003,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000])}, # noqa: E501
-        AHRIVersion.AHRI_210_240_2023: {
+        RatingStandard.AHRI_210_240_2023: {
             # Note: AHRI 2023 issue: None of these distributions add to 1.0!
             1: HeatingDistribution(fr_u(37.0,"°F"), [0.000,0.239,0.194,0.129,0.081,0.041,0.019,0.005,0.001,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.10, 1.03, fr_u(58.0,"°F")), # noqa: E501
             2: HeatingDistribution(fr_u(27.0,"°F"), [0.000,0.000,0.163,0.143,0.112,0.088,0.056,0.024,0.008,0.002,0.000,0.000,0.000,0.000,0.000,0.000,0.000,0.000], 1.06, 0.99, fr_u(57.0,"°F")), # noqa: E501
@@ -278,7 +278,7 @@ class DXUnit:
         heating_full_load_speed: int = 0,  # The first entry (index = 0) in arrays reflects AHRI "full" speed.
         heating_intermediate_speed: int | None = None,
         is_ducted: bool = True,
-        rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
+        rating_standard: RatingStandard = RatingStandard.AHRI_210_240_2023,
         # Used for comparisons and to inform some defaults
         input_seer: (float | None) = None,  # SEER value input (may not match calculated SEER of the model)
         input_eer: (float | None) = None,  # EER value input (may not match calculated EER of the model)
@@ -832,7 +832,7 @@ class DXUnit:
     def get_rated_full_flow_rated_pressure(self):
         if not self.is_ducted:
             return 0.0
-        if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
+        if self.rating_standard == RatingStandard.AHRI_210_240_2017:
             # TODO: Add Small-duct, High-velocity Systems
             if self.rated_net_total_cooling_capacity[0] <= fr_u(29000, "Btu/h"):
                 return fr_u(0.1, "in_H2O")
@@ -840,7 +840,7 @@ class DXUnit:
                 return fr_u(0.15, "in_H2O")
             else:
                 return fr_u(0.2, "in_H2O")
-        elif self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+        elif self.rating_standard == RatingStandard.AHRI_210_240_2023:
             # TODO: Add exceptional system types
             return fr_u(0.5, "in_H2O")
 
@@ -1413,13 +1413,13 @@ class DXUnit:
         heating_distribution = self.regional_heating_distributions[self.rating_standard][region]
         t_od = heating_distribution.outdoor_design_temperature
 
-        if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
+        if self.rating_standard == RatingStandard.AHRI_210_240_2017:
             c = 0.77  # eq. 11.110 (agreement factor)
             dhr_min = (
                 self.net_steady_state_heating_capacity(self.H1_full_cond) * (fr_u(65, "°F") - t_od) / (fr_u(60, "°R"))
             )  # eq. 11.111
             dhr_min = find_nearest(self.standard_design_heating_requirements, dhr_min)
-        else:  # if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+        else:  # if self.rating_standard == RatingStandard.AHRI_210_240_2023:
             if self.staging_type == StagingType.VARIABLE_SPEED:
                 c_x = heating_distribution.c_vs
             else:
@@ -1471,9 +1471,9 @@ class DXUnit:
             n = heating_distribution.fractional_hours[i]
             if n == 0.0:
                 continue
-            if self.rating_standard == AHRIVersion.AHRI_210_240_2017:
+            if self.rating_standard == RatingStandard.AHRI_210_240_2017:
                 bl = max((fr_u(65, "°F") - t) / (fr_u(65, "°F") - t_od) * c * dhr_min, 0.0)  # eq. 11.109
-            else:  # if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+            else:  # if self.rating_standard == RatingStandard.AHRI_210_240_2023:
                 bl = max((t_zl - t) / (t_zl - t_od) * c_x * q_A_full, 0.0)
 
             t_ob = fr_u(45, "°F")  # eq. 11.119
@@ -1697,7 +1697,7 @@ class DXUnit:
     def print_cooling_info(self, power_units="W", capacity_units="ton_ref"):
         seasonal_metric = "SEER"
         efficiency_metric = "EER"
-        if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+        if self.rating_standard == RatingStandard.AHRI_210_240_2023:
             seasonal_metric = "SEER2"
             efficiency_metric = "EER2"
 
@@ -1717,7 +1717,7 @@ class DXUnit:
 
     def print_heating_info(self, power_units="W", capacity_units="ton_ref", region=4):
         seasonal_metric = "HSPF"
-        if self.rating_standard == AHRIVersion.AHRI_210_240_2023:
+        if self.rating_standard == RatingStandard.AHRI_210_240_2023:
             seasonal_metric = "HSPF2"
         print(f"{seasonal_metric} (region {region}): {self.hspf(region):.2f}")
         for speed in range(self.number_of_heating_speeds):

@@ -1,7 +1,7 @@
 from koozie import fr_u
 from scipy import optimize
 
-from .dx_unit import AHRIVersion, StagingType
+from .dx_unit import RatingStandard, StagingType
 from .models.unified_resnet import RESNETDXModel
 
 
@@ -15,7 +15,7 @@ def make_rating_unit(
     qm17: float = 0.63,
     t_min: float | None = None,
     t_defrost: float = fr_u(40.0, "degF"),
-    rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
+    rating_standard: RatingStandard = RatingStandard.AHRI_210_240_2023,
 ) -> RESNETDXModel:
     q47_: float
     if q47 is None:

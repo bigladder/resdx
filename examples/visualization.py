@@ -3,7 +3,7 @@ from dimes.griddeddata import DataSelection, GridAxis, GridPointData, RegularGri
 from koozie import fr_u
 
 from resdx import (
-    AHRIVersion,
+    RatingStandard,
     CoolingConditions,
     HeatingConditions,
     HeatingDistribution,
@@ -76,7 +76,7 @@ plot.add_display_data(shrs)
 plot.write_html_plot(f"{output_directory_path}/shr.html")
 
 # Heating temperature bins
-distributions = RESNETDXModel.regional_heating_distributions[AHRIVersion.AHRI_210_240_2023]
+distributions = RESNETDXModel.regional_heating_distributions[RatingStandard.AHRI_210_240_2023]
 regions = GridAxis([1, 2, 3, 4, 5, 6], "Region", "")
 dry_bulbs = GridAxis(HeatingDistribution.outdoor_drybulbs, "Outdoor Temperature", "K")
 fraction_values = []

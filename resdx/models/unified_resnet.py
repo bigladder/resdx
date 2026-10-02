@@ -5,7 +5,7 @@ from koozie import fr_u, to_u
 
 from ..conditions import CoolingConditions, HeatingConditions
 from ..defrost import Defrost
-from ..dx_unit import AHRIVersion, DXUnit
+from ..dx_unit import RatingStandard, DXUnit
 from ..enums import FanMotorType, StagingType
 from ..fan import RESNETBPMFan, RESNETPSCFan
 from ..psychrometrics import cooling_psych_state, heating_psych_state
@@ -41,7 +41,7 @@ class RESNETDXModel(DXUnit):
         defrost_temperature: float = fr_u(40.0, "degF"),
         inactive_mode_power: float = 0.0,
         off_mode_power: float = 0.0,
-        rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
+        rating_standard: RatingStandard = RatingStandard.AHRI_210_240_2023,
         tabular_data: TemperatureSpeedPerformance | None = None,
     ) -> None:
         self.net_tabular_data: TemperatureSpeedPerformance | None = tabular_data

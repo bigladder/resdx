@@ -2,7 +2,7 @@ from koozie import fr_u
 from pytest import approx
 from scipy import optimize
 
-from resdx import AHRIVersion, RESNETDXModel, StagingType, make_neep_model_data, make_performance_map
+from resdx import RatingStandard, RESNETDXModel, StagingType, make_neep_model_data, make_performance_map
 from resdx.models.tabular_data import make_two_speed_model_data, make_single_speed_model_data
 from resdx.rating_solver import make_rating_unit
 
@@ -21,7 +21,7 @@ def test_1_speed_regression():
         StagingType.SINGLE_STAGE,
         seer,
         hspf,
-        rating_standard=AHRIVersion.AHRI_210_240_2017,
+        rating_standard=RatingStandard.AHRI_210_240_2017,
     )
 
     dx_unit_1_speed.print_cooling_info()
@@ -48,7 +48,7 @@ def test_1_speed_refrigerant_charge_regression():
         StagingType.SINGLE_STAGE,
         seer,
         hspf,
-        rating_standard=AHRIVersion.AHRI_210_240_2017,
+        rating_standard=RatingStandard.AHRI_210_240_2017,
     )
     dx_unit_1_speed.refrigerant_charge_deviation = -0.25
 
@@ -67,10 +67,10 @@ def test_1_speed_2023_regression():
         StagingType.SINGLE_STAGE,
         seer,
         hspf,
-        rating_standard=AHRIVersion.AHRI_210_240_2017,
+        rating_standard=RatingStandard.AHRI_210_240_2017,
     )
 
-    dx_unit_1_speed.set_rating_standard(AHRIVersion.AHRI_210_240_2023)
+    dx_unit_1_speed.set_rating_standard(RatingStandard.AHRI_210_240_2023)
 
     dx_unit_1_speed.print_cooling_info()
     dx_unit_1_speed.print_heating_info()
@@ -85,14 +85,14 @@ def test_1_speed_rating_version():
     dx_unit_2017 = RESNETDXModel(
         rated_net_cooling_cop=COP_C,
         rated_net_heating_cop=COP_H,
-        rating_standard=AHRIVersion.AHRI_210_240_2017,
+        rating_standard=RatingStandard.AHRI_210_240_2017,
         input_seer=seer_1,
         input_hspf=hspf_1,
     )
     dx_unit_2023 = RESNETDXModel(
         rated_net_cooling_cop=COP_C,
         rated_net_heating_cop=COP_H,
-        rating_standard=AHRIVersion.AHRI_210_240_2023,
+        rating_standard=RatingStandard.AHRI_210_240_2023,
         input_seer=seer_1,
         input_hspf=hspf_1,
     )
@@ -138,7 +138,7 @@ def test_2_speed_regression():
         StagingType.TWO_STAGE,
         seer_2,
         hspf_2,
-        rating_standard=AHRIVersion.AHRI_210_240_2017,
+        rating_standard=RatingStandard.AHRI_210_240_2017,
     )
 
     dx_unit_2_speed.print_cooling_info()
@@ -229,7 +229,7 @@ def test_1_speed_ceer():
         StagingType.SINGLE_STAGE,
         13.0,
         8.0,
-        rating_standard=AHRIVersion.AHRI_210_240_2017,
+        rating_standard=RatingStandard.AHRI_210_240_2017,
     )
     # Without standby power, single speed CEER is EER at 95 °F
     assert dx_unit_1_speed.ceer() == approx(dx_unit_1_speed.eer(dx_unit_1_speed.A_full_cond), 0.0001)
@@ -269,7 +269,7 @@ def test_neep_vchp_regression():
 
     vchp_unit = RESNETDXModel(
         tabular_data=make_neep_model_data(cooling_capacities, cooling_powers, heating_capacities, heating_powers),
-        rating_standard=AHRIVersion.AHRI_210_240_2017,
+        rating_standard=RatingStandard.AHRI_210_240_2017,
     )
     assert vchp_unit.net_total_cooling_capacity() == approx(
         vchp_unit.rated_net_total_cooling_capacity[vchp_unit.cooling_full_load_speed],
@@ -347,7 +347,7 @@ def test_plot():
                 input_seer=seer_1,
                 input_eer=eer_1,
                 input_hspf=hspf_1,
-                rating_standard=AHRIVersion.AHRI_210_240_2017,
+                rating_standard=RatingStandard.AHRI_210_240_2017,
             ).hspf()
             - hspf_1
         ),
@@ -359,7 +359,7 @@ def test_plot():
         input_seer=seer_1,
         input_eer=eer_1,
         input_hspf=hspf_1,
-        rating_standard=AHRIVersion.AHRI_210_240_2017,
+        rating_standard=RatingStandard.AHRI_210_240_2017,
     )
 
     dx_unit_1_speed.plot("output/heat-pump.html")

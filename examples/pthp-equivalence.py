@@ -1,7 +1,7 @@
 # Used to convert PTHP ratings to SEER/HSPF
 
 # %%
-from resdx import RESNETDXModel, AHRIVersion, fr_u
+from resdx import RESNETDXModel, RatingStandard, fr_u
 from resdx.models.tabular_data import make_packaged_terminal_model_data
 
 output_directory_path = "output"
@@ -17,7 +17,7 @@ dx_unit = RESNETDXModel(
     rated_net_heating_cop=heating_cop,
     rated_net_total_cooling_capacity=[fr_u(cooling_capacity, "Btu/h")],
     rated_net_heating_capacity=[fr_u(heating_capacity, "Btu/h")],
-    rating_standard=AHRIVersion.AHRI_210_240_2017,
+    rating_standard=RatingStandard.AHRI_210_240_2017,
 )
 
 dx_unit.print_cooling_info()
@@ -33,7 +33,7 @@ dx_unit = RESNETDXModel(
         heating_capacity_47=fr_u(heating_capacity, "Btu/h"),
         heating_cop_47=heating_cop,
     ),
-    rating_standard=AHRIVersion.AHRI_210_240_2023,
+    rating_standard=RatingStandard.AHRI_210_240_2023,
 )
 
 dx_unit.print_cooling_info()
