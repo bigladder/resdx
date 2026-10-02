@@ -1,6 +1,7 @@
 import datetime
 import math
 import uuid
+import warnings
 from collections.abc import Callable
 from csv import DictWriter
 from dataclasses import dataclass
@@ -266,6 +267,8 @@ class DXUnit:
         # Standby
         crankcase_heater_capacity: float | None = None,
         crankcase_heater_setpoint_temperature: float = fr_u(50.0, "°F"),
+        inactive_mode_power: float = 0.0,  # Used for CEER (10 CFR 430 Subpart B, Appendix F)
+        off_mode_power: float = 0.0,  # Used for CEER (10 CFR 430 Subpart B, Appendix F)
         # Faults
         refrigerant_charge_deviation: float = 0.0,
         # Ratings
@@ -314,6 +317,8 @@ class DXUnit:
             self.defrost = defrost
 
         self.crankcase_heater_setpoint_temperature = crankcase_heater_setpoint_temperature
+        self.inactive_mode_power = inactive_mode_power
+        self.off_mode_power = off_mode_power
         self.rating_standard = rating_standard
         self.refrigerant_charge_deviation = refrigerant_charge_deviation
 
@@ -559,6 +564,11 @@ class DXUnit:
             outdoor=PsychState(drybulb=fr_u(82.0, "°F"), wetbulb=fr_u(65.0, "°F")),
             compressor_speed=self.cooling_full_load_speed,
         )
+        self.CEER_92_full_cond: CoolingConditions = self.make_condition(
+            CoolingConditions,
+            outdoor=PsychState(drybulb=fr_u(92.0, "°F"), wetbulb=fr_u(72.5, "°F")),
+            compressor_speed=self.cooling_full_load_speed,
+        )  # Not an AHRI condition, only used for CEER
 
         self.H1_full_cond: HeatingConditions = self.make_condition(
             HeatingConditions, compressor_speed=self.heating_full_load_speed
@@ -699,6 +709,7 @@ class DXUnit:
             if i == self.cooling_full_load_speed:
                 self.A_full_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.B_full_cond.set_new_fan_speed(new_fan_speed, airflow)
+                self.CEER_92_full_cond.set_new_fan_speed(new_fan_speed, airflow)
             if i == self.cooling_intermediate_speed:
                 self.A_int_cond.set_new_fan_speed(new_fan_speed, airflow)
                 self.E_int_cond.set_new_fan_speed(new_fan_speed, airflow)
@@ -1198,6 +1209,70 @@ class DXUnit:
 
             seer = q_sum / e_sum  # e.q. 11.59
         return to_u(seer, "Btu/Wh")
+
+    def ceer(self):
+        """Based on 10 CFR 430 Subpart B, Appendix F (2021). Unrounded, in Btu/Wh."""
+        # Annual hours: 750 in cooling mode, 5,115 in inactive/off modes (split evenly if the unit has both)
+        if self.inactive_mode_power > 0.0 and self.off_mode_power > 0.0:
+            standby_hours = 2557.5
+        else:
+            standby_hours = 5115.0
+        standby_power = (self.inactive_mode_power + self.off_mode_power) * standby_hours / 750.0  # sec. 5.1
+
+        q_1 = self.net_total_cooling_capacity(self.A_full_cond)
+        p_1 = self.net_cooling_power(self.A_full_cond)
+        ceer_1 = q_1 / (p_1 + standby_power)  # sec. 5.2.2, 5.3.6
+
+        if self.staging_type == StagingType.SINGLE_STAGE:
+            return to_u(ceer_1, "Btu/Wh")
+
+        # TWO_STAGE is not addressed by Appendix F, so it is rated as variable-speed using low speed at 87 °F
+        if self.staging_type == StagingType.VARIABLE_SPEED:
+            q_3 = self.net_total_cooling_capacity(self.E_int_cond)
+            p_3 = self.net_cooling_power(self.E_int_cond)
+        else:
+            q_3 = interpolate(self.net_total_cooling_capacity, self.F_low_cond, self.B_low_cond, fr_u(87.0, "°F"))
+            p_3 = interpolate(self.net_cooling_power, self.F_low_cond, self.B_low_cond, fr_u(87.0, "°F"))
+
+        q_4 = self.net_total_cooling_capacity(self.B_low_cond)
+        p_4 = self.net_cooling_power(self.B_low_cond)
+
+        if not 0.47 <= q_4 / q_1 <= 0.57:  # sec. 2.16
+            warnings.warn(
+                f"Low speed capacity at 82 °F is {q_4 / q_1:.1%} of full speed capacity at 95 °F. "
+                "Appendix F requires 47% to 57%."
+            )
+
+        capacities = [
+            q_1,
+            self.net_total_cooling_capacity(self.CEER_92_full_cond),
+            q_3,
+            q_4,
+        ]
+        powers = [
+            p_1,
+            self.net_cooling_power(self.CEER_92_full_cond),
+            p_3,
+            p_4,
+        ]
+        outdoor_drybulbs = [95.0, 92.0, 87.0, 82.0]  # °F
+        weights = [0.08, 0.20, 0.33, 0.39]  # sec. 5.3.1
+        cycling_loss_factors = [1.0, 0.956, 0.883, 0.810]  # sec. 5.3.8
+
+        ceer_weighted = 0.0
+        ceer_single_speed_weighted = 0.0
+        for q, p, t, w, clf in zip(capacities, powers, outdoor_drybulbs, weights, cycling_loss_factors):
+            # Theoretical comparable single-speed unit
+            q_single_speed = q_1 * (1.0 + 0.0099 * (95.0 - t))  # sec. 5.3.2
+            p_single_speed = p_1 * (1.0 - 0.0076 * (95.0 - t))  # sec. 5.3.2
+            ceer_weighted += w * q / (p + standby_power)  # sec. 5.3.6, 5.3.9
+            # sec. 5.3.7-5.3.9
+            ceer_single_speed_weighted += w * clf * q_single_speed / (p_single_speed + standby_power)
+
+        # sec. 5.3.10
+        performance_adjustment_factor = (ceer_weighted - ceer_single_speed_weighted) / ceer_single_speed_weighted
+        ceer = ceer_1 * (1.0 + performance_adjustment_factor)  # sec. 5.3.11
+        return to_u(ceer, "Btu/Wh")
 
     ### For heating ###
     def full_charge_gross_steady_state_heating_capacity(self, conditions):

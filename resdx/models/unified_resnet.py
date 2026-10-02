@@ -39,6 +39,8 @@ class RESNETDXModel(DXUnit):
         motor_type: FanMotorType | None = None,
         is_ducted: bool = True,
         defrost_temperature: float = fr_u(40.0, "degF"),
+        inactive_mode_power: float = 0.0,
+        off_mode_power: float = 0.0,
         rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
         tabular_data: TemperatureSpeedPerformance | None = None,
     ) -> None:
@@ -73,6 +75,8 @@ class RESNETDXModel(DXUnit):
             input_hspf=input_hspf,
             rated_net_heating_cop=rated_net_heating_cop,
             defrost=Defrost(high_temperature=defrost_temperature),
+            inactive_mode_power=inactive_mode_power,
+            off_mode_power=off_mode_power,
             is_ducted=is_ducted,
             rating_standard=rating_standard,
         )

@@ -224,6 +224,23 @@ def test_neep_statistical_vchp_regression():
     )  # This match is bad because cooling capacity is so high relative to heating capacity
 
 
+def test_1_speed_ceer():
+    dx_unit_1_speed = make_rating_unit(
+        StagingType.SINGLE_STAGE,
+        13.0,
+        8.0,
+        rating_standard=AHRIVersion.AHRI_210_240_2017,
+    )
+    # Without standby power, single speed CEER is EER at 95 °F
+    assert dx_unit_1_speed.ceer() == approx(dx_unit_1_speed.eer(dx_unit_1_speed.A_full_cond), 0.0001)
+
+    # Standby power adds an equivalent power of 5115 h / 750 h times the inactive mode power
+    dx_unit_1_speed.inactive_mode_power = 0.5
+    q = dx_unit_1_speed.net_total_cooling_capacity(dx_unit_1_speed.A_full_cond)
+    p = dx_unit_1_speed.net_cooling_power(dx_unit_1_speed.A_full_cond)
+    assert fr_u(dx_unit_1_speed.ceer(), "Btu/Wh") == approx(q / (p + 0.5 * 5115.0 / 750.0), 0.0001)
+
+
 def test_neep_vchp_regression():
     # AHRI Certification #: 202680596 https://ashp.neep.org/#!/product/34439/7/25000/95/7500/0///0
     # SEER2 21, EER2 13, HSPF(4) = 11
