@@ -2218,29 +2218,27 @@ class DXUnit:
             else:
                 title = f"{self.hspf():.2f} HSPF2, {self.seer():.2f} SEER2"
 
-        # Heating Temperatures
+        # Heating Temperatures (from the heating off temperature up)
         heating_temperatures = DimensionalData(
-            [
-                self.heating_off_temperature,
-                fr_u(5.0, "degF"),
-                fr_u(17.0, "degF"),
-                fr_u(35.0, "degF"),
-                fr_u(47.0, "degF"),
-                fr_u(60.0, "degF"),
+            [self.heating_off_temperature]
+            + [
+                temperature
+                for temperature in [fr_u(t, "degF") for t in [5.0, 17.0, 35.0, 47.0, 60.0]]
+                if temperature > self.heating_off_temperature
             ],
             "Heating Temperatures",
             "K",
             "°F",
         )
 
-        # Cooling Temperatures
+        # Cooling Temperatures (up to the cooling off temperature)
         cooling_temperatures = DimensionalData(
             [
-                fr_u(60.0, "degF"),
-                fr_u(82.0, "degF"),
-                fr_u(95.0, "degF"),
-                self.cooling_off_temperature,
-            ],
+                temperature
+                for temperature in [fr_u(t, "degF") for t in [60.0, 82.0, 95.0]]
+                if temperature < self.cooling_off_temperature
+            ]
+            + [self.cooling_off_temperature],
             "Cooling Temperatures",
             "K",
             "°F",
