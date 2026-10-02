@@ -395,6 +395,8 @@ class DXUnit:
             self.heating_off_temperature = heating_off_temperature
         if heating_on_temperature is None:
             self.heating_on_temperature = self.heating_off_temperature
+        else:
+            self.heating_on_temperature = heating_on_temperature
 
         # Placeholders for derived staging array values
         self.set_placeholder_arrays()
