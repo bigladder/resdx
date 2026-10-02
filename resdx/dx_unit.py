@@ -1237,6 +1237,9 @@ class DXUnit:
 
     def ceer(self):
         """Based on 10 CFR 430 Subpart B, Appendix F (2021). Unrounded, in Btu/Wh."""
+        # Test conditions are stored as rating bins, using the weights as bin fractions
+        self.cooling_rating_bins = DXUnit.SeasonalRatingBins()
+
         # Annual hours: 750 in cooling mode, 5,115 in inactive/off modes (split evenly if the unit has both)
         if self.inactive_mode_power > 0.0 and self.off_mode_power > 0.0:
             standby_hours = 2557.5
@@ -1249,6 +1252,15 @@ class DXUnit:
         ceer_1 = q_1 / (p_1 + standby_power)  # sec. 5.2.2, 5.3.6
 
         if self.staging_type == StagingType.SINGLE_STAGE:
+            self.cooling_rating_bins.add_bin(
+                fraction=1.0,
+                temperature=self.A_full_cond.outdoor.db,
+                load=q_1,
+                energy=p_1,
+                maximum_capacity=q_1,
+                minimum_capacity=q_1,
+                supplemental_energy=standby_power,
+            )
             return to_u(ceer_1, "Btu/Wh")
 
         # TWO_STAGE is not addressed by Appendix F, so it is rated as variable-speed using low speed at 87 °F
@@ -1293,6 +1305,19 @@ class DXUnit:
             ceer_weighted += w * q / (p + standby_power)  # sec. 5.3.6, 5.3.9
             # sec. 5.3.7-5.3.9
             ceer_single_speed_weighted += w * clf * q_single_speed / (p_single_speed + standby_power)
+
+            t_bin = fr_u(t, "°F")
+            self.cooling_rating_bins.add_bin(
+                fraction=w,
+                temperature=t_bin,
+                load=q,
+                energy=p,
+                maximum_capacity=interpolate(
+                    self.net_total_cooling_capacity, self.B_full_cond, self.A_full_cond, t_bin
+                ),
+                minimum_capacity=interpolate(self.net_total_cooling_capacity, self.F_low_cond, self.B_low_cond, t_bin),
+                supplemental_energy=standby_power,
+            )
 
         # sec. 5.3.10
         performance_adjustment_factor = (ceer_weighted - ceer_single_speed_weighted) / ceer_single_speed_weighted
@@ -2188,7 +2213,10 @@ class DXUnit:
         """Generate an HTML plot for this system."""
 
         if title is None:
-            title = f"{self.hspf():.2f} HSPF2, {self.seer():.2f} SEER2"
+            if self.rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024:
+                title = f"{self.heer():.2f} HEER, {self.ceer():.2f} CEER"
+            else:
+                title = f"{self.hspf():.2f} HSPF2, {self.seer():.2f} SEER2"
 
         # Heating Temperatures
         heating_temperatures = DimensionalData(

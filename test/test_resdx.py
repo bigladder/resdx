@@ -531,3 +531,28 @@ def test_plot():
     )
 
     dx_unit_1_speed.plot("output/heat-pump.html")
+
+
+@mark.filterwarnings("ignore:Low speed capacity at 82")
+def test_room_unit_plot():
+    room_standard = RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024
+    vchp_unit = make_rating_unit(
+        StagingType.VARIABLE_SPEED,
+        eer=11.26,
+        ceer=16.8,
+        heer=10.9,
+        q95=fr_u(9000, "Btu/h"),
+        t_min=fr_u(-20.0, "°F"),
+        rating_standard=room_standard,
+    )
+    vchp_unit.plot("output/room-heat-pump.html", show_seasonal_bins=True)
+
+    # CEER test conditions are stored as rating bins
+    assert len(vchp_unit.cooling_rating_bins.fractions) == 4
+    assert sum(vchp_unit.cooling_rating_bins.fractions) == approx(1.0, 0.0001)
+
+    dx_unit_1_speed = make_rating_unit(
+        StagingType.SINGLE_STAGE, ceer=11.0, heer=6.0, t_min=fr_u(10.0, "°F"), rating_standard=room_standard
+    )
+    dx_unit_1_speed.ceer()
+    assert len(dx_unit_1_speed.cooling_rating_bins.fractions) == 1
