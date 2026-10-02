@@ -1,5 +1,5 @@
 from koozie import fr_u
-from pytest import approx
+from pytest import approx, raises
 from scipy import optimize
 
 from resdx import RatingStandard, RESNETDXModel, StagingType, make_neep_model_data, make_performance_map
@@ -239,6 +239,35 @@ def test_1_speed_ceer():
     q = dx_unit_1_speed.net_total_cooling_capacity(dx_unit_1_speed.A_full_cond)
     p = dx_unit_1_speed.net_cooling_power(dx_unit_1_speed.A_full_cond)
     assert fr_u(dx_unit_1_speed.ceer(), "Btu/Wh") == approx(q / (p + 0.5 * 5115.0 / 750.0), 0.0001)
+
+
+def test_room_unit_rating_standard():
+    room_unit = RESNETDXModel(
+        rated_net_cooling_cop=COP_C,
+        rated_net_heating_cop=COP_H,
+        input_seer=13.0,
+        input_hspf=8.0,
+        is_ducted=False,
+        rating_standard=RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024,
+    )
+    with raises(RuntimeError, match="Use ceer"):
+        room_unit.seer()
+    with raises(RuntimeError, match="set_rating_standard"):
+        room_unit.hspf()
+    room_unit.print_cooling_info()  # Reports CEER
+
+    room_unit.set_rating_standard(RatingStandard.AHRI_210_240_2023)
+    assert room_unit.seer() > 0.0
+
+    with raises(RuntimeError, match="non-ducted"):
+        RESNETDXModel(
+            rated_net_cooling_cop=COP_C,
+            rated_net_heating_cop=COP_H,
+            input_seer=13.0,
+            input_hspf=8.0,
+            is_ducted=True,
+            rating_standard=RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024,
+        )
 
 
 def test_neep_vchp_regression():

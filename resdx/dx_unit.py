@@ -51,6 +51,9 @@ class CyclingMethod(Enum):
 class RatingStandard(Enum):
     AHRI_210_240_2017 = 1
     AHRI_210_240_2023 = 2
+    # Room air conditioners and room heat pumps: CEER per 10 CFR 430 Subpart B, Appendix F, and HEER per ENERGY STAR
+    # Test Method to Determine Room Air Conditioner Heating Mode Performance (July 2024)
+    DOE_APPENDIX_F_ENERGY_STAR_2024 = 3
 
 
 # AHRI 210/240 2017 distributions
@@ -319,6 +322,7 @@ class DXUnit:
         self.crankcase_heater_setpoint_temperature = crankcase_heater_setpoint_temperature
         self.inactive_mode_power = inactive_mode_power
         self.off_mode_power = off_mode_power
+        self.check_rating_standard(rating_standard)
         self.rating_standard = rating_standard
         self.refrigerant_charge_deviation = refrigerant_charge_deviation
 
@@ -847,7 +851,12 @@ class DXUnit:
     def calculate_rated_pressure(self, rated_airflow, rated_cooling_full_airflow):
         return self.rated_full_flow_external_static_pressure * (rated_airflow / rated_cooling_full_airflow) ** 2
 
+    def check_rating_standard(self, rating_standard):
+        if rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024 and self.is_ducted:
+            raise RuntimeError(f"{rating_standard} only applies to non-ducted (room) units.")
+
     def set_rating_standard(self, rating_standard):
+        self.check_rating_standard(rating_standard)
         self.rating_standard = rating_standard
         # Reset rating conditions to use the any differences between standards
         self.set_rating_conditions()
@@ -1056,6 +1065,11 @@ class DXUnit:
 
     def seer(self):
         """Based on AHRI 210/240 2023 (unless otherwise noted)"""
+        if self.rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024:
+            raise RuntimeError(
+                f"SEER is not defined for {self.rating_standard}. Use ceer() instead, or use set_rating_standard() "
+                "to change to an AHRI 210/240 rating standard."
+            )
         self.cooling_rating_bins = DXUnit.SeasonalRatingBins()
         if self.staging_type == StagingType.SINGLE_STAGE:
             plf = 1.0 - 0.5 * self.rated_c_d_cooling  # eq. 11.56
@@ -1405,6 +1419,11 @@ class DXUnit:
 
     def hspf(self, region=4):
         """Based on AHRI 210/240 2023 (unless otherwise noted)"""
+        if self.rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024:
+            raise RuntimeError(
+                f"HSPF is not defined for {self.rating_standard}. Use set_rating_standard() to change to an AHRI "
+                "210/240 rating standard."
+            )
         q_sum = 0.0
         e_sum = 0.0
         rh_sum = 0.0
@@ -1701,7 +1720,10 @@ class DXUnit:
             seasonal_metric = "SEER2"
             efficiency_metric = "EER2"
 
-        print(f"{seasonal_metric}: {self.seer():.2f}")
+        if self.rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024:
+            print(f"CEER: {self.ceer():.2f}")
+        else:
+            print(f"{seasonal_metric}: {self.seer():.2f}")
         for speed in range(self.number_of_cooling_speeds):
             conditions = self.make_condition(CoolingConditions, compressor_speed=speed)
             print(
