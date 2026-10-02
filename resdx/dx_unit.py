@@ -2387,7 +2387,7 @@ class DXUnit:
 
         if show_seasonal_bins:
             # Seasonal Ratings Bin Data
-            make_seasonal_bins_visible = True
+            make_seasonal_bins_visible = False
             marker_size_multiplier = 100
             hover_template = (
                 f"%{{y:.2f}}<br>  Bin Fraction: %{{customdata.fraction:.2f}}"
