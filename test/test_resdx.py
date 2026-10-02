@@ -2,7 +2,15 @@ from koozie import fr_u
 from pytest import approx, raises
 from scipy import optimize
 
-from resdx import RatingStandard, RESNETDXModel, StagingType, make_neep_model_data, make_performance_map
+from resdx import (
+    RatingStandard,
+    RESNETDXModel,
+    RoomHeatPumpType,
+    StagingType,
+    make_neep_model_data,
+    make_performance_map,
+)
+from resdx.defrost import DefrostStrategy
 from resdx.models.tabular_data import make_two_speed_model_data, make_single_speed_model_data
 from resdx.rating_solver import make_rating_unit
 
@@ -252,9 +260,10 @@ def test_room_unit_rating_standard():
     )
     with raises(RuntimeError, match="Use ceer"):
         room_unit.seer()
-    with raises(RuntimeError, match="set_rating_standard"):
+    with raises(RuntimeError, match="Use heer"):
         room_unit.hspf()
     room_unit.print_cooling_info()  # Reports CEER
+    room_unit.print_heating_info()  # Reports HEER
 
     room_unit.set_rating_standard(RatingStandard.AHRI_210_240_2023)
     assert room_unit.seer() > 0.0
@@ -268,6 +277,31 @@ def test_room_unit_rating_standard():
             is_ducted=True,
             rating_standard=RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024,
         )
+
+
+def test_heer_regression():
+    vchp_unit = make_rating_unit(StagingType.VARIABLE_SPEED, 21.0, 11.0, t_min=fr_u(-10.0, "°F"))
+    assert vchp_unit.room_heat_pump_type() == RoomHeatPumpType.TYPE_4
+    assert vchp_unit.heer() == approx(13.567, 0.001)
+
+    # Room heat pump type follows cut-out/cut-in temperatures and active defrost
+    vchp_unit.heating_off_temperature = vchp_unit.heating_on_temperature = fr_u(10.0, "°F")
+    assert vchp_unit.room_heat_pump_type() == RoomHeatPumpType.TYPE_3
+    assert vchp_unit.heer() == approx(11.875, 0.001)
+
+    vchp_unit.heating_off_temperature = vchp_unit.heating_on_temperature = fr_u(30.0, "°F")
+    assert vchp_unit.room_heat_pump_type() == RoomHeatPumpType.TYPE_2
+    assert vchp_unit.heer() == approx(6.545, 0.001)
+
+    vchp_unit.defrost.strategy = DefrostStrategy.NONE
+    assert vchp_unit.room_heat_pump_type() == RoomHeatPumpType.TYPE_1
+    assert vchp_unit.heer() == approx(3.796, 0.001)
+
+    dx_unit_1_speed = make_rating_unit(StagingType.SINGLE_STAGE, 13.0, 8.0, t_min=fr_u(-10.0, "°F"))
+    assert dx_unit_1_speed.heer() == approx(7.856, 0.001)
+
+    dx_unit_2_speed = make_rating_unit(StagingType.TWO_STAGE, 17.0, 10.0, t_min=fr_u(-10.0, "°F"))
+    assert dx_unit_2_speed.heer() == approx(11.087, 0.001)
 
 
 def test_neep_vchp_regression():

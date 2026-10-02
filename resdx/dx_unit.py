@@ -22,7 +22,7 @@ from numpy import linspace
 from scipy import optimize
 
 from .conditions import CoolingConditions, HeatingConditions, OperatingConditions
-from .defrost import Defrost, DefrostControl
+from .defrost import Defrost, DefrostControl, DefrostStrategy
 from .enums import StagingType
 from .fan import ConstantSpecificFanPowerFan, Fan, FanMotorType
 from .psychrometrics import STANDARD_CONDITIONS, PsychState, cooling_psych_state, heating_psych_state, psychrolib
@@ -54,6 +54,15 @@ class RatingStandard(Enum):
     # Room air conditioners and room heat pumps: CEER per 10 CFR 430 Subpart B, Appendix F, and HEER per ENERGY STAR
     # Test Method to Determine Room Air Conditioner Heating Mode Performance (July 2024)
     DOE_APPENDIX_F_ENERGY_STAR_2024 = 3
+
+
+class RoomHeatPumpType(Enum):
+    """ENERGY STAR Test Method to Determine Room Air Conditioner Heating Mode Performance (July 2024), sec. 3.E"""
+
+    TYPE_1 = 1  # No active defrost, or cut-out/cut-in temperatures not both below 40 °F
+    TYPE_2 = 2  # Cut-out/cut-in temperatures both below 40 °F, but not both below 17 °F
+    TYPE_3 = 3  # Cut-out/cut-in temperatures both below 17 °F, but not both below 5 °F
+    TYPE_4 = 4  # Cut-out/cut-in temperatures both below 5 °F
 
 
 # AHRI 210/240 2017 distributions
@@ -1421,8 +1430,8 @@ class DXUnit:
         """Based on AHRI 210/240 2023 (unless otherwise noted)"""
         if self.rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024:
             raise RuntimeError(
-                f"HSPF is not defined for {self.rating_standard}. Use set_rating_standard() to change to an AHRI "
-                "210/240 rating standard."
+                f"HSPF is not defined for {self.rating_standard}. Use heer() instead, or use set_rating_standard() "
+                "to change to an AHRI 210/240 rating standard."
             )
         q_sum = 0.0
         e_sum = 0.0
@@ -1713,6 +1722,275 @@ class DXUnit:
         hspf = q_sum / (e_sum + rh_sum) * f_def  # eq. 11.133
         return to_u(hspf, "Btu/Wh")
 
+    def room_heat_pump_type(self) -> RoomHeatPumpType:
+        """ENERGY STAR room heat pump type, based on active defrost and cut-out/cut-in temperatures (sec. 3.E)"""
+        t_max = max(self.heating_off_temperature, self.heating_on_temperature)
+        if self.defrost.strategy == DefrostStrategy.NONE or t_max >= fr_u(40.0, "°F"):
+            return RoomHeatPumpType.TYPE_1
+        if t_max >= fr_u(17.0, "°F"):
+            return RoomHeatPumpType.TYPE_2
+        if t_max >= fr_u(5.0, "°F"):
+            return RoomHeatPumpType.TYPE_3
+        return RoomHeatPumpType.TYPE_4
+
+    def heer(self) -> float:
+        """Based on ENERGY STAR Test Method to Determine Room Air Conditioner Heating Mode Performance (July 2024).
+        Unrounded, in Btu/Wh."""
+        # TODO: Allow optional tests to be omitted (using the default values in sec. 7.2 and 7.3). Currently all
+        # optional tests are evaluated from the model, so CF_int = 1 (eq. 7.1.1).
+        self.heating_rating_bins = DXUnit.SeasonalRatingBins()
+
+        heat_pump_type = self.room_heat_pump_type()
+        if heat_pump_type == RoomHeatPumpType.TYPE_1:
+            t_off = t_on = fr_u(42.0, "°F")  # sec. 6.3.1
+        else:
+            t_off = self.heating_off_temperature
+            t_on = self.heating_on_temperature
+        t_l = (t_off + t_on) / 2.0  # sec. 6.3.2
+
+        t_62 = fr_u(62.0, "°F")
+        t_47 = fr_u(47.0, "°F")
+        t_42 = fr_u(42.0, "°F")
+        t_40 = fr_u(40.0, "°F")
+        t_37 = fr_u(37.0, "°F")
+        t_35 = fr_u(35.0, "°F")
+        t_17 = fr_u(17.0, "°F")
+        t_5 = fr_u(5.0, "°F")
+
+        def line(t: float, t_1: float, value_1: float, t_2: float, value_2: float) -> float:
+            """Value at temperature t on the line through (t_1, value_1) and (t_2, value_2)."""
+            return value_1 + (value_2 - value_1) * (t - t_1) / (t_2 - t_1)
+
+        def capacity_and_power(conditions: OperatingConditions, integrated: bool = False) -> tuple[float, float]:
+            """Net heating capacity and power (W) at test conditions, integrated over defrost cycles if specified."""
+            if integrated:
+                return (
+                    self.net_integrated_heating_capacity(conditions),
+                    self.net_integrated_heating_power(conditions),
+                )
+            return (
+                self.net_steady_state_heating_capacity(conditions),
+                self.net_steady_state_heating_power(conditions),
+            )
+
+        def test_condition(drybulb: float, wetbulb: float, compressor_speed: int) -> OperatingConditions:
+            """Heating test conditions at the given outdoor state and compressor speed."""
+            return self.make_condition(
+                HeatingConditions,
+                outdoor=PsychState(drybulb=drybulb, wetbulb=wetbulb),
+                compressor_speed=compressor_speed,
+            )
+
+        # Test method speed terms differ from ResDX (sec. 6.5.3): "nominal" (maximum speed at 47 °F) is the full load
+        # speed, while "full" (maximum speed at 17 °F) and "max" are the boost speed, if there is one.
+        if self.heating_boost_speed is not None:
+            boost_speed = self.heating_boost_speed
+        else:
+            boost_speed = self.heating_full_load_speed
+        h1_nom = capacity_and_power(self.H1_full_cond)
+        h1_full = capacity_and_power(test_condition(t_47, fr_u(43.0, "°F"), boost_speed))
+        # H0,full uses the full load speed because it is paired with H1,nom (eq. 7.2.6-1, 7.2.7-1)
+        h0_full = capacity_and_power(test_condition(t_62, fr_u(56.5, "°F"), self.heating_full_load_speed))
+        h3_full = capacity_and_power(test_condition(t_17, fr_u(15.0, "°F"), boost_speed))
+        h4_full = capacity_and_power(test_condition(t_5, fr_u(4.0, "°F"), boost_speed))
+        hl_full = capacity_and_power(self.outdoor_temperature_condition(t_l, boost_speed))
+
+        # Full speed performance at 35 °F
+        if self.staging_type == StagingType.SINGLE_STAGE:
+            h2_full = capacity_and_power(self.H2_full_cond, integrated=True)  # sec. 7.4
+        elif heat_pump_type == RoomHeatPumpType.TYPE_2:
+            # Variable-speed units do not have an H2,full test
+            if t_l <= t_37:
+                h2_full = tuple(
+                    factor * line(t_35, t_l, hl_full[i], t_47, h1_nom[i]) for i, factor in enumerate([0.9, 0.985])
+                )  # eq. 7.2.5-2, 7.2.5-5
+            else:
+                h2_full = tuple(
+                    factor * line(t_35, t_47, h1_nom[i], t_62, h0_full[i]) for i, factor in enumerate([0.9, 0.985])
+                )  # eq. 7.2.6-2, 7.2.6-5
+        else:
+            h2_full = tuple(
+                factor * (h3_full[i] + 0.6 * (h1_full[i] - h3_full[i])) for i, factor in enumerate([0.9, 0.985])
+            )  # eq. 7.2.8-2, 7.2.8-5
+
+        # Calculated full speed performance at 17 °F for type 2
+        if t_l <= t_37:
+            h3_calc = tuple(line(t_17, t_l, hl_full[i], t_47, h1_nom[i]) for i in range(2))  # eq. 7.2.5-3, 7.2.5-6
+        else:
+            h3_calc = tuple(line(t_17, t_47, h1_nom[i], t_62, h0_full[i]) for i in range(2))  # eq. 7.2.6-3, 7.2.6-6
+
+        def full_capacity_and_power(t: float) -> tuple[float, float]:
+            """Full speed heating capacity and power (W) at outdoor temperature t, by heat pump type (sec. 7.2)."""
+            values = []
+            for i in range(2):  # capacity, power
+                if heat_pump_type == RoomHeatPumpType.TYPE_1:
+                    value = line(t, t_47, h1_nom[i], t_62, h0_full[i]) if t >= t_42 else 0.0  # eq. 7.2.4-1, 7.2.4-2
+                elif heat_pump_type == RoomHeatPumpType.TYPE_2:
+                    if t <= t_42:
+                        value = line(t, t_17, h3_calc[i], t_35, h2_full[i])  # eq. 7.2.6-1, 7.2.7-1
+                    elif t > t_47 or t_l > t_37:
+                        value = line(t, t_47, h1_nom[i], t_62, h0_full[i])  # eq. 7.2.6-1, 7.2.7-1
+                    else:
+                        value = line(t, t_l, hl_full[i], t_47, h1_nom[i])  # eq. 7.2.7-1
+                elif t > t_42:
+                    value = line(t, t_17, h3_full[i], t_47, h1_full[i]) * h1_nom[i] / h1_full[i]  # eq. 7.2.8-1, 7.2.9-1
+                elif t >= t_17:
+                    value = line(t, t_17, h3_full[i], t_35, h2_full[i])  # eq. 7.2.8-1, 7.2.9-1
+                elif heat_pump_type == RoomHeatPumpType.TYPE_3:
+                    value = line(t, t_17, h3_full[i], t_47, h1_full[i])  # eq. 7.2.8-1, 7.2.8-4
+                elif t >= t_5:
+                    value = line(t, t_5, h4_full[i], t_17, h3_full[i])  # eq. 7.2.9-1, 7.2.9-2
+                else:
+                    value = h4_full[i] + (h1_full[i] - h3_full[i]) * (t - t_5) / (t_47 - t_17)  # eq. 7.2.9-1, 7.2.9-2
+                values.append(value)
+            return values[0], values[1]
+
+        if self.staging_type != StagingType.SINGLE_STAGE:
+            h0_low = capacity_and_power(self.H0_low_cond)
+            h1_low = capacity_and_power(self.H1_low_cond)
+            h2_low = tuple(
+                factor * (h1_low[i] - 0.8 * (h0_low[i] - h1_low[i])) for i, factor in enumerate([0.9, 0.985])
+            )  # eq. 7.3.3.ii-1, 7.3.3.ii-2
+            h3_low_calc = tuple(h1_low[i] - 2.0 * (h0_low[i] - h1_low[i]) for i in range(2))
+
+            def low_capacity_and_power(t: float) -> tuple[float, float]:
+                """Low speed heating capacity and power (W) at outdoor temperature t (sec. 7.3.3.ii)."""
+                if heat_pump_type == RoomHeatPumpType.TYPE_1 and t < t_42:
+                    return 0.0, 0.0  # Type 1 does not operate below 42 °F (consistent with eq. 7.2.4-1, 7.2.4-2)
+                if t < t_17 or t > t_40:
+                    return (
+                        line(t, t_47, h1_low[0], t_62, h0_low[0]),  # eq. 7.3.3.ii-1
+                        line(t, t_47, h1_low[1], t_62, h0_low[1]),  # eq. 7.3.3.ii-2
+                    )
+                return (
+                    line(t, t_17, h3_low_calc[0], t_35, h2_low[0]),  # eq. 7.3.3.ii-1
+                    line(t, t_17, h3_low_calc[1], t_35, h2_low[1]),  # eq. 7.3.3.ii-2
+                )
+
+        if self.staging_type == StagingType.VARIABLE_SPEED:
+            # Intermediate speed (sec. 7.3.2)
+            int_slopes = []
+            if heat_pump_type == RoomHeatPumpType.TYPE_1:
+                h_int = capacity_and_power(test_condition(t_47, fr_u(43.0, "°F"), self.heating_intermediate_speed))
+                t_int = t_47
+                for i, standard_slope_factor in enumerate([0.0262, 0.00455]):
+                    n_x = (h_int[i] - h1_low[i]) / (h1_nom[i] - h1_low[i])  # eq. 7.3.2i-4, 7.3.2i-6
+                    m_x = (h0_low[i] - h1_low[i]) / (t_62 - t_47) * (1.0 - n_x) + fr_u(
+                        standard_slope_factor, "1/°F"
+                    ) * h1_nom[i] / (1.0 + 30.0 * standard_slope_factor) * n_x  # eq. 7.3.2i-3, 7.3.2i-5
+                    int_slopes.append(m_x)
+            else:
+                h_int = capacity_and_power(self.H2_int_cond, integrated=True)  # sec. 7.4
+                t_int = t_35
+                h3_x = h3_calc if heat_pump_type == RoomHeatPumpType.TYPE_2 else h3_full
+                for i in range(2):
+                    low_dry_35 = h1_low[i] - 0.8 * (h0_low[i] - h1_low[i])
+                    n_x = (h_int[i] - low_dry_35) / (h2_full[i] - low_dry_35)  # eq. 7.3.2ii-5, 7.3.2ii-6
+                    m_x = (h0_low[i] - h1_low[i]) / (t_62 - t_47) * (1.0 - n_x) + n_x * (h2_full[i] - h3_x[i]) / (
+                        t_35 - t_17
+                    )  # eq. 7.3.2ii-3, 7.3.2ii-4, 7.3.2iii-3, 7.3.2iii-4
+                    int_slopes.append(m_x)
+
+            def int_capacity_and_power(t: float) -> tuple[float, float]:
+                """Intermediate speed heating capacity and power (W) at outdoor temperature t (sec. 7.3.2)."""
+                return (
+                    h_int[0] + int_slopes[0] * (t - t_int),  # eq. 7.3.2i-1, 7.3.2ii-1, 7.3.2iii-1
+                    h_int[1] + int_slopes[1] * (t - t_int),  # eq. 7.3.2i-2, 7.3.2ii-2, 7.3.2iii-2
+                )
+
+        bin_temperatures = [62, 57, 52, 47, 42, 37, 32, 27, 22, 17, 12, 7, 2, -3]  # °F, Table 11
+        fractional_hours = [
+            0.017,
+            0.044,
+            0.077,
+            0.136,
+            0.181,
+            0.177,
+            0.133,
+            0.081,
+            0.062,
+            0.038,
+            0.023,
+            0.013,
+            0.008,
+            0.01,
+        ]
+        t_zl = fr_u(63.0, "°F")  # eq. 7.1.2
+        q_c_full = self.net_total_cooling_capacity(self.A_full_cond)
+
+        q_sum = 0.0
+        e_sum = 0.0
+        rh_sum = 0.0
+        for t_f, n in zip(bin_temperatures, fractional_hours):
+            t = fr_u(t_f, "°F")
+            bl = (t_zl - t) / (t_zl - fr_u(-15.0, "°F")) * q_c_full  # eq. 7.1.2
+
+            if t <= t_off:
+                delta = 0.0  # eq. 7.2.2-1, 7.3.3.i-1
+            elif t <= t_on:
+                delta = 0.5  # eq. 7.2.2-1, 7.3.3.i-1
+            else:
+                delta = 1.0  # eq. 7.2.2-1, 7.3.3.i-1
+
+            q_full, p_full = full_capacity_and_power(t)
+            q_low = q_full
+            plf = 1.0
+
+            if self.staging_type == StagingType.SINGLE_STAGE:
+                x = min(bl / q_full, 1.0) if q_full > 0.0 else 1.0
+                plf = 1.0 - 0.38 * (1.0 - x)  # sec. 7.2.1
+                e = x * p_full * delta / plf  # eq. 7.2.1-1
+                rh = bl - x * q_full * delta  # eq. 7.2.1-2
+            else:
+                q_low, p_low = low_capacity_and_power(t)
+                if bl < q_low:
+                    x_low = bl / q_low
+                    plf = 1.0 - 0.44 * (1.0 - x_low)  # sec. 7.3.3
+                    e = x_low * p_low * delta / plf  # eq. 7.3.3-1
+                    rh = bl * (1.0 - delta)  # eq. 7.3.3-2
+                elif bl < q_full:
+                    if self.staging_type == StagingType.VARIABLE_SPEED:
+                        q_int, p_int = int_capacity_and_power(t)
+                        cop_low = q_low / p_low
+                        cop_int = q_int / p_int
+                        cop_full = q_full / p_full
+                        if bl < q_int:
+                            cop_int_bin = cop_low + (cop_int - cop_low) / (q_int - q_low) * (
+                                bl - q_low
+                            )  # eq. 7.3.4.i-1
+                        else:
+                            cop_int_bin = cop_int + (cop_full - cop_int) / (q_full - q_int) * (
+                                bl - q_int
+                            )  # eq. 7.3.4.ii-1
+                        e = bl / cop_int_bin * delta  # eq. 7.3.4-1, 7.3.4-3
+                        rh = bl * (1.0 - delta)  # eq. 7.3.4-2
+                    else:  # TWO_STAGE is not addressed by the test method, so it alternates between low and full speed
+                        x_low = (q_full - bl) / (q_full - q_low)  # sec. 7.3.5
+                        x_full = 1.0 - x_low  # sec. 7.3.5
+                        e = (x_low * p_low + x_full * p_full) * delta  # eq. 7.3.5-1
+                        rh = bl - delta * (q_low * x_low + q_full * x_full)  # eq. 7.3.5-2
+                else:
+                    e = p_full * delta  # sec. 7.3.6 (printed as eq. 7.3.5-1)
+                    rh = bl - q_full * delta  # sec. 7.3.6 (printed as eq. 7.3.5-2)
+
+            q_sum += n * bl
+            e_sum += n * e
+            rh_sum += n * rh
+
+            self.heating_rating_bins.add_bin(
+                fraction=n,
+                temperature=t,
+                load=bl,
+                energy=e,
+                maximum_capacity=q_full,
+                minimum_capacity=q_low,
+                part_load_factor=plf,
+                supplemental_energy=rh,
+            )
+
+        heer = q_sum / (e_sum + rh_sum)  # eq. 7.1.1
+        return to_u(heer, "Btu/Wh")
+
     def print_cooling_info(self, power_units="W", capacity_units="ton_ref"):
         seasonal_metric = "SEER"
         efficiency_metric = "EER"
@@ -1741,7 +2019,10 @@ class DXUnit:
         seasonal_metric = "HSPF"
         if self.rating_standard == RatingStandard.AHRI_210_240_2023:
             seasonal_metric = "HSPF2"
-        print(f"{seasonal_metric} (region {region}): {self.hspf(region):.2f}")
+        if self.rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024:
+            print(f"HEER: {self.heer():.2f}")
+        else:
+            print(f"{seasonal_metric} (region {region}): {self.hspf(region):.2f}")
         for speed in range(self.number_of_heating_speeds):
             conditions = self.make_condition(HeatingConditions, compressor_speed=speed)
             print(
