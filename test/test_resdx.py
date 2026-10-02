@@ -1,5 +1,5 @@
 from koozie import fr_u
-from pytest import approx, raises
+from pytest import approx, mark, raises, warns
 from scipy import optimize
 
 from resdx import (
@@ -302,6 +302,70 @@ def test_heer_regression():
 
     dx_unit_2_speed = make_rating_unit(StagingType.TWO_STAGE, 17.0, 10.0, t_min=fr_u(-10.0, "°F"))
     assert dx_unit_2_speed.heer() == approx(11.087, 0.001)
+
+
+@mark.filterwarnings("ignore:Low speed capacity at 82")
+def test_room_unit_rating_solver():
+    room_standard = RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024
+    eer = 11.26  # Btu/Wh at 95 °F
+    ceer = 16.8
+    heer = 10.9
+
+    # NEEP statistical low speed capacity is below the Appendix F range
+    with warns(UserWarning, match="Appendix F requires 47% to 57%"):
+        vchp_unit = make_rating_unit(
+            StagingType.VARIABLE_SPEED,
+            eer=eer,
+            ceer=ceer,
+            heer=heer,
+            q95=fr_u(9000, "Btu/h"),
+            t_min=fr_u(-20.0, "°F"),
+            rating_standard=room_standard,
+        )
+    assert vchp_unit.ceer() == approx(ceer, 0.0001)
+    assert vchp_unit.heer() == approx(heer, 0.0001)
+    assert vchp_unit.eer(vchp_unit.A_full_cond) == approx(eer, 0.0001)
+
+    # Without standby power, CEER reduces to a weighted average of EERs at the four test conditions
+    eers = [
+        vchp_unit.eer(condition)
+        for condition in [
+            vchp_unit.A_full_cond,
+            vchp_unit.CEER_92_full_cond,
+            vchp_unit.E_int_cond,
+            vchp_unit.B_low_cond,
+        ]
+    ]
+    weights = [0.08, 0.20, 0.33, 0.39]
+    assert ceer == approx(sum(w * e for w, e in zip(weights, eers)) / 1.01194, 0.0001)
+
+    dx_unit_2_speed = make_rating_unit(
+        StagingType.TWO_STAGE, eer=9.0, ceer=12.0, heer=6.0, t_min=fr_u(10.0, "°F"), rating_standard=room_standard
+    )
+    assert dx_unit_2_speed.ceer() == approx(12.0, 0.0001)
+    assert dx_unit_2_speed.heer() == approx(6.0, 0.0001)
+
+    # Single speed EER is determined from CEER (including standby power)
+    dx_unit_1_speed = make_rating_unit(
+        StagingType.SINGLE_STAGE,
+        ceer=11.0,
+        heer=6.0,
+        t_min=fr_u(10.0, "°F"),
+        rating_standard=room_standard,
+        inactive_mode_power=0.5,
+    )
+    assert dx_unit_1_speed.ceer() == approx(11.0, 0.0001)
+    assert dx_unit_1_speed.heer() == approx(6.0, 0.0001)
+    assert dx_unit_1_speed.eer(dx_unit_1_speed.A_full_cond) > 11.0
+
+    with raises(ValueError, match="ceer and heer are required"):
+        make_rating_unit(StagingType.VARIABLE_SPEED, eer=eer, ceer=ceer, rating_standard=room_standard)
+    with raises(ValueError, match="seer and hspf are not used"):
+        make_rating_unit(StagingType.VARIABLE_SPEED, 21.0, eer=eer, ceer=ceer, heer=heer, rating_standard=room_standard)
+    with raises(ValueError, match="eer is required"):
+        make_rating_unit(StagingType.VARIABLE_SPEED, ceer=ceer, heer=heer, rating_standard=room_standard)
+    with raises(ValueError, match="ceer and heer are not used"):
+        make_rating_unit(StagingType.VARIABLE_SPEED, 21.0, 11.0, ceer=ceer)
 
 
 def test_neep_vchp_regression():

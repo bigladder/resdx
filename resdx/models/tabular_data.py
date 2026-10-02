@@ -692,7 +692,7 @@ def make_performance_map(
 
 def make_single_speed_model_data(
     cooling_capacity_95: float,  # Net total cooling capacity at 95F and rated speed
-    seer2: float,
+    seer2: float | None,  # If None, 82F power is based on NREL curves
     eer2: float,
     heating_capacity_47: float,
     heating_capacity_17: float | None,
@@ -729,8 +729,15 @@ def make_single_speed_model_data(
 
     # 95/82 F
     P_c.set(Qrated, t_95, Q_c.get(Qrated, t_95) / fr_u(eer2, "Btu/Wh"))
-    eer2_b = seer2 / (1.0 - 0.5 * cycling_degradation_coefficient)  # EER2 at B (82F) conditions
-    P_c.set(Qrated, t_82, Q_c.get(Qrated, t_82) / fr_u(eer2_b, "Btu/Wh"))
+    if seer2 is not None:
+        eer2_b = seer2 / (1.0 - 0.5 * cycling_degradation_coefficient)  # EER2 at B (82F) conditions
+        P_c.set(Qrated, t_82, Q_c.get(Qrated, t_82) / fr_u(eer2_b, "Btu/Wh"))
+    else:
+        Pm95rated = 1.0 / (
+            calc_biquad(NRELDXModel.COOLING_CAP_FT_COEFFICIENTS, 67.0, 82.0)
+            * calc_biquad(NRELDXModel.COOLING_EIR_FT_COEFFICIENTS, 67.0, 82.0)
+        )
+        P_c.set_by_maintenance(Qrated, t_82, t_95, Pm95rated)
 
     # Tmin
     # Find temperature where power is half of 82F value to avoid division by zero
