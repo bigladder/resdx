@@ -1,7 +1,11 @@
+from collections.abc import Callable
+from copy import deepcopy
+
 from koozie import fr_u
 from scipy import optimize
 
 from .dx_unit import RatingStandard, StagingType
+from .models.tabular_data import TemperatureSpeedPerformance
 from .models.unified_resnet import RESNETDXModel
 
 
@@ -20,9 +24,13 @@ def make_rating_unit(
     heer: float | None = None,
     inactive_mode_power: float = 0.0,
     off_mode_power: float = 0.0,
+    modify_map: Callable[[TemperatureSpeedPerformance], None] | None = None,
 ) -> RESNETDXModel:
     """Make a unit that matches the given ratings: SEER and HSPF for AHRI 210/240 rating standards, or CEER and HEER
-    for room units (RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024)."""
+    for room units (RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024).
+
+    modify_map, if provided, modifies the net performance map in place before the unit is rated, so the ratings are
+    matched with the modifications applied."""
     is_room_unit = rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024
     if is_room_unit:
         if ceer is None or heer is None:
@@ -47,7 +55,7 @@ def make_rating_unit(
         q47_ = q47
 
     def make_unit(cop_82_min: float, cop_47: float | None = None, eer_: float | None = eer) -> RESNETDXModel:
-        return RESNETDXModel(
+        unit = RESNETDXModel(
             staging_type=staging_type,
             rating_standard=rating_standard,
             rated_net_total_cooling_capacity=q95,
@@ -58,6 +66,21 @@ def make_rating_unit(
             input_hspf=hspf,
             rated_net_heating_cop=cop_47,
             rated_net_total_cooling_cop_82_min=cop_82_min,
+            heating_off_temperature=t_min,
+            defrost_temperature=t_defrost,
+            is_ducted=not is_room_unit,
+            inactive_mode_power=inactive_mode_power,
+            off_mode_power=off_mode_power,
+        )
+        if modify_map is None:
+            return unit
+        performance_map = deepcopy(unit.net_tabular_data)
+        modify_map(performance_map)
+        performance_map.set_interpolators()
+        return RESNETDXModel(
+            staging_type=staging_type,
+            rating_standard=rating_standard,
+            tabular_data=performance_map,
             heating_off_temperature=t_min,
             defrost_temperature=t_defrost,
             is_ducted=not is_room_unit,

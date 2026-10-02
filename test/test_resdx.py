@@ -385,6 +385,30 @@ def test_neep_statistical_vchp_high_cutout():
     assert vchp_unit.heer() == approx(5.8, 0.0001)
 
 
+@mark.filterwarnings("ignore:Low speed capacity at 82")
+def test_rating_unit_modify_map():
+    t_95 = fr_u(95.0, "°F")
+
+    def set_minimum_cooling_capacity_ratio(performance_map):
+        performance_map.set_cooling_capacity_ratio(1, t_95, 0.5)
+
+    # Ratings are matched with the map modifications applied
+    vchp_unit = make_rating_unit(
+        StagingType.VARIABLE_SPEED,
+        eer=11.26,
+        ceer=16.8,
+        heer=10.9,
+        q95=fr_u(9000, "Btu/h"),
+        t_min=fr_u(-20.0, "°F"),
+        rating_standard=RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024,
+        modify_map=set_minimum_cooling_capacity_ratio,
+    )
+    capacities = vchp_unit.net_tabular_data.cooling_capacities
+    assert capacities.get(1, t_95) / capacities.get(2, t_95) == approx(0.5, 0.0001)
+    assert vchp_unit.ceer() == approx(16.8, 0.0001)
+    assert vchp_unit.heer() == approx(10.9, 0.0001)
+
+
 def test_neep_vchp_regression():
     # AHRI Certification #: 202680596 https://ashp.neep.org/#!/product/34439/7/25000/95/7500/0///0
     # SEER2 21, EER2 13, HSPF(4) = 11
