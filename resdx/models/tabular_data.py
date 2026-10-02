@@ -440,11 +440,15 @@ def make_neep_statistical_model_data(
     t_47 = fr_u(47, "degF")
 
     t_h = [
-        t_h_min,
         t_5,
         t_17,
         t_47,
     ]
+
+    # Above 5F, the map ends at 5F and the heating off temperature limits operation
+    has_t_h_min = t_h_min < t_5
+    if has_t_h_min:
+        t_h.insert(0, t_h_min)
 
     Qr47rated = default_heating_statistics.Qr47Rated
     Qr47min = default_heating_statistics.Qr47Min
@@ -491,13 +495,14 @@ def make_neep_statistical_model_data(
     Q_h.set_by_ratio(Qrated, t_5, Qr5rated)
     Q_h.set_by_ratio(Qmin, t_5, Qr5min)
 
-    QmLCTmax = 1 / (1 - fr_u(QmslopeLCTmax, "1/degF") * (t_5 - t_h_min))
-    QmLCTmin = 1 / (1 - fr_u(QmslopeLCTmin, "1/degF") * (t_5 - t_h_min))
-
     # Tmin
-    Q_h.set_by_maintenance(Qmax, t_h_min, t_5, QmLCTmax)
-    Q_h.set_by_maintenance(Qmin, t_h_min, t_5, QmLCTmin)
-    Q_h.set_by_interpolation(Qrated, t_h_min)
+    if has_t_h_min:
+        QmLCTmax = 1 / (1 - fr_u(QmslopeLCTmax, "1/degF") * (t_5 - t_h_min))
+        QmLCTmin = 1 / (1 - fr_u(QmslopeLCTmin, "1/degF") * (t_5 - t_h_min))
+
+        Q_h.set_by_maintenance(Qmax, t_h_min, t_5, QmLCTmax)
+        Q_h.set_by_maintenance(Qmin, t_h_min, t_5, QmLCTmin)
+        Q_h.set_by_interpolation(Qrated, t_h_min)
 
     # Net Power
     if heating_cop_47 is None:
@@ -529,16 +534,17 @@ def make_neep_statistical_model_data(
     P_h.set_by_ratio(Qrated, t_5, Pr5rated)
     P_h.set_by_ratio(Qmin, t_5, Pr5min)
 
-    EIRmLCTmax = 1 / (1 - fr_u(EIRmslopeLCTmax, "1/degF") * (t_5 - t_h_min))
-    EIRmLCTmin = 1 / (1 - fr_u(EIRmslopeLCTmin, "1/degF") * (t_5 - t_h_min))
-
-    PmLCTmax = EIRmLCTmax * Q_h.get_maintenance(Qmax, t_h_min, t_5)
-    PmLCTmin = EIRmLCTmin * Q_h.get_maintenance(Qmin, t_h_min, t_5)
-
     # Tmin
-    P_h.set_by_maintenance(Qmax, t_h_min, t_5, PmLCTmax)
-    P_h.set_by_maintenance(Qmin, t_h_min, t_5, PmLCTmin)
-    P_h.set_by_interpolation(Qrated, t_h_min)
+    if has_t_h_min:
+        EIRmLCTmax = 1 / (1 - fr_u(EIRmslopeLCTmax, "1/degF") * (t_5 - t_h_min))
+        EIRmLCTmin = 1 / (1 - fr_u(EIRmslopeLCTmin, "1/degF") * (t_5 - t_h_min))
+
+        PmLCTmax = EIRmLCTmax * Q_h.get_maintenance(Qmax, t_h_min, t_5)
+        PmLCTmin = EIRmLCTmin * Q_h.get_maintenance(Qmin, t_h_min, t_5)
+
+        P_h.set_by_maintenance(Qmax, t_h_min, t_5, PmLCTmax)
+        P_h.set_by_maintenance(Qmin, t_h_min, t_5, PmLCTmin)
+        P_h.set_by_interpolation(Qrated, t_h_min)
 
     Q_c.set_interpolator()
     P_c.set_interpolator()

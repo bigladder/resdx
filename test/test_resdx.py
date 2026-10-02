@@ -368,6 +368,23 @@ def test_room_unit_rating_solver():
         make_rating_unit(StagingType.VARIABLE_SPEED, 21.0, 11.0, ceer=ceer)
 
 
+@mark.filterwarnings("ignore:Low speed capacity at 82")
+def test_neep_statistical_vchp_high_cutout():
+    # Heating off temperature above 5 °F (e.g., type 2 room heat pumps)
+    vchp_unit = make_rating_unit(
+        StagingType.VARIABLE_SPEED,
+        eer=8.19,
+        ceer=13.2,
+        heer=5.8,
+        q95=fr_u(9000, "Btu/h"),
+        t_min=fr_u(30.0, "°F"),
+        rating_standard=RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024,
+    )
+    assert vchp_unit.room_heat_pump_type() == RoomHeatPumpType.TYPE_2
+    assert vchp_unit.ceer() == approx(13.2, 0.0001)
+    assert vchp_unit.heer() == approx(5.8, 0.0001)
+
+
 def test_neep_vchp_regression():
     # AHRI Certification #: 202680596 https://ashp.neep.org/#!/product/34439/7/25000/95/7500/0///0
     # SEER2 21, EER2 13, HSPF(4) = 11
