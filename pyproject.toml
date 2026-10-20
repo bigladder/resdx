@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = [{ name = "Big Ladder Software" }]
 requires-python = ">=3.10"
-dependencies = ["koozie>=1.2.2", "PsychroLib>=2.5.0", "scipy>=1.6.3", "dimes"]
+dependencies = ["koozie>=1.2.2", "PsychroLib>=2.5.0", "scipy>=1.6.3", "numpy<2.4", "dimes"]
 
 [dependency-groups]
 dev = ["pytest>=7.1.3", "doit", "jinja2"]
