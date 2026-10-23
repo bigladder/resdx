@@ -2212,11 +2212,18 @@ class DXUnit:
     def plot(self, output_path: Path | str, title: str | None = None, show_seasonal_bins: bool = False) -> None:
         """Generate an HTML plot for this system."""
 
-        if title is None:
-            if self.rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024:
-                title = f"{self.heer():.2f} HEER, {self.ceer():.2f} CEER"
+        is_room_unit = self.rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024
+        if show_seasonal_bins or title is None:
+            # Computing the ratings also populates the seasonal rating bins plotted below
+            if is_room_unit:
+                heating_rating, cooling_rating = self.heer(), self.ceer()
             else:
-                title = f"{self.hspf():.2f} HSPF2, {self.seer():.2f} SEER2"
+                heating_rating, cooling_rating = self.hspf(), self.seer()
+        if title is None:
+            if is_room_unit:
+                title = f"{heating_rating:.2f} HEER, {cooling_rating:.2f} CEER"
+            else:
+                title = f"{heating_rating:.2f} HSPF2, {cooling_rating:.2f} SEER2"
 
         # Heating Temperatures (from the heating off temperature up)
         heating_temperatures = DimensionalData(
