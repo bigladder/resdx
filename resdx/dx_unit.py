@@ -1809,8 +1809,11 @@ class DXUnit:
     def plot(self, output_path: Path | str, title: str | None = None, show_seasonal_bins: bool = False) -> None:
         """Generate an HTML plot for this system."""
 
+        if show_seasonal_bins or title is None:
+            # Computing the ratings also populates the seasonal rating bins plotted below
+            hspf2, seer2 = self.hspf(), self.seer()
         if title is None:
-            title = f"{self.hspf():.2f} HSPF2, {self.seer():.2f} SEER2"
+            title = f"{hspf2:.2f} HSPF2, {seer2:.2f} SEER2"
 
         # Heating Temperatures
         heating_temperatures = DimensionalData(
