@@ -188,14 +188,11 @@ class DXUnit:
             self.part_load_factors.append(part_load_factor)
             self.supplemental_energies.append(supplemental_energy)
             self.cops.append(load / (energy + supplemental_energy) if (energy + supplemental_energy) > 0 else 0.0)
-            if minimum_capacity > 0:
-                load_ratio = load / maximum_capacity
-                if load >= minimum_capacity:
-                    cycling_ratio = 1.0
-                else:
-                    cycling_ratio = load / minimum_capacity
+            # Capacities can be zero independently (e.g., full capacity below the heating off temperature)
+            load_ratio = load / maximum_capacity if maximum_capacity > 0 else 0.0
+            if minimum_capacity > 0 and load < minimum_capacity:
+                cycling_ratio = load / minimum_capacity
             else:
-                load_ratio = 0.0
                 cycling_ratio = 1.0
 
             self.load_ratios.append(load_ratio)
