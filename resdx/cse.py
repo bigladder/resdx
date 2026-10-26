@@ -9,7 +9,7 @@ from math import isclose
 from koozie import fr_u, to_u
 
 from .conditions import CoolingConditions, HeatingConditions
-from .dx_unit import DXUnit, StagingType
+from .dx_unit import DXUnit, RatingStandard, StagingType
 from .models.unified_resnet import RESNETDXModel
 from .psychrometrics import cooling_psych_state, heating_psych_state
 
@@ -34,6 +34,16 @@ class CSELine:
 
     def __str__(self):
         return self.line
+
+
+class CSEComment(CSELine):
+    def __init__(self, comment: str, parent_object: "CSEObject | None" = None) -> None:
+        self.comment = comment
+        self.parent_object = parent_object
+
+    def __str__(self):
+        level = 0 if self.parent_object is None else self.parent_object.level
+        return f"{INDENT * level}  // {self.comment}"
 
 
 class CSEMember(CSELine):
@@ -337,6 +347,29 @@ def get_cooling_performance_map_object(unit: DXUnit, system_name: str) -> CSEPer
     )
 
 
+def get_seasonal_rating_comments(unit: DXUnit, cooling_only: bool = False) -> tuple[CSEComment, CSEComment | None]:
+    """Comments reporting the unit's seasonal ratings. CSE performance map system types do not use rated seasonal
+    efficiencies, so these are for reference only."""
+    if unit.rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024:
+        cooling_rating = ("CEER", unit.ceer())
+        heating_rating = ("HEER", unit.heer()) if not cooling_only else None
+    else:
+        suffix = "2" if unit.rating_standard == RatingStandard.AHRI_210_240_2023 else ""
+        cooling_rating = (f"SEER{suffix}", unit.seer())
+        heating_rating = (f"HSPF{suffix}", unit.hspf()) if not cooling_only else None
+
+    def make_comment(rating: tuple[str, float], performance_map_member: str) -> CSEComment:
+        name, value = rating
+        return CSEComment(
+            f"{name} = {value:.2f} Btu/Wh (reference only; performance is given by {performance_map_member})"
+        )
+
+    return (
+        make_comment(cooling_rating, "rsPerfMapClg"),
+        make_comment(heating_rating, "rsPerfMapHtg") if heating_rating is not None else None,
+    )
+
+
 def write_cse(
     unit: DXUnit,
     output_path: str | None = None,
@@ -363,6 +396,8 @@ def write_cse(
     objects.append(cooling_performance_map_object)
 
     cooling_heating_capacity_ratio = unit.net_total_cooling_capacity() / unit.net_steady_state_heating_capacity()
+
+    cooling_rating_comment, heating_rating_comment = get_seasonal_rating_comments(unit, cooling_only)
 
     if modelkit_template:
         cooling_capacity_lines = [
@@ -447,7 +482,7 @@ def write_cse(
 
     cooling_lines = cooling_capacity_lines + [
         CSEMember("rsFxCapC", 1.0, precision=1),
-        CSEMember("rsSEER", unit.seer(), precision=1),
+        cooling_rating_comment,
         CSEMember(
             "rsVfPerTon",
             unit.rated_cooling_airflow_per_rated_net_capacity[unit.cooling_full_load_speed],
@@ -471,7 +506,7 @@ def write_cse(
             + backup_heating_capacity_lines
             + [
                 CSEMember("rsFxCapH", 1.0, precision=1),
-                CSEMember("rsHSPF", unit.hspf(), precision=1),
+                *([heating_rating_comment] if heating_rating_comment is not None else []),
                 CSEMember("rsPerfMapHtg", f"{system_name} Heating Performance Map"),
                 CSEMember(
                     "rsFanPwrH",
