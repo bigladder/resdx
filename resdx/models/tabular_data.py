@@ -150,7 +150,7 @@ class TemperatureSpeedPerformanceTable:
             # Interpolate
             t = temperature
             t_m1 = self.temperatures[t_i - 1]
-            t_1 = self.temperatures[1]
+            t_1 = self.temperatures[t_i + 1]
             for speed in self.speeds:
                 s_i = speed - 1  # speed index
                 self.data[t_i][s_i] = self.data[t_i - 1][s_i] + (self.data[t_i + 1][s_i] - self.data[t_i - 1][s_i]) / (
