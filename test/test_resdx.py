@@ -358,7 +358,7 @@ def test_room_unit_rating_solver():
     assert dx_unit_1_speed.heer() == approx(6.0, 0.0001)
     assert dx_unit_1_speed.eer(dx_unit_1_speed.A_full_cond) > 11.0
 
-    with raises(ValueError, match="ceer and heer are required"):
+    with raises(ValueError, match="heer or a pinned heating COP"):
         make_rating_unit(StagingType.VARIABLE_SPEED, eer=eer, ceer=ceer, rating_standard=room_standard)
     with raises(ValueError, match="seer and hspf are not used"):
         make_rating_unit(StagingType.VARIABLE_SPEED, 21.0, eer=eer, ceer=ceer, heer=heer, rating_standard=room_standard)
