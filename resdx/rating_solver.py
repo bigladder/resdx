@@ -9,8 +9,6 @@ from .models.tabular_data import TemperatureSpeedPerformance
 from .models.unified_resnet import RESNETDXModel
 from .performance_points import PerformancePoint, PowerLimit, apply_performance_points, apply_power_limits
 
-FULL_LOAD_SPEEDS = {StagingType.SINGLE_STAGE: 1, StagingType.TWO_STAGE: 2, StagingType.VARIABLE_SPEED: 2}
-
 
 def pinned_cop(points: list[PerformancePoint], location: PerformancePoint | None) -> float | None:
     """COP set by a pinned point at the location, if any."""
@@ -84,27 +82,9 @@ def make_rating_unit(
     limits = list(power_limits or [])
     is_room_unit = rating_standard == RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024
 
-    default_cooling_location: PerformancePoint | None
-    if is_room_unit and staging_type == StagingType.SINGLE_STAGE:
-        default_cooling_location = PerformancePoint("cooling", 1, fr_u(95.0, "°F"))
-    elif staging_type != StagingType.SINGLE_STAGE:
-        default_cooling_location = PerformancePoint("cooling", 1, fr_u(82.0, "°F"))
-    else:
-        default_cooling_location = None  # SEER is a model input
-    default_heating_location = PerformancePoint("heating", FULL_LOAD_SPEEDS[staging_type], fr_u(47.0, "°F"))
-
     if is_room_unit:
         if seer is not None or hspf is not None:
             raise ValueError(f"seer and hspf are not used for {rating_standard}.")
-        if ceer is None and pinned_cop(points, default_cooling_location) is None:
-            raise ValueError(
-                f"ceer or a pinned cooling COP at the default adjustment point is required for {rating_standard}."
-            )
-        if heer is None and pinned_cop(points, default_heating_location) is None:
-            raise ValueError(
-                f"heer or a pinned heating COP at the default adjustment point (full speed, 47 °F) is required for "
-                f"{rating_standard}."
-            )
         if staging_type == StagingType.SINGLE_STAGE:
             if eer is not None:
                 raise ValueError("eer is determined from ceer for single speed room units.")
@@ -115,6 +95,62 @@ def make_rating_unit(
             raise ValueError(f"seer and hspf are required for {rating_standard}.")
         if ceer is not None or heer is not None:
             raise ValueError(f"ceer and heer are not used for {rating_standard}.")
+
+    q47_: float
+    if q47 is None:
+        q47_ = q95
+    else:
+        q47_ = q47
+
+    def make_base_unit(cop_82_min: float, cop_47: float | None, eer_: float | None) -> RESNETDXModel:
+        """Unit without map modifications."""
+        return RESNETDXModel(
+            staging_type=staging_type,
+            rating_standard=rating_standard,
+            rated_net_total_cooling_capacity=q95,
+            rated_net_heating_capacity=q47,
+            rated_net_heating_capacity_17=q47_ * qm17,
+            input_seer=seer,
+            input_eer=eer_,
+            input_hspf=hspf,
+            rated_net_heating_cop=cop_47,
+            rated_net_total_cooling_cop_82_min=cop_82_min,
+            heating_off_temperature=t_min,
+            defrost_temperature=t_defrost,
+            is_ducted=not is_room_unit,
+            inactive_mode_power=inactive_mode_power,
+            off_mode_power=off_mode_power,
+        )
+
+    # Table speed numbers of the full load and low speeds (independent of the arbitrary COPs used here)
+    speed_unit = make_base_unit(
+        3.0, 3.0 if is_room_unit else None, eer if eer is not None or not is_room_unit else 10.0
+    )
+    full_load_speeds = {
+        "cooling": round(speed_unit.tabular_cooling_speed_map[speed_unit.cooling_full_load_speed]),
+        "heating": round(speed_unit.tabular_heating_speed_map[speed_unit.heating_full_load_speed]),
+    }
+
+    default_cooling_location: PerformancePoint | None
+    if is_room_unit and staging_type == StagingType.SINGLE_STAGE:
+        default_cooling_location = PerformancePoint("cooling", full_load_speeds["cooling"], fr_u(95.0, "°F"))
+    elif staging_type != StagingType.SINGLE_STAGE:
+        low_speed = round(speed_unit.tabular_cooling_speed_map[speed_unit.cooling_low_speed])
+        default_cooling_location = PerformancePoint("cooling", low_speed, fr_u(82.0, "°F"))
+    else:
+        default_cooling_location = None  # SEER is a model input
+    default_heating_location = PerformancePoint("heating", full_load_speeds["heating"], fr_u(47.0, "°F"))
+
+    if is_room_unit:
+        if ceer is None and pinned_cop(points, default_cooling_location) is None:
+            raise ValueError(
+                f"ceer or a pinned cooling COP at the default adjustment point is required for {rating_standard}."
+            )
+        if heer is None and pinned_cop(points, default_heating_location) is None:
+            raise ValueError(
+                f"heer or a pinned heating COP at the default adjustment point (full speed, 47 °F) is required for "
+                f"{rating_standard}."
+            )
 
     cooling_target = ceer if is_room_unit else seer
     heating_target = heer if is_room_unit else hspf
@@ -132,12 +168,6 @@ def make_rating_unit(
                 f"The default adjustment point is pinned, so an adjustment point is required: {default_location}"
             )
 
-    q47_: float
-    if q47 is None:
-        q47_ = q95
-    else:
-        q47_ = q47
-
     is_modified = modify_map is not None or bool(points) or bool(limits)
 
     def make_unit(
@@ -147,23 +177,7 @@ def make_rating_unit(
         cooling_cop: float | None = None,
         heating_cop: float | None = None,
     ) -> RESNETDXModel:
-        unit = RESNETDXModel(
-            staging_type=staging_type,
-            rating_standard=rating_standard,
-            rated_net_total_cooling_capacity=q95,
-            rated_net_heating_capacity=q47,
-            rated_net_heating_capacity_17=q47_ * qm17,
-            input_seer=seer,
-            input_eer=eer_,
-            input_hspf=hspf,
-            rated_net_heating_cop=cop_47,
-            rated_net_total_cooling_cop_82_min=cop_82_min,
-            heating_off_temperature=t_min,
-            defrost_temperature=t_defrost,
-            is_ducted=not is_room_unit,
-            inactive_mode_power=inactive_mode_power,
-            off_mode_power=off_mode_power,
-        )
+        unit = make_base_unit(cop_82_min, cop_47, eer_)
         if not is_modified and cooling_cop is None and heating_cop is None:
             return unit
         performance_map = deepcopy(unit.net_tabular_data)
@@ -175,7 +189,7 @@ def make_rating_unit(
         if heating_cop is not None:
             unit_points = with_adjustment(unit_points, heating_adjustment_point, heating_cop)  # type: ignore[arg-type]
         if unit_points:
-            apply_performance_points(performance_map, unit_points)
+            apply_performance_points(performance_map, unit_points, full_load_speeds)
         if limits:
             apply_power_limits(performance_map, limits)
         performance_map.set_interpolators()

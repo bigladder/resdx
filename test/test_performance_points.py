@@ -11,6 +11,7 @@ from resdx.rating_solver import make_rating_unit
 pytestmark = mark.filterwarnings("ignore:Low speed capacity at 82")
 
 ROOM_STANDARD = RatingStandard.DOE_APPENDIX_F_ENERGY_STAR_2024
+FULL_LOAD_SPEEDS = {"cooling": 2, "heating": 2}  # Variable speed table speed numbers
 T_MINUS_20 = fr_u(-20.0, "°F")  # Heating off temperature
 T_5 = fr_u(5.0, "°F")
 T_17 = fr_u(17.0, "°F")
@@ -42,7 +43,9 @@ def test_pin_capacity_and_cop():
     performance_map = base_map()
     original = deepcopy(performance_map)
     capacity = fr_u(7200, "Btu/h")
-    apply_performance_points(performance_map, [PerformancePoint("heating", 2, T_17, capacity=capacity, cop=1.78)])
+    apply_performance_points(
+        performance_map, [PerformancePoint("heating", 2, T_17, capacity=capacity, cop=1.78)], FULL_LOAD_SPEEDS
+    )
 
     capacities, powers = performance_map.heating_capacities, performance_map.heating_powers
     assert capacities.get(2, T_17) == approx(capacity)
@@ -53,10 +56,24 @@ def test_pin_capacity_and_cop():
     factor = capacity / original.heating_capacities.get(2, T_17)
     assert capacities.get(2, T_47) == approx(original.heating_capacities.get(2, T_47) * factor)
     assert capacities.get(2, T_5) == approx(original.heating_capacities.get(2, T_5) * factor)
-    # Faster speeds keep their ratio to the pinned speed
+    # Boost speeds keep their ratio to the pinned full load speed
     assert capacities.get(3, T_17) / capacities.get(2, T_17) == approx(
         original.heating_capacities.get(3, T_17) / original.heating_capacities.get(2, T_17)
     )
+
+
+def test_pin_minimum_speed_only():
+    # Pinning a slower speed (e.g., for turndown) leaves full load and boost unchanged
+    performance_map = base_map()
+    original = deepcopy(performance_map)
+    apply_performance_points(
+        performance_map, [PerformancePoint("cooling", 1, T_95, capacity=fr_u(4500, "Btu/h"))], FULL_LOAD_SPEEDS
+    )
+    capacities = performance_map.cooling_capacities
+    assert capacities.get(1, T_95) == approx(fr_u(4500, "Btu/h"))
+    for speed in (2, 3):
+        for t in capacities.temperatures:
+            assert capacities.get(speed, t) == original.cooling_capacities.get(speed, t)
 
 
 def test_pins_interpolate_between_and_scale_beyond():
@@ -67,7 +84,7 @@ def test_pins_interpolate_between_and_scale_beyond():
         PerformancePoint("heating", 2, T_30, capacity=fr_u(8000, "Btu/h"), cop=2.6),  # New temperature
         PerformancePoint("heating", 2, T_5, capacity=fr_u(4500, "Btu/h"), cop=1.25),
     ]
-    apply_performance_points(performance_map, points)
+    apply_performance_points(performance_map, points, FULL_LOAD_SPEEDS)
 
     capacities = performance_map.heating_capacities
     assert T_30 in capacities.temperatures
@@ -84,18 +101,20 @@ def test_single_quantity_pins():
     original_cop = original.heating_capacities.get(2, T_17) / original.heating_powers.get(2, T_17)
 
     performance_map = deepcopy(original)
-    apply_performance_points(performance_map, [PerformancePoint("heating", 2, T_17, capacity=fr_u(8000, "Btu/h"))])
+    apply_performance_points(
+        performance_map, [PerformancePoint("heating", 2, T_17, capacity=fr_u(8000, "Btu/h"))], FULL_LOAD_SPEEDS
+    )
     capacities, powers = performance_map.heating_capacities, performance_map.heating_powers
     assert capacities.get(2, T_17) / powers.get(2, T_17) == approx(original_cop)  # Capacity alone keeps COP
 
     performance_map = deepcopy(original)
-    apply_performance_points(performance_map, [PerformancePoint("heating", 2, T_17, cop=2.0)])
+    apply_performance_points(performance_map, [PerformancePoint("heating", 2, T_17, cop=2.0)], FULL_LOAD_SPEEDS)
     capacities, powers = performance_map.heating_capacities, performance_map.heating_powers
     assert capacities.get(2, T_17) == approx(original.heating_capacities.get(2, T_17))  # COP alone keeps capacity
     assert capacities.get(2, T_17) / powers.get(2, T_17) == approx(2.0)
 
     performance_map = deepcopy(original)
-    apply_performance_points(performance_map, [PerformancePoint("heating", 2, T_17, power=1000.0)])
+    apply_performance_points(performance_map, [PerformancePoint("heating", 2, T_17, power=1000.0)], FULL_LOAD_SPEEDS)
     capacities, powers = performance_map.heating_capacities, performance_map.heating_powers
     assert powers.get(2, T_17) == approx(1000.0)
     assert capacities.get(2, T_17) / powers.get(2, T_17) == approx(original_cop)  # Power alone keeps COP
@@ -104,14 +123,17 @@ def test_single_quantity_pins():
 def test_invalid_pins():
     performance_map = base_map()
     with raises(ValueError, match="one or two of capacity, cop, and power"):
-        apply_performance_points(performance_map, [PerformancePoint("heating", 2, T_17)])
+        apply_performance_points(performance_map, [PerformancePoint("heating", 2, T_17)], FULL_LOAD_SPEEDS)
     with raises(ValueError, match="inconsistent"):
         apply_performance_points(
             deepcopy(performance_map),
             [PerformancePoint("heating", 2, T_17, capacity=fr_u(8000, "Btu/h"), cop=2.0, power=10.0)],
+            FULL_LOAD_SPEEDS,
         )
     with raises(ValueError, match="out of speed order"):
-        apply_performance_points(deepcopy(performance_map), [PerformancePoint("heating", 2, T_17, capacity=1.0)])
+        apply_performance_points(
+            deepcopy(performance_map), [PerformancePoint("heating", 2, T_17, capacity=1.0)], FULL_LOAD_SPEEDS
+        )
 
 
 def test_power_limit():

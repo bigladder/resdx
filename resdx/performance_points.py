@@ -86,9 +86,9 @@ def pin_speed(
     powers: TemperatureSpeedPerformanceTable,
     speed: int,
     points: list[PerformancePoint],
-    faster_speeds: list[int],
+    following_speeds: list[int],
 ) -> None:
-    """Pin a speed's points, scale the speed beyond its warmest and coldest pins, and scale the faster speeds to keep
+    """Pin a speed's points, scale the speed beyond its warmest and coldest pins, and scale the following speeds to keep
     their ratio to it."""
     original_capacities = {t: capacities.get(speed, t) for t in capacities.temperatures}
     original_powers = {t: powers.get(speed, t) for t in powers.temperatures}
@@ -110,20 +110,23 @@ def pin_speed(
         capacities.set(speed, t, capacity)
         powers.set(speed, t, power)
 
-    for faster_speed in faster_speeds:
+    for following_speed in following_speeds:
         for t in capacities.temperatures:
             capacity_ratio = capacities.get(speed, t) / original_capacities[t]
             power_ratio = powers.get(speed, t) / original_powers[t]
-            capacities.set(faster_speed, t, capacities.get(faster_speed, t) * capacity_ratio)
-            powers.set(faster_speed, t, powers.get(faster_speed, t) * power_ratio)
+            capacities.set(following_speed, t, capacities.get(following_speed, t) * capacity_ratio)
+            powers.set(following_speed, t, powers.get(following_speed, t) * power_ratio)
 
 
-def apply_performance_points(performance_map: TemperatureSpeedPerformance, points: list[PerformancePoint]) -> None:
+def apply_performance_points(
+    performance_map: TemperatureSpeedPerformance, points: list[PerformancePoint], full_load_speeds: dict[str, int]
+) -> None:
     """Pin performance points in the map.
 
     Each point becomes a table point (added if needed). Unpinned temperatures between a speed's pins keep their values,
-    and temperatures beyond its warmest and coldest pins are scaled to stay continuous with them. Faster speeds without
-    pins keep their ratio to the next slower pinned speed.
+    and temperatures beyond its warmest and coldest pins are scaled to stay continuous with them. Boost speeds (faster
+    than the full load speed, given by mode as a table speed number in full_load_speeds) without pins keep their ratio
+    to the full load speed. Other speeds without pins are unchanged.
     """
     for mode in ("cooling", "heating"):
         mode_points = [point for point in points if point.mode == mode]
@@ -134,12 +137,14 @@ def apply_performance_points(performance_map: TemperatureSpeedPerformance, point
             table_temperature(capacities, point.temperature)
             table_temperature(powers, point.temperature)
 
+        full_load_speed = full_load_speeds[mode]
         pinned_speeds = sorted({point.speed for point in mode_points})
-        for i, speed in enumerate(pinned_speeds):
-            next_pinned_speed = pinned_speeds[i + 1] if i + 1 < len(pinned_speeds) else capacities.speeds[-1] + 1
-            faster_speeds = [s for s in capacities.speeds if speed < s < next_pinned_speed]
+        for speed in pinned_speeds:
+            following_speeds = []
+            if speed == full_load_speed:
+                following_speeds = [s for s in capacities.speeds if s > full_load_speed and s not in pinned_speeds]
             speed_points = [point for point in mode_points if point.speed == speed]
-            pin_speed(capacities, powers, speed, speed_points, faster_speeds)
+            pin_speed(capacities, powers, speed, speed_points, following_speeds)
 
         for t in capacities.temperatures:
             speed_capacities = [capacities.get(speed, t) for speed in capacities.speeds]
