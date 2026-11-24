@@ -41,8 +41,15 @@ class RESNETDXModel(DXUnit):
         defrost_temperature: float = fr_u(40.0, "degF"),
         rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
         tabular_data: TemperatureSpeedPerformance | None = None,
+        low_temperature_cooling_eir_ratio: float | None = None,
+        low_temperature_cooling_eir_temperature: float = fr_u(18.0, "°C"),
     ) -> None:
+        """low_temperature_cooling_eir_ratio, if provided, fixes gross cooling EIR (normalized to EIR at 95 °F for each
+        speed) at that ratio for outdoor temperatures at or below low_temperature_cooling_eir_temperature, varying
+        linearly from there to 82 °F."""
         self.net_tabular_data: TemperatureSpeedPerformance | None = tabular_data
+        self.low_temperature_cooling_eir_ratio: float | None = low_temperature_cooling_eir_ratio
+        self.low_temperature_cooling_eir_temperature: float = low_temperature_cooling_eir_temperature
         self.gross_tabular_data: TemperatureSpeedPerformance | None = None
         self.motor_type: FanMotorType | None = motor_type
         self.rated_net_heating_capacity_17: float | None = rated_net_heating_capacity_17
@@ -332,6 +339,14 @@ class RESNETDXModel(DXUnit):
 
         # Setup gross tabular data
         if self.net_tabular_data is not None:
+            if self.low_temperature_cooling_eir_ratio is not None:
+                # Output grids (IDF, CSE) come from the net table, so they need this temperature too
+                limit_temperature = self.low_temperature_cooling_eir_temperature
+                self.net_tabular_data.add_cooling_temperature(limit_temperature)
+                if self.net_tabular_data.cooling_capacities.temperatures[0] == limit_temperature:
+                    # Tables extrapolate linearly below the lowest temperature; a second point at the limited EIR keeps
+                    # EIR constant there
+                    self.net_tabular_data.add_cooling_temperature(limit_temperature - 10.0)  # K
             self.gross_tabular_data = deepcopy(self.net_tabular_data)
 
             cooling_fan_powers = []
@@ -344,6 +359,10 @@ class RESNETDXModel(DXUnit):
                 heating_fan_powers.append(self.rated_heating_fan_power[i])
 
             self.gross_tabular_data.make_gross(cooling_fan_powers, heating_fan_powers)
+            if self.low_temperature_cooling_eir_ratio is not None:
+                self.gross_tabular_data.apply_low_temperature_cooling_eir_ratio(
+                    self.low_temperature_cooling_eir_ratio, self.low_temperature_cooling_eir_temperature
+                )
 
             for i, speed in self.tabular_cooling_speed_map.items():
                 self.rated_net_cooling_cop[i] = self.net_tabular_data.cooling_cop(speed)

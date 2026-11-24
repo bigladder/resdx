@@ -1,9 +1,13 @@
 from koozie import fr_u
-from pytest import approx
+from pytest import approx, warns
 from scipy import optimize
 
 from resdx import AHRIVersion, RESNETDXModel, StagingType, make_neep_model_data, make_performance_map
-from resdx.models.tabular_data import make_two_speed_model_data, make_single_speed_model_data
+from resdx.models.tabular_data import (
+    TemperatureSpeedCoolingPerformanceTable,
+    make_single_speed_model_data,
+    make_two_speed_model_data,
+)
 from resdx.rating_solver import make_rating_unit
 
 # Single speed gross COP values used for regression testing
@@ -346,3 +350,80 @@ def test_plot():
     )
 
     dx_unit_1_speed.plot("output/heat-pump.html")
+
+
+def test_add_cooling_temperature_interpolates():
+    t_40 = fr_u(40.0, "degF")
+    t_82 = fr_u(82.0, "degF")
+    t_95 = fr_u(95.0, "degF")
+    capacities = TemperatureSpeedCoolingPerformanceTable([t_40, t_82, t_95], 1, [[1.0], [2.0], [3.0]])
+    capacities.add_temperature(fr_u(61.0, "degF"))
+    assert capacities.get(1, fr_u(61.0, "degF")) == approx(1.5)
+
+
+def normalized_gross_cooling_eir(unit: RESNETDXModel, speed: float, temperature: float) -> float:
+    gross_data = unit.gross_tabular_data
+    return gross_data.cooling_cop(speed, fr_u(95.0, "degF")) / gross_data.cooling_cop(speed, temperature)
+
+
+def test_low_temperature_cooling_eir_ratio():
+    eir_ratio = 0.66
+    t_limit = fr_u(18.0, "°C")
+    t_82 = fr_u(82.0, "degF")
+    t_95 = fr_u(95.0, "degF")
+
+    def make_units(**kwargs):
+        return [
+            RESNETDXModel(**kwargs, low_temperature_cooling_eir_ratio=eir_ratio),
+            RESNETDXModel(**kwargs),
+        ]
+
+    unit_pairs = [
+        make_units(staging_type=StagingType.SINGLE_STAGE, input_seer=14.3, input_eer=11.7, input_hspf=7.5),
+        make_units(staging_type=StagingType.TWO_STAGE, input_seer=17.0, input_eer=13.0, input_hspf=9.0),
+        make_units(staging_type=StagingType.VARIABLE_SPEED, input_seer=21.0, input_eer=13.0, input_hspf=11.0),
+    ]
+
+    for limited_unit, unlimited_unit in unit_pairs:
+        assert t_limit in limited_unit.net_tabular_data.cooling_capacities.temperatures
+        for speed in limited_unit.gross_tabular_data.cooling_capacities.speeds:
+            assert normalized_gross_cooling_eir(limited_unit, speed, t_limit) == approx(eir_ratio)
+            assert normalized_gross_cooling_eir(limited_unit, speed, fr_u(30.0, "degF")) == approx(eir_ratio)
+            for t in [t_82, t_95, fr_u(110.0, "degF")]:
+                assert normalized_gross_cooling_eir(limited_unit, speed, t) == approx(
+                    normalized_gross_cooling_eir(unlimited_unit, speed, t)
+                )
+            # Capacity and power interpolate separately, so EIR between grid points is only nearly linear
+            eir_ratio_82 = normalized_gross_cooling_eir(limited_unit, speed, t_82)
+            t_middle = (t_limit + t_82) / 2.0
+            assert normalized_gross_cooling_eir(limited_unit, speed, t_middle) == approx(
+                (eir_ratio + eir_ratio_82) / 2.0, 0.01
+            )
+        assert limited_unit.rated_net_total_cooling_capacity == approx(unlimited_unit.rated_net_total_cooling_capacity)
+
+    # Single speed SEER2 only depends on 82 °F and 95 °F performance
+    single_speed_limited, single_speed_unlimited = unit_pairs[0]
+    assert single_speed_limited.seer() == approx(single_speed_unlimited.seer())
+
+
+def test_low_temperature_cooling_eir_ratio_rating_unit():
+    seer_2 = 17.0
+    hspf_2 = 10.0
+    dx_unit = make_rating_unit(StagingType.TWO_STAGE, seer_2, hspf_2, low_temperature_cooling_eir_ratio=0.66)
+    assert dx_unit.seer() == approx(seer_2, 0.01)
+    assert dx_unit.hspf() == approx(hspf_2, 0.01)
+    assert normalized_gross_cooling_eir(dx_unit, 1, fr_u(18.0, "°C")) == approx(0.66)
+
+
+def test_low_temperature_cooling_eir_ratio_above_82_f_eir_warns():
+    # SEER2/EER2 this high puts normalized EIR at 82 °F (about 0.49) below the 0.66 limit
+    with warns(UserWarning, match="below the low temperature limit"):
+        dx_unit = RESNETDXModel(
+            staging_type=StagingType.SINGLE_STAGE,
+            input_seer=14.3,
+            input_eer=8.0,
+            input_hspf=7.5,
+            low_temperature_cooling_eir_ratio=0.66,
+        )
+    # The limit is still applied
+    assert normalized_gross_cooling_eir(dx_unit, 1, fr_u(18.0, "°C")) == approx(0.66)

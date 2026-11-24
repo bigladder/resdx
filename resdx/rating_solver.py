@@ -16,6 +16,8 @@ def make_rating_unit(
     t_min: float | None = None,
     t_defrost: float = fr_u(40.0, "degF"),
     rating_standard: AHRIVersion = AHRIVersion.AHRI_210_240_2023,
+    low_temperature_cooling_eir_ratio: float | None = None,
+    low_temperature_cooling_eir_temperature: float = fr_u(18.0, "°C"),
 ) -> RESNETDXModel:
     q47_: float
     if q47 is None:
@@ -39,6 +41,8 @@ def make_rating_unit(
                 rated_net_total_cooling_cop_82_min=cop_82_min_guess,
                 heating_off_temperature=t_min,
                 defrost_temperature=t_defrost,
+                low_temperature_cooling_eir_ratio=low_temperature_cooling_eir_ratio,
+                low_temperature_cooling_eir_temperature=low_temperature_cooling_eir_temperature,
             ).seer()
             - seer,
             seer / 3.0,
@@ -59,6 +63,8 @@ def make_rating_unit(
             rated_net_total_cooling_cop_82_min=cop_82_min,
             heating_off_temperature=t_min,
             defrost_temperature=t_defrost,
+            low_temperature_cooling_eir_ratio=low_temperature_cooling_eir_ratio,
+            low_temperature_cooling_eir_temperature=low_temperature_cooling_eir_temperature,
         ).hspf()
         - hspf,
         hspf / 2.0,
@@ -77,4 +83,6 @@ def make_rating_unit(
         input_hspf=hspf,
         heating_off_temperature=t_min,
         defrost_temperature=t_defrost,
+        low_temperature_cooling_eir_ratio=low_temperature_cooling_eir_ratio,
+        low_temperature_cooling_eir_temperature=low_temperature_cooling_eir_temperature,
     )

@@ -1,3 +1,4 @@
+import warnings
 from bisect import insort
 from copy import deepcopy
 from typing import Literal
@@ -150,7 +151,7 @@ class TemperatureSpeedPerformanceTable:
             # Interpolate
             t = temperature
             t_m1 = self.temperatures[t_i - 1]
-            t_1 = self.temperatures[1]
+            t_1 = self.temperatures[t_i + 1]
             for speed in self.speeds:
                 s_i = speed - 1  # speed index
                 self.data[t_i][s_i] = self.data[t_i - 1][s_i] + (self.data[t_i + 1][s_i] - self.data[t_i - 1][s_i]) / (
@@ -281,6 +282,48 @@ class TemperatureSpeedPerformance:
         cop = self.get_cooling_cop(speed, temperature)
         self.cooling_capacities.set(speed, temperature, reference_capacity * ratio)
         self.set_cooling_cop(speed, temperature, cop)  # Restore COP after capacity change
+
+    def add_cooling_temperature(self, temperature: float) -> None:
+        """Add a cooling temperature (K) to the capacity and power tables, if missing, by linear interpolation or
+        extrapolation."""
+        if temperature in self.cooling_capacities.temperatures:
+            return
+        self.cooling_capacities.add_temperature(temperature)
+        self.cooling_powers.add_temperature(temperature)
+        self.number_of_cooling_temperatures = len(self.cooling_capacities.temperatures)
+        self.cooling_capacities.set_interpolator()
+        self.cooling_powers.set_interpolator()
+
+    def apply_low_temperature_cooling_eir_ratio(self, eir_ratio: float, temperature: float) -> None:
+        """Set cooling power so that EIR, normalized to EIR at 95 °F for each speed, equals eir_ratio at and below
+        temperature (K), and varies linearly from there to the existing value at 82 °F."""
+        t_82 = fr_u(82.0, "degF")
+        t_95 = fr_u(95.0, "degF")
+        if temperature not in self.cooling_capacities.temperatures:
+            raise RuntimeError(
+                f"Temperature, {to_u(temperature, 'degF'):.2f} °F, must be in the cooling tables before limiting EIR."
+            )
+        if temperature >= t_82:
+            raise ValueError("Low temperature cooling EIR limit must be below 82 °F.")
+        for speed in self.cooling_capacities.speeds:
+            eir_95 = self.get_cooling_cop(speed, t_95) ** -1
+            eir_ratio_82 = self.get_cooling_cop(speed, t_82) ** -1 / eir_95
+            if eir_ratio_82 < eir_ratio:
+                warnings.warn(
+                    f"Normalized cooling EIR at 82 °F ({eir_ratio_82:.3f}) for speed {speed} is below the low "
+                    f"temperature limit ({eir_ratio:.3f}), so EIR will decrease with rising temperature below 82 °F. "
+                    "Check the cooling efficiency inputs (e.g., SEER2 is too high relative to EER2).",
+                    stacklevel=2,
+                )
+            for t in self.cooling_capacities.temperatures:
+                if t >= t_82:
+                    continue
+                if t <= temperature:
+                    normalized_eir = eir_ratio
+                else:
+                    normalized_eir = eir_ratio + (eir_ratio_82 - eir_ratio) * (t - temperature) / (t_82 - temperature)
+                self.set_cooling_cop(speed, t, 1.0 / (normalized_eir * eir_95))
+        self.cooling_powers.set_interpolator()
 
     def heating_capacity(self, speed: float = 2, temperature: float = fr_u(47, "degF")) -> float:
         return self.heating_capacities.calculate(speed, temperature)
